@@ -17,16 +17,16 @@ import re
 import io
 import subprocess
 import traceback
+import logging
 from pathlib import Path
 from datetime import datetime
-from typing import Optional, Dict, List, Tuple, Any
+from typing import Optional, List
 from dataclasses import dataclass
 
-import openpyxl
 from openpyxl import Workbook
+from openpyxl.worksheet.worksheet import Worksheet
 from openpyxl.drawing.image import Image as XLImage
 from openpyxl.styles import Alignment, Font, PatternFill
-from openpyxl.utils import get_column_letter
 from PIL import Image
 import argparse
 
@@ -46,6 +46,15 @@ class Config:
         '感知相似度', 'SSIM', '像素相似度', '大图Size', '小图Size', 
         '大图透明度', '小图透明度'
     ]
+    
+    # Excel列名到列号的映射（避免硬编码列号）
+    COLUMN_MAP = {
+        'ID': 1, '图片名': 2, '大图路径': 3, '小图路径': 4,
+        '大图图片': 5, '小图图片': 6, '感知相似度': 7, 'SSIM': 8,
+        '像素相似度': 9, '大图Size': 10, '小图Size': 11,
+        '大图透明度': 12, '小图透明度': 13
+    }
+    
     EXCEL_COL_WIDTHS = {
         'A': 30, 'B': 30, 'C': 40, 'D': 40, 'E': 15, 'F': 15,
         'G': 12, 'H': 15, 'I': 15, 'J': 15, 'K': 15, 'L': 15, 'M': 15
@@ -91,24 +100,39 @@ class ComparisonResult:
 class IconComparator:
     def __init__(self, ui_directory: str, log_path: str):
         self.ui_dir = Path(ui_directory).resolve()
-        self.log_file = open(log_path, "a", encoding="utf-8")
+        self.log_path = Path(log_path)
         self.statistics = {
             "success": 0,
             "error": 0,
             "skip": 0,
             "total": 0
         }
-
-    def __del__(self):
-        """析构函数，确保日志文件关闭"""
-        if hasattr(self, 'log_file') and not self.log_file.closed:
-            self.log_file.close()
+        
+        # 配置日志系统（使用logging模块，避免手动管理文件）
+        self.logger = logging.getLogger('IconComparator')
+        self.logger.setLevel(logging.INFO)
+        
+        # 清除已有的处理器
+        self.logger.handlers.clear()
+        
+        # 文件处理器
+        file_handler = logging.FileHandler(self.log_path, mode='a', encoding='utf-8')
+        file_handler.setLevel(logging.INFO)
+        file_formatter = logging.Formatter('%(message)s')
+        file_handler.setFormatter(file_formatter)
+        
+        # 控制台处理器
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+        console_formatter = logging.Formatter('%(message)s')
+        console_handler.setFormatter(console_formatter)
+        
+        self.logger.addHandler(file_handler)
+        self.logger.addHandler(console_handler)
 
     def log(self, msg: str):
         """日志记录（控制台+文件）"""
-        print(msg)
-        self.log_file.write(msg + "\n")
-        self.log_file.flush()
+        self.logger.info(msg)
 
     def parse_config_file(self, config_file_path: str) -> List[IconPair]:
         """解析配置文件，提取图标对"""
@@ -127,12 +151,6 @@ class IconComparator:
                 # 处理空路径
                 big_icon_raw = big_icon_raw if big_icon_raw else "大图为空"
                 icon_raw = icon_raw if icon_raw else "小图为空"
-                
-                # 清理路径（保留原逻辑，封装为内部函数）
-                # def clean_path(path: str) -> str:
-                #     path = re.sub(r'^Assets/_Game/Resource/ArtSource/UI/', '', path)
-                #     path = re.sub(r'^ArtSource://UI/', '', path)
-                #     return path
                 
                 big_icon_path = big_icon_raw
                 icon_path = icon_raw
@@ -166,13 +184,12 @@ class IconComparator:
                     self.log(f"【错误】无效路径：{protocol_path}，协议后无实际路径")
                     return protocol_path
                 abs_path = self.ui_dir / sub_dir / relative_path
-                return str(abs_path).replace("\\", "/")
+                return str(abs_path)
 
         # 处理相对根路径
         if protocol_path.startswith(Config.RELATIVE_ROOT_PREFIX):
-            #relative_path = protocol_path.replace(Config.RELATIVE_ROOT_PREFIX, '')
             abs_path = self.ui_dir / protocol_path
-            return str(abs_path).replace("\\", "/")
+            return str(abs_path)
 
         self.log(f"【错误】不支持的协议：{protocol_path}，仅支持{list(Config.PROTOCOL_MAP.keys())}")
         return protocol_path
@@ -229,8 +246,8 @@ class IconComparator:
         """调整图片大小适配Excel"""
         try:
             with Image.open(image_path) as img:
-                # 保持纵横比缩放
-                img.thumbnail(Config.IMAGE_MAX_SIZE, Image.LANCZOS)
+                # 保持纵横比缩放（使用LANCZOS替代已废弃的常量）
+                img.thumbnail(Config.IMAGE_MAX_SIZE, Image.Resampling.LANCZOS)
                 
                 # 处理透明通道
                 if img.mode == 'RGBA':
@@ -267,7 +284,7 @@ class IconComparator:
     def generate_excel(self, icon_pairs: List[IconPair], output_file: str):
         """生成Excel报告"""
         wb = Workbook()
-        ws = wb.active
+        ws: Worksheet = wb.active  # type: ignore
         ws.title = "图标相似度对比"
 
         # 写入表头
@@ -298,10 +315,7 @@ class IconComparator:
             
             # 转换为绝对路径
             big_path = self.custom_protocol_to_abs_path(pair.big_icon_path)
-            #print(f"==========================:{big_path}\t {os.path.exists(big_path)}")
-            #print(f"==========================pair.small_icon_path:{pair.small_icon_path}")
             small_path = self.custom_protocol_to_abs_path(pair.small_icon_path)
-            #print(f"==========================:{small_path}\t {os.path.exists(small_path)}")
             
             # 获取图片基础信息
             big_info = self.get_image_info(big_path)
@@ -312,14 +326,18 @@ class IconComparator:
             self.log(f"  大图: {pair.big_icon_path} \t {big_info} \t {big_trans}")
             self.log(f"  小图: {pair.small_icon_path} \t {small_info} \t {small_trans}")
 
-            # 检查文件是否存在
+            # 检查文件是否存在（修复重复统计问题）
             skip = False
-            if not os.path.exists(big_path):
-                self.log(f"  警告: 大图不存在，跳过")
-                self.statistics["skip"] += 1
-                skip = True
-            if not os.path.exists(small_path):
-                self.log(f"  警告: 小图不存在，跳过")
+            big_exists = os.path.exists(big_path)
+            small_exists = os.path.exists(small_path)
+            
+            if not big_exists or not small_exists:
+                missing = []
+                if not big_exists:
+                    missing.append("大图")
+                if not small_exists:
+                    missing.append("小图")
+                self.log(f"  警告: {'/'.join(missing)}不存在，跳过")
                 self.statistics["skip"] += 1
                 skip = True
 
@@ -329,18 +347,18 @@ class IconComparator:
                 if not skip:
                     comp_result = self.compare_images(big_path, small_path)
 
-                # 写入基础数据
-                ws.cell(row=current_row, column=1, value=pair.id_name)
-                ws.cell(row=current_row, column=2, value=pair.icon_name)
-                ws.cell(row=current_row, column=3, value=pair.big_icon_path)
-                ws.cell(row=current_row, column=4, value=pair.small_icon_path)
-                ws.cell(row=current_row, column=7, value=f"{comp_result.perceptual_similarity:.4f}")
-                ws.cell(row=current_row, column=8, value=f"{comp_result.ssim:.4f}")
-                ws.cell(row=current_row, column=9, value=f"{comp_result.pixel_similarity:.4f}")
-                ws.cell(row=current_row, column=10, value=big_info)
-                ws.cell(row=current_row, column=11, value=small_info)
-                ws.cell(row=current_row, column=12, value=big_trans)
-                ws.cell(row=current_row, column=13, value=small_trans)
+                # 写入基础数据（使用列名映射，避免硬编码列号）
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['ID'], value=pair.id_name)
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['图片名'], value=pair.icon_name)
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['大图路径'], value=pair.big_icon_path)
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['小图路径'], value=pair.small_icon_path)
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['感知相似度'], value=f"{comp_result.perceptual_similarity:.4f}")
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['SSIM'], value=f"{comp_result.ssim:.4f}")
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['像素相似度'], value=f"{comp_result.pixel_similarity:.4f}")
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['大图Size'], value=big_info)
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['小图Size'], value=small_info)
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['大图透明度'], value=big_trans)
+                ws.cell(row=current_row, column=Config.COLUMN_MAP['小图透明度'], value=small_trans)
 
                 # 设置单元格对齐
                 for col_num in range(1, 14):
@@ -373,16 +391,20 @@ class IconComparator:
                     self.statistics["success"] += 1
                 current_row += 1
 
+            except FileNotFoundError as e:
+                self.log(f"  错误: 文件未找到 - {e}")
+                self._write_error_row(ws, current_row, pair, "FILE_NOT_FOUND")
+                current_row += 1
+                self.statistics["error"] += 1
+            except ValueError as e:
+                self.log(f"  错误: 数据错误 - {e}")
+                self._write_error_row(ws, current_row, pair, "VALUE_ERROR")
+                current_row += 1
+                self.statistics["error"] += 1
             except Exception as e:
-                self.log(f"  错误: {e}")
-                # 错误数据兜底
-                ws.cell(row=current_row, column=1, value=pair.icon_name)
-                ws.cell(row=current_row, column=2, value=pair.big_icon_path)
-                ws.cell(row=current_row, column=3, value=pair.small_icon_path)
-                ws.cell(row=current_row, column=7, value="ERROR")
-                ws.cell(row=current_row, column=8, value="ERROR")
-                ws.cell(row=current_row, column=9, value="ERROR")
-                ws.row_dimensions[current_row].height = 20
+                self.log(f"  错误: 未知错误 - {e}")
+                self.log(f"  详细信息: {traceback.format_exc()}")
+                self._write_error_row(ws, current_row, pair, "ERROR")
                 current_row += 1
                 self.statistics["error"] += 1
 
@@ -400,6 +422,17 @@ class IconComparator:
         self.log(f"  跳过: {self.statistics['skip']}")
         self.log(f"  总计: {self.statistics['total']}")
         self.log("="*80)
+
+    def _write_error_row(self, ws: Worksheet, row: int, pair: IconPair, error_msg: str):
+        """写入错误行到Excel（辅助方法）"""
+        ws.cell(row=row, column=Config.COLUMN_MAP['ID'], value=pair.id_name)
+        ws.cell(row=row, column=Config.COLUMN_MAP['图片名'], value=pair.icon_name)
+        ws.cell(row=row, column=Config.COLUMN_MAP['大图路径'], value=pair.big_icon_path)
+        ws.cell(row=row, column=Config.COLUMN_MAP['小图路径'], value=pair.small_icon_path)
+        ws.cell(row=row, column=Config.COLUMN_MAP['感知相似度'], value=error_msg)
+        ws.cell(row=row, column=Config.COLUMN_MAP['SSIM'], value=error_msg)
+        ws.cell(row=row, column=Config.COLUMN_MAP['像素相似度'], value=error_msg)
+        ws.row_dimensions[row].height = 20
 
 # ===================== SVN 工具函数 =====================
 def svn_update_dir(target_dir: str, ignore_error: bool = False) -> bool:
@@ -444,10 +477,10 @@ def svn_update_dir(target_dir: str, ignore_error: bool = False) -> bool:
 def search_json_files(root_dir: str, save_path: str):
     """提取JSON文件中的指定行"""
     pattern = re.compile(r'^\s*("ID":|"UIBigIcon":|"UIIcon":)\s*.+,?$', re.MULTILINE)
-    root_dir = Path(root_dir).resolve()
+    root_path = Path(root_dir).resolve()
 
     with open(save_path, 'w', encoding='utf-8') as txt_f:
-        for json_file in root_dir.rglob("*.json"):
+        for json_file in root_path.rglob("*.json"):
             try:
                 content = json_file.read_text(encoding='utf-8')
                 match_lines = [line.rstrip() for line in content.splitlines() if pattern.search(line)]
@@ -481,12 +514,12 @@ def main():
         epilog="""
 使用示例:
   python batch_compare_excel.py UI
-  python batch_compare_excel.py UI -o my_results.xlsx
+  python batch_compare_excel.py UI --ignore-svn-error
         """
     )
     parser.add_argument('ui_directory', help='UI 根目录路径')
-    # parser.add_argument('-o', '--output', default='icon_comparison.xlsx',
-    #                    help='输出 Excel 文件名 (默认: icon_comparison.xlsx)')
+    parser.add_argument('--ignore-svn-error', action='store_true',
+                       help='忽略 SVN 更新错误继续执行')
     args = parser.parse_args()
 
     # 初始化路径和文件名
@@ -505,14 +538,14 @@ def main():
 
     try:
         # 1. 更新SVN
+        svn_ignore = args.ignore_svn_error if hasattr(args, 'ignore_svn_error') else Config.SVN_IGNORE_ERROR
         for rel_path in Config.PROJECT_PATHS:
             full_path = target_dir / rel_path
-            svn_update_dir(str(full_path), Config.SVN_IGNORE_ERROR)
+            svn_update_dir(str(full_path), svn_ignore)
 
         # 2. 提取JSON内容
         item_root = target_dir / Config.PROJECT_PATHS[0]
         search_json_files(str(item_root), json_content_txt)
-        #json_content_txt = r"f:\caiqifeng\MyTestProject\MyTestTool\ai_pic_compare\main_0205_1140_json_content.txt"#"
 
         # 3. 初始化比较器并生成Excel
         comparator = IconComparator(args.ui_directory, log_path)
@@ -524,12 +557,12 @@ def main():
         comparator.generate_excel(icon_pairs, result_xlsx)
         return 0
 
+    except KeyboardInterrupt:
+        print("\n程序被用户中断")
+        return 130
     except Exception as e:
         print(f"程序执行失败: {e}")
         traceback.print_exc()
-        # 确保日志写入
-        if 'comparator' in locals() and hasattr(comparator, 'log'):
-            comparator.log(f"错误: {e}")
         return 1
 
 if __name__ == "__main__":
