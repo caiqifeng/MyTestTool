@@ -526,9 +526,17 @@ def main():
     time_str = datetime.now().strftime("%m%d_%H%M")
     branch = get_branch(args.ui_directory)
 
-    log_path = f"{branch}_{time_str}_Log.txt"
-    json_content_txt = f"{branch}_{time_str}_json_content.txt"
-    result_xlsx = f"{branch}_{time_str}_icon_comparison.xlsx"
+    # 获取脚本所在目录（绝对路径）
+    script_dir = Path(__file__).resolve().parent
+    
+    # 创建Release输出目录
+    output_dir = script_dir / "Release"
+    output_dir.mkdir(exist_ok=True)
+    
+    # 输出文件路径（绝对路径）
+    log_path = str(output_dir / f"{branch}_{time_str}_Log.txt")
+    json_content_txt = str(output_dir / f"{branch}_{time_str}_json_content.txt")
+    result_xlsx = str(output_dir / f"{branch}_{time_str}_icon_comparison.xlsx")
 
     # 工程根目录
     target_dir = Path(args.ui_directory).resolve()
