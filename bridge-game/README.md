@@ -34,6 +34,7 @@ pip install pygame pymunk
 | `bridge_game_fixed_v2.py` | 修复版 v2 | 高级功能，可配置 |
 | `bridge_game_simple.py` | **推荐** 最简版 | **彻底解决字体乱码** |
 | `bridge_game_enhanced.py` | **增强版** | **修复车辆移动，支持图片替换** |
+| `bridge_game_final.py` | **最终版** | **修复图片应用和桥梁高度问题** |
 
 ### 推荐：最简版本（解决所有字体问题）
 ```bash
@@ -70,6 +71,18 @@ python bridge_game.py
 ```bash
 python bridge_game_enhanced.py
 ```
+
+#### 最终版（修复图片应用和桥梁高度问题）
+```bash
+python bridge_game_final.py
+```
+
+**最终版特点**：
+1. **图片正确应用**：详细的图片加载状态报告，确保图片正确加载
+2. **桥梁高度修复**：车辆与路面平齐，无高度差问题
+3. **加厚桥梁**：12像素厚度，更好支撑车辆
+4. **详细调试信息**：显示车辆位置、速度等实时信息
+5. **兼容性好**：图片不存在时自动使用几何图形
 
 **增强版特点**：
 1. **修复车辆移动**：车辆不会卡住，持续施加驱动力
@@ -120,6 +133,7 @@ python bridge_game_enhanced.py
 | `build_windows_fixed_game.bat` | `bridge_game_fixed.py` | 修复版v1，解决字体乱码 | ⭐⭐⭐⭐ |
 | `build_windows_simple_game.bat` | `bridge_game_simple.py` | **最佳**，无字体问题，使用符号 | ⭐⭐⭐⭐⭐ |
 | `build_windows_enhanced_game.bat` | `bridge_game_enhanced.py` | **增强版**，修复车辆移动，支持图片 | ⭐⭐⭐⭐⭐⭐ |
+| `build_windows_final_game.bat` | `bridge_game_final.py` | **最终版**，修复图片应用和桥梁高度问题 | ⭐⭐⭐⭐⭐⭐⭐ |
 
 ### 推荐：简单版本打包（彻底解决字体问题）
 
@@ -158,6 +172,20 @@ pyinstaller --onefile --console --name "BridgeMaster_Fixed" bridge_game_fixed.py
 
 # 或手动打包
 pyinstaller --onefile --console --name "BridgeMaster_Enhanced" bridge_game_enhanced.py
+```
+
+### 最终版打包
+如果您遇到图片未应用或桥梁高度问题：
+
+**最终版（强烈推荐）**
+```bash
+# 使用专用打包脚本
+# 1. 下载 bridge_game_final.py 和 build_windows_final_game.bat
+# 2. 双击运行 build_windows_final_game.bat
+# 3. 生成的 EXE: dist\BridgeMaster_Final.exe
+
+# 或手动打包
+pyinstaller --onefile --console --name "BridgeMaster_Final" bridge_game_final.py
 ```
 
 ### 手动打包（如果脚本仍失败）
