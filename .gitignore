@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# PyInstaller
+*.spec
+bridge_game  # Linux executable
+bridge_game.gz
+
+# Game builds
+dist/
+build/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OpenClaw workspace files (personal config)
+AGENTS.md
+SOUL.md
+USER.md
+IDENTITY.md
+HEARTBEAT.md
+TOOLS.md
+BOOTSTRAP.md
+memory/
+.clawhub/
+.openclaw/
+skills/
+
+# Other projects
+bakery-mini-program/
+bread_video_project/
+snake_game/
+stock_monitor/
+video_generation/
+全市场创新策略方案.md
+全市场策略/
+
+# Temporary files
+*.log
+*.tmp
+*.temp
