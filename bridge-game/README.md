@@ -71,6 +71,20 @@ python bridge_game_fixed.py
 | `build_windows_exe.bat` | 原始版本，可能乱码 | 不推荐使用 |
 | `build_windows_exe_fixed.bat` | **推荐**，中文提示，修复编码 | 中文 Windows 系统 |
 | `build_windows_simple.bat` | **推荐**，英文提示，兼容性好 | 所有 Windows 系统 |
+| `build_windows_fixed_game.bat` | **最新推荐**，打包修复版游戏，解决字体乱码 | 所有出现乱码问题的系统 |
+
+### 修复版游戏打包
+如果您遇到游戏内文字乱码或执行错误，请使用修复版游戏：
+
+**方法一：使用专用打包脚本**
+1. 下载 `bridge_game_fixed.py` 和 `build_windows_fixed_game.bat`
+2. 双击运行 `build_windows_fixed_game.bat`
+3. 生成的 EXE: `dist\BridgeMaster_Fixed.exe`
+
+**方法二：手动打包修复版**
+```bash
+pyinstaller --onefile --console --name "BridgeMaster_Fixed" bridge_game_fixed.py
+```
 
 ### 手动打包（如果脚本仍失败）
 ```bash
