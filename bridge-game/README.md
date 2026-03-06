@@ -119,6 +119,7 @@ python bridge_game_enhanced.py
 | `build_windows_simple.bat` | `bridge_game.py` | 英文提示，兼容性好 | ⭐⭐⭐ |
 | `build_windows_fixed_game.bat` | `bridge_game_fixed.py` | 修复版v1，解决字体乱码 | ⭐⭐⭐⭐ |
 | `build_windows_simple_game.bat` | `bridge_game_simple.py` | **最佳**，无字体问题，使用符号 | ⭐⭐⭐⭐⭐ |
+| `build_windows_enhanced_game.bat` | `bridge_game_enhanced.py` | **增强版**，修复车辆移动，支持图片 | ⭐⭐⭐⭐⭐⭐ |
 
 ### 推荐：简单版本打包（彻底解决字体问题）
 
@@ -143,6 +144,20 @@ pyinstaller --onefile --console --name "BridgeMaster_v2" bridge_game_fixed_v2.py
 **修复版v1**
 ```bash
 pyinstaller --onefile --console --name "BridgeMaster_Fixed" bridge_game_fixed.py
+```
+
+### 增强版打包
+如果您需要修复车辆移动问题并支持图片替换：
+
+**增强版（推荐）**
+```bash
+# 使用专用打包脚本
+# 1. 下载 bridge_game_enhanced.py 和 build_windows_enhanced_game.bat
+# 2. 双击运行 build_windows_enhanced_game.bat
+# 3. 生成的 EXE: dist\BridgeMaster_Enhanced.exe
+
+# 或手动打包
+pyinstaller --onefile --console --name "BridgeMaster_Enhanced" bridge_game_enhanced.py
 ```
 
 ### 手动打包（如果脚本仍失败）
