@@ -33,6 +33,7 @@ pip install pygame pymunk
 | `bridge_game_fixed.py` | 修复版 v1 | 一般情况，自动字体检测 |
 | `bridge_game_fixed_v2.py` | 修复版 v2 | 高级功能，可配置 |
 | `bridge_game_simple.py` | **推荐** 最简版 | **彻底解决字体乱码** |
+| `bridge_game_enhanced.py` | **增强版** | **修复车辆移动，支持图片替换** |
 
 ### 推荐：最简版本（解决所有字体问题）
 ```bash
@@ -64,6 +65,25 @@ python bridge_game_fixed.py
 ```bash
 python bridge_game.py
 ```
+
+#### 增强版（修复车辆移动，支持图片）
+```bash
+python bridge_game_enhanced.py
+```
+
+**增强版特点**：
+1. **修复车辆移动**：车辆不会卡住，持续施加驱动力
+2. **支持图片替换**：自动加载`images/`目录下的图片
+3. **防卡住检测**：车辆低速时自动施加额外推力
+4. **物理优化**：调整摩擦系数，改善游戏体验
+
+**图片准备**：
+1. 创建 `images/` 目录
+2. 准备以下图片（PNG格式）：
+   - `car.png` - 车辆图片（建议60x30像素）
+   - `wood.png` - 木材图片
+   - `steel.png` - 钢筋图片
+3. 如果图片不存在，会自动使用几何图形
 
 ### 问题诊断
 如果游戏运行失败，请尝试：
