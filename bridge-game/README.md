@@ -25,27 +25,53 @@ pip install pygame pymunk
 
 ## 运行游戏
 
-### 原版（可能出现乱码）
+### 版本选择指南
+
+| 版本 | 特点 | 推荐场景 |
+|------|------|----------|
+| `bridge_game.py` | 原版 | ❌ 不推荐（可能乱码） |
+| `bridge_game_fixed.py` | 修复版 v1 | 一般情况，自动字体检测 |
+| `bridge_game_fixed_v2.py` | 修复版 v2 | 高级功能，可配置 |
+| `bridge_game_simple.py` | **推荐** 最简版 | **彻底解决字体乱码** |
+
+### 推荐：最简版本（解决所有字体问题）
 ```bash
-python bridge_game.py
+python bridge_game_simple.py
 ```
 
-### 修复版（解决乱码和执行错误）
+**最简版特点**：
+1. **无字体依赖**：使用符号(W/S)和颜色替代文字
+2. **彻底解决乱码**：完全不依赖系统字体
+3. **全英文界面**：避免所有编码问题
+4. **键盘快捷键**：W=木材, S=钢筋, T=测试, ESC=退出
+
+### 其他版本
+
+#### 修复版 v2（可配置）
+```bash
+# 编辑 config.py 修改设置
+# USE_ENGLISH_TEXT = True  # 切换英文模式
+
+python bridge_game_fixed_v2.py
+```
+
+#### 修复版 v1
 ```bash
 python bridge_game_fixed.py
 ```
 
-**修复版改进**：
-1. **字体兼容性**：自动尝试多种中文字体，解决乱码问题
-2. **错误处理**：详细的错误信息和调试输出
-3. **控制台编码**：支持UTF-8编码输出
-4. **系统兼容性**：更好的跨平台支持
+#### 原版（可能有问题）
+```bash
+python bridge_game.py
+```
 
 ### 问题诊断
-如果游戏运行失败，修复版会显示具体错误原因，常见问题：
-1. **缺少依赖**：运行 `pip install pygame pymunk`
-2. **字体问题**：修复版自动尝试多种字体
-3. **显示问题**：尝试以管理员身份运行或更新显卡驱动
+如果游戏运行失败，请尝试：
+
+1. **最简版本**：运行 `python bridge_game_simple.py`
+2. **检查依赖**：`pip install pygame pymunk`
+3. **权限问题**：以管理员身份运行
+4. **驱动更新**：更新显卡驱动
 
 ## Windows 打包指南
 
@@ -64,24 +90,37 @@ python bridge_game_fixed.py
 
 3. 生成的 EXE 位于 `dist\BridgeMaster.exe` 或 `dist\bridge_game.exe`
 
-### 各版本说明
+### 打包脚本说明
 
-| 脚本文件 | 特点 | 适用场景 |
-|----------|------|----------|
-| `build_windows_exe.bat` | 原始版本，可能乱码 | 不推荐使用 |
-| `build_windows_exe_fixed.bat` | **推荐**，中文提示，修复编码 | 中文 Windows 系统 |
-| `build_windows_simple.bat` | **推荐**，英文提示，兼容性好 | 所有 Windows 系统 |
-| `build_windows_fixed_game.bat` | **最新推荐**，打包修复版游戏，解决字体乱码 | 所有出现乱码问题的系统 |
+| 脚本文件 | 打包的游戏 | 特点 | 推荐度 |
+|----------|------------|------|--------|
+| `build_windows_exe.bat` | `bridge_game.py` | 原始版本，可能乱码 | ⭐ |
+| `build_windows_exe_fixed.bat` | `bridge_game.py` | 中文提示，修复编码 | ⭐⭐ |
+| `build_windows_simple.bat` | `bridge_game.py` | 英文提示，兼容性好 | ⭐⭐⭐ |
+| `build_windows_fixed_game.bat` | `bridge_game_fixed.py` | 修复版v1，解决字体乱码 | ⭐⭐⭐⭐ |
+| `build_windows_simple_game.bat` | `bridge_game_simple.py` | **最佳**，无字体问题，使用符号 | ⭐⭐⭐⭐⭐ |
 
-### 修复版游戏打包
-如果您遇到游戏内文字乱码或执行错误，请使用修复版游戏：
+### 推荐：简单版本打包（彻底解决字体问题）
 
 **方法一：使用专用打包脚本**
-1. 下载 `bridge_game_fixed.py` 和 `build_windows_fixed_game.bat`
-2. 双击运行 `build_windows_fixed_game.bat`
-3. 生成的 EXE: `dist\BridgeMaster_Fixed.exe`
+1. 下载 `bridge_game_simple.py` 和 `build_windows_simple_game.bat`
+2. 双击运行 `build_windows_simple_game.bat`
+3. 生成的 EXE: `dist\BridgeMaster_Simple.exe`
 
-**方法二：手动打包修复版**
+**方法二：手动打包简单版**
+```bash
+pyinstaller --onefile --console --name "BridgeMaster_Simple" bridge_game_simple.py
+```
+
+### 修复版打包
+如果您想使用中文界面，但遇到字体问题：
+
+**修复版v2（可配置）**
+```bash
+pyinstaller --onefile --console --name "BridgeMaster_v2" bridge_game_fixed_v2.py
+```
+
+**修复版v1**
 ```bash
 pyinstaller --onefile --console --name "BridgeMaster_Fixed" bridge_game_fixed.py
 ```
