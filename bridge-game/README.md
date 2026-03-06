@@ -29,6 +29,67 @@ pip install pygame pymunk
 python bridge_game.py
 ```
 
+## Windows 打包指南
+
+### 重要提示：编码问题修复
+原 `build_windows_exe.bat` 脚本可能出现乱码或执行错误，原因是 Windows 命令行编码问题。我们提供了修复版本：
+
+### 推荐使用修复版本
+
+**修复版脚本**（解决乱码问题）：
+1. 下载以下文件到游戏目录：
+   - `bridge_game.py` (主游戏代码)
+   - `build_windows_exe_fixed.bat` (修复版中文脚本)
+   - 或 `build_windows_simple.bat` (英文简化版)
+
+2. 双击运行 `build_windows_exe_fixed.bat` 或 `build_windows_simple.bat`
+
+3. 生成的 EXE 位于 `dist\BridgeMaster.exe` 或 `dist\bridge_game.exe`
+
+### 各版本说明
+
+| 脚本文件 | 特点 | 适用场景 |
+|----------|------|----------|
+| `build_windows_exe.bat` | 原始版本，可能乱码 | 不推荐使用 |
+| `build_windows_exe_fixed.bat` | **推荐**，中文提示，修复编码 | 中文 Windows 系统 |
+| `build_windows_simple.bat` | **推荐**，英文提示，兼容性好 | 所有 Windows 系统 |
+
+### 手动打包（如果脚本仍失败）
+```bash
+# 1. 安装 Python 3.7+（安装时勾选 "Add Python to PATH"）
+# 2. 打开命令提示符（CMD）或 PowerShell
+# 3. 安装依赖
+pip install pygame pymunk pyinstaller
+
+# 4. 切换到游戏目录
+cd "你的游戏文件夹路径"
+
+# 5. 打包为 EXE（控制台模式，便于调试）
+pyinstaller --onefile --console bridge_game.py
+
+# 6. 运行游戏
+dist\bridge_game.exe
+```
+
+### 常见问题解决
+
+**问题1**："不是内部或外部命令，也不是可运行的程序"
+- **原因**：脚本编码问题或路径问题
+- **解决**：使用修复版脚本或手动打包
+
+**问题2**：乱码显示
+- **原因**：Windows 控制台编码不匹配
+- **解决**：使用 `build_windows_simple.bat`（英文版）
+
+**问题3**：依赖安装失败
+- **解决**：以管理员身份运行命令提示符，或使用：
+  ```bash
+  pip install --user pygame pymunk pyinstaller
+  ```
+
+**问题4**：打包后 EXE 无法运行
+- **解决**：安装 [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+
 ## 操作说明
 
 1. **选择材料**：
