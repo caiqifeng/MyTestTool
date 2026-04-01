@@ -63,7 +63,9 @@ const bannerSchema = new mongoose.Schema<IBanner>(
     }
   },
   {
-    timestamps: true
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
   }
 );
 

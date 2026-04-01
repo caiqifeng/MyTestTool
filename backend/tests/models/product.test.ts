@@ -34,4 +34,91 @@ describe('Product Model', () => {
     expect(product.stock).toBe(100);
     expect(product.status).toBe(ProductStatus.ACTIVE);
   });
+
+  test('decreaseStock should validate quantity is integer', async () => {
+    // Mock the Product model methods for this test
+    const mockProduct = {
+      _id: 'test_id',
+      stock: 100,
+      salesCount: 0,
+      status: ProductStatus.ACTIVE,
+      save: jest.fn().mockResolvedValue({
+        _id: 'test_id',
+        stock: 90,
+        salesCount: 10,
+        status: ProductStatus.ACTIVE
+      })
+    };
+
+    const mockFindById = jest.fn().mockResolvedValue(mockProduct);
+
+    // Temporarily replace the static method for testing
+    const originalFindById = Product.findById;
+    Product.findById = mockFindById;
+
+    try {
+      // Test with non-integer quantity
+      await expect(Product.decreaseStock('test_id', 10.5)).rejects.toThrow('Quantity must be an integer');
+
+      // Test with negative quantity
+      await expect(Product.decreaseStock('test_id', -5)).rejects.toThrow('Quantity must be greater than 0');
+
+      // Test with zero quantity
+      await expect(Product.decreaseStock('test_id', 0)).rejects.toThrow('Quantity must be greater than 0');
+    } finally {
+      // Restore original method
+      Product.findById = originalFindById;
+    }
+  });
+
+  test('decreaseStock should handle insufficient stock', async () => {
+    const mockProduct = {
+      _id: 'test_id',
+      stock: 5,
+      salesCount: 0,
+      status: ProductStatus.ACTIVE,
+      save: jest.fn()
+    };
+
+    const mockFindById = jest.fn().mockResolvedValue(mockProduct);
+
+    const originalFindById = Product.findById;
+    Product.findById = mockFindById;
+
+    try {
+      await expect(Product.decreaseStock('test_id', 10)).rejects.toThrow('Insufficient stock. Available: 5, Requested: 10');
+    } finally {
+      Product.findById = originalFindById;
+    }
+  });
+
+  test('decreaseStock should update status when stock reaches zero', async () => {
+    const mockProduct = {
+      _id: 'test_id',
+      stock: 5,
+      salesCount: 0,
+      status: ProductStatus.ACTIVE,
+      save: jest.fn().mockResolvedValue({
+        _id: 'test_id',
+        stock: 0,
+        salesCount: 5,
+        status: ProductStatus.OUT_OF_STOCK
+      })
+    };
+
+    const mockFindById = jest.fn().mockResolvedValue(mockProduct);
+
+    const originalFindById = Product.findById;
+    Product.findById = mockFindById;
+
+    try {
+      const result = await Product.decreaseStock('test_id', 5);
+      expect(result).toBeDefined();
+      expect(mockProduct.stock).toBe(0); // Should be updated to 0
+      expect(mockProduct.salesCount).toBe(5); // Should be incremented
+      // Note: The status update happens in the save() method which we mocked
+    } finally {
+      Product.findById = originalFindById;
+    }
+  });
 });

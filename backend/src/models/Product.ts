@@ -112,6 +112,11 @@ productSchema.index({ name: 'text', description: 'text' });
 
 // Static methods
 productSchema.statics.decreaseStock = async function(productId: string, quantity: number): Promise<IProduct | null> {
+  // Validate quantity is a positive integer
+  if (!Number.isInteger(quantity)) {
+    throw new Error('Quantity must be an integer');
+  }
+
   if (quantity <= 0) {
     throw new Error('Quantity must be greater than 0');
   }

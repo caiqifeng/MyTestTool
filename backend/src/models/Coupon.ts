@@ -26,7 +26,9 @@ export interface ICoupon extends mongoose.Document {
   calculateDiscount(orderAmount: number): number;
 }
 
-const couponSchema = new mongoose.Schema<ICoupon>(
+export interface ICouponModel extends mongoose.Model<ICoupon> {}
+
+const couponSchema = new mongoose.Schema<ICoupon, ICouponModel>(
   {
     code: {
       type: String,
@@ -100,7 +102,9 @@ const couponSchema = new mongoose.Schema<ICoupon>(
     }]
   },
   {
-    timestamps: true
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
   }
 );
 
@@ -171,6 +175,6 @@ couponSchema.methods.calculateDiscount = function(orderAmount: number): number {
   return Math.min(discount, orderAmount);
 };
 
-const Coupon = mongoose.model<ICoupon>('Coupon', couponSchema);
+const Coupon = mongoose.model<ICoupon, ICouponModel>('Coupon', couponSchema);
 
 export default Coupon;

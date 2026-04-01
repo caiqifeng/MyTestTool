@@ -204,22 +204,28 @@ orderSchema.index({ userId: 1, createdAt: -1 });
 // Pre-save hook to generate order number
 orderSchema.pre('save', async function(next) {
   if (this.isNew) {
-    const date = new Date();
-    const year = date.getFullYear().toString().slice(-2);
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const day = date.getDate().toString().padStart(2, '0');
+    try {
+      const date = new Date();
+      const year = date.getFullYear().toString().slice(-2);
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const day = date.getDate().toString().padStart(2, '0');
 
-    // Get count of orders today for sequence number
-    const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-    const OrderModel = this.constructor as mongoose.Model<IOrder>;
-    const count = await OrderModel.countDocuments({
-      createdAt: { $gte: startOfDay }
-    });
+      // Get count of orders today for sequence number
+      const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const OrderModel = this.constructor as mongoose.Model<IOrder>;
+      const count = await OrderModel.countDocuments({
+        createdAt: { $gte: startOfDay }
+      });
 
-    const sequence = (count + 1).toString().padStart(4, '0');
-    this.orderNumber = `${year}${month}${day}${sequence}`;
+      const sequence = (count + 1).toString().padStart(4, '0');
+      this.orderNumber = `${year}${month}${day}${sequence}`;
+      next();
+    } catch (error) {
+      next(error as Error);
+    }
+  } else {
+    next();
   }
-  next();
 });
 
 // Static methods
