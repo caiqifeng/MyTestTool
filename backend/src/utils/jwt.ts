@@ -11,7 +11,7 @@ interface TokenPayload {
 export class JWTService {
   static generateToken(payload: TokenPayload): string {
     return jwt.sign(payload, config.jwtSecret, {
-      expiresIn: '7d'
+      expiresIn: '32000m' // 32000 minutes ≈ 22.22 days
     });
   }
 
