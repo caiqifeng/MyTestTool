@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { UserModel } from '../models/User';
+import UserModel from '../models/User';
 import JWTService from '../utils/jwt';
 import { UserRole } from '../../../shared/src/types';
 import { asyncHandler } from '../middleware/error';
@@ -222,7 +222,7 @@ export class AuthController {
     res.json({
       success: true,
       data: {
-        users: users.map(user => ({
+        users: users.map((user: any) => ({
           _id: user._id,
           openid: user.openid,
           nickname: user.nickname,

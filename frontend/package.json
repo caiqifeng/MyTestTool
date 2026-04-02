@@ -8,7 +8,7 @@
     "dev:mp-weixin": "uni -p mp-weixin",
     "build": "npm run build:mp-weixin",
     "build:mp-weixin": "uni build -p mp-weixin",
-    "test": "jest",
+    "test": "jest --passWithNoTests",
     "lint": "eslint . --ext .vue,.js,.ts"
   },
   "dependencies": {

@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
-import { ProductModel } from '../models/Product';
-import { CategoryModel } from '../models/Category';
+import ProductModel from '../models/Product';
+import CategoryModel from '../models/Category';
 import { ProductStatus } from '../../../shared/src/types';
 import { asyncHandler } from '../middleware/error';
 
@@ -79,7 +79,7 @@ export class ProductController {
     res.json({
       success: true,
       data: {
-        products: products.map(product => ({
+        products: products.map((product: any) => ({
           _id: product._id,
           name: product.name,
           description: product.description,
@@ -308,9 +308,9 @@ export class ProductController {
     const product = await ProductModel.findByIdAndUpdate(
       id,
       {
-        $set: { stock },
-        // 根据库存更新状态
         $set: {
+          stock,
+          // 根据库存更新状态
           status: stock <= 0 ? ProductStatus.OUT_OF_STOCK : ProductStatus.ACTIVE
         }
       },
@@ -353,7 +353,7 @@ export class ProductController {
     res.json({
       success: true,
       data: {
-        products: products.map(product => ({
+        products: products.map((product: any) => ({
           _id: product._id,
           name: product.name,
           description: product.description,
@@ -416,7 +416,7 @@ export class ProductController {
           description: category.description,
           icon: category.icon
         },
-        products: products.map(product => ({
+        products: products.map((product: any) => ({
           _id: product._id,
           name: product.name,
           description: product.description,

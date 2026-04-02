@@ -8,11 +8,15 @@ import { errorMiddleware, notFoundMiddleware } from './middleware/error';
 import { authMiddleware } from './middleware/auth';
 import { requireAdmin } from './middleware/rbac';
 
-// 导入路由（稍后实现）
-// import authRoutes from './routes/auth';
-// import productRoutes from './routes/products';
-// import orderRoutes from './routes/orders';
-// import adminRoutes from './routes/admin';
+// 导入路由
+import authRoutes from './routes/auth.routes';
+import productRoutes from './routes/product.routes';
+import orderRoutes from './routes/order.routes';
+import cartRoutes from './routes/cart.routes';
+import addressRoutes from './routes/address.routes';
+import couponRoutes from './routes/coupon.routes';
+import bannerRoutes from './routes/banner.routes';
+import categoryRoutes from './routes/category.routes';
 
 class App {
   public app: express.Application;
@@ -85,10 +89,14 @@ class App {
     });
 
     // API路由
-    // this.app.use('/api/auth', authRoutes);
-    // this.app.use('/api/products', productRoutes);
-    // this.app.use('/api/orders', orderRoutes);
-    // this.app.use('/api/admin', authMiddleware, requireAdmin, adminRoutes);
+    this.app.use('/api/auth', authRoutes);
+    this.app.use('/api/products', productRoutes);
+    this.app.use('/api/orders', orderRoutes);
+    this.app.use('/api/cart', cartRoutes);
+    this.app.use('/api/addresses', addressRoutes);
+    this.app.use('/api/coupons', couponRoutes);
+    this.app.use('/api/banners', bannerRoutes);
+    this.app.use('/api/categories', categoryRoutes);
 
     // 静态文件服务（如果需要）
     this.app.use('/uploads', express.static('uploads'));
