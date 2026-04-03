@@ -1,13 +1,21 @@
-// Jest setup file
-// Mock uni-app global objects
-global.uni = {
-  request: jest.fn(),
-  showToast: jest.fn(),
-  showModal: jest.fn(),
-  navigateTo: jest.fn(),
+import { config } from '@vue/test-utils';
+
+// 配置Vue Test Utils
+config.global = {
+  ...config.global,
+  // 全局组件模拟（如果有的话）
+  // 全局插件（如果有的话）
 };
 
-// Set global Vue and Vue internal globals for @vue/test-utils browser build
-global.Vue = require('vue');
-global.VueCompilerDOM = require('@vue/compiler-dom');
-global.VueServerRenderer = require('@vue/server-renderer');
+// 全局测试辅助函数
+global.testUtils = {
+  mountComponent: (component, options = {}) => {
+    return mount(component, {
+      global: {
+        plugins: [], // 添加全局插件
+        components: {}, // 添加全局组件
+      },
+      ...options,
+    });
+  },
+};

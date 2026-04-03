@@ -1,35 +1,31 @@
 module.exports = {
-  preset: 'ts-jest',
+  preset: '@vue/cli-plugin-unit-jest/preset',
   testEnvironment: 'jsdom',
-  moduleFileExtensions: ['vue', 'js', 'ts', 'json'],
   transform: {
     '^.+\\.vue$': '@vue/vue3-jest',
-    '^.+\\.ts$': 'ts-jest',
     '^.+\\.js$': 'babel-jest',
+    '^.+\\.ts$': 'ts-jest',
   },
-  transformIgnorePatterns: [
-    'node_modules/(?!(vue|@vue|@vue/test-utils|@vue/vue3-jest|@vue/compiler-dom|@vue/compiler-sfc|@vue/server-renderer)/)',
-  ],
-  testMatch: ['**/__tests__/**/*.spec.[jt]s', '**/?(*.)+(spec|test).[jt]s'],
+  moduleFileExtensions: ['js', 'ts', 'json', 'vue'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
-    '^@components/(.*)$': '<rootDir>/src/components/$1',
-    '^@store/(.*)$': '<rootDir>/src/store/$1',
-    '^@api/(.*)$': '<rootDir>/src/api/$1',
-    '^@utils/(.*)$': '<rootDir>/src/utils/$1',
-    '^@shared/(.*)$': '<rootDir>/../shared/src/$1',
-    '^@vue/test-utils$': '<rootDir>/../../node_modules/@vue/test-utils/dist/vue-test-utils.cjs.js',
   },
-  collectCoverage: true,
+  testMatch: [
+    '**/__tests__/**/*.[jt]s?(x)',
+    '**/?(*.)+(spec|test).[jt]s?(x)',
+  ],
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js'],
   collectCoverageFrom: [
-    'src/components/**/*.{vue,ts,js}',
+    'src/**/*.{js,ts,vue}',
+    '!src/main.ts',
     '!src/**/*.d.ts',
   ],
-  coverageReporters: ['text', 'lcov'],
-  setupFiles: ['<rootDir>/jest.setup.js'],
-  globals: {
-    'vue-jest': {
-      compiler: '@vue/compiler-dom',
+  coverageThreshold: {
+    global: {
+      branches: 70,
+      functions: 70,
+      lines: 70,
+      statements: 70,
     },
   },
 };
