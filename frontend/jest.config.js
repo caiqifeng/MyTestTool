@@ -1,11 +1,14 @@
 module.exports = {
-  preset: '@vue/cli-plugin-unit-jest/preset',
+  preset: '@vue/cli-plugin-unit-jest',
   testEnvironment: 'jsdom',
   transform: {
     '^.+\\.vue$': '@vue/vue3-jest',
     '^.+\\.js$': 'babel-jest',
     '^.+\\.ts$': 'ts-jest',
   },
+  transformIgnorePatterns: [
+    'node_modules/(?!(vue|@vue|@vue/test-utils|@vue/vue3-jest)/)',
+  ],
   moduleFileExtensions: ['js', 'ts', 'json', 'vue'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
