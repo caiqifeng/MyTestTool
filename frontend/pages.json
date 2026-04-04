@@ -3,109 +3,58 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "首页",
-        "enablePullDownRefresh": false
+        "navigationBarTitleText": "面包店首页"
       }
     },
     {
-      "path": "pages/category/category",
+      "path": "pages/product-detail/index",
       "style": {
-        "navigationBarTitleText": "分类",
-        "enablePullDownRefresh": false
+        "navigationBarTitleText": "商品详情"
       }
     },
     {
-      "path": "pages/cart/cart",
+      "path": "pages/cart/index",
       "style": {
-        "navigationBarTitleText": "购物车",
-        "enablePullDownRefresh": false
+        "navigationBarTitleText": "购物车"
       }
     },
     {
-      "path": "pages/user/user",
+      "path": "pages/user-center/index",
       "style": {
-        "navigationBarTitleText": "我的",
-        "enablePullDownRefresh": false
-      }
-    },
-    {
-      "path": "pages/product/detail",
-      "style": {
-        "navigationBarTitleText": "商品详情",
-        "enablePullDownRefresh": false
-      }
-    },
-    {
-      "path": "pages/order/list",
-      "style": {
-        "navigationBarTitleText": "我的订单",
-        "enablePullDownRefresh": false
-      }
-    },
-    {
-      "path": "pages/order/detail",
-      "style": {
-        "navigationBarTitleText": "订单详情",
-        "enablePullDownRefresh": false
-      }
-    },
-    {
-      "path": "pages/login/login",
-      "style": {
-        "navigationBarTitleText": "登录",
-        "enablePullDownRefresh": false,
-        "disableScroll": true
+        "navigationBarTitleText": "个人中心"
       }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "Break面包店",
-    "navigationBarBackgroundColor": "#ffffff",
-    "backgroundColor": "#f8f8f8",
-    "app-plus": {
-      "background": "#efeff4"
-    }
+    "navigationBarTitleText": "面包店小程序",
+    "navigationBarBackgroundColor": "#F8F8F8",
+    "backgroundColor": "#F8F8F8",
+    "navigationStyle": "custom"
   },
   "tabBar": {
-    "color": "#7A7E83",
+    "color": "#999999",
     "selectedColor": "#FF6B35",
+    "backgroundColor": "#FFFFFF",
     "borderStyle": "black",
-    "backgroundColor": "#ffffff",
     "list": [
       {
         "pagePath": "pages/index/index",
+        "text": "首页",
         "iconPath": "static/tabbar/home.png",
-        "selectedIconPath": "static/tabbar/home-active.png",
-        "text": "首页"
+        "selectedIconPath": "static/tabbar/home-active.png"
       },
       {
-        "pagePath": "pages/category/category",
-        "iconPath": "static/tabbar/category.png",
-        "selectedIconPath": "static/tabbar/category-active.png",
-        "text": "分类"
-      },
-      {
-        "pagePath": "pages/cart/cart",
+        "pagePath": "pages/cart/index",
+        "text": "购物车",
         "iconPath": "static/tabbar/cart.png",
-        "selectedIconPath": "static/tabbar/cart-active.png",
-        "text": "购物车"
+        "selectedIconPath": "static/tabbar/cart-active.png"
       },
       {
-        "pagePath": "pages/user/user",
+        "pagePath": "pages/user-center/index",
+        "text": "我的",
         "iconPath": "static/tabbar/user.png",
-        "selectedIconPath": "static/tabbar/user-active.png",
-        "text": "我的"
-      }
-    ]
-  },
-  "condition": {
-    "current": 0,
-    "list": [
-      {
-        "name": "商品详情页",
-        "path": "pages/product/detail",
-        "query": "id=1"
+        "selectedIconPath": "static/tabbar/user-active.png"
       }
     ]
   }
