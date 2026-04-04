@@ -1,0 +1,178 @@
+/**
+ * Break面包店小程序 - 全局样式变量
+ * 导入uni-app默认样式变量 + 自定义变量
+ */
+
+// 导入uni-app默认样式变量
+@import '~@dcloudio/uni-app/styles/index.scss';
+
+// 导入自定义变量（将在Task 3中创建）
+@import './src/styles/variables.scss';
+
+// 主题色
+$color-primary: #FF6B35;
+$color-success: #07C160;
+$color-warning: #FF9F0F;
+$color-danger: #FF3B30;
+$color-info: #909399;
+
+// 文字色
+$color-text-primary: #303133;
+$color-text-regular: #606266;
+$color-text-secondary: #909399;
+$color-text-placeholder: #C0C4CC;
+
+// 边框色
+$border-color-base: #DCDFE6;
+$border-color-light: #E4E7ED;
+$border-color-lighter: #EBEEF5;
+$border-color-extra-light: #F2F6FC;
+
+// 背景色
+$bg-color: #F8F8F8;
+$bg-color-page: #F8F8F8;
+$bg-color-overlay: #FFFFFF;
+
+// 尺寸
+$size-base: 4px;
+$size-xs: $size-base * 2; // 8px
+$size-sm: $size-base * 3; // 12px
+$size-md: $size-base * 4; // 16px
+$size-lg: $size-base * 6; // 24px
+$size-xl: $size-base * 8; // 32px
+
+// 字体
+$font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Helvetica, Segoe UI, Arial, Roboto, 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+$font-size-xs: 10px;
+$font-size-sm: 12px;
+$font-size-base: 14px;
+$font-size-md: 16px;
+$font-size-lg: 18px;
+$font-size-xl: 20px;
+
+// 圆角
+$border-radius-sm: 2px;
+$border-radius-base: 4px;
+$border-radius-lg: 8px;
+$border-radius-xl: 12px;
+$border-radius-round: 999px;
+
+// 阴影
+$box-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.1);
+$box-shadow-base: 0 4px 8px rgba(0, 0, 0, 0.12);
+$box-shadow-lg: 0 8px 16px rgba(0, 0, 0, 0.14);
+
+// 动画
+$animation-duration-fast: 0.2s;
+$animation-duration-base: 0.3s;
+$animation-duration-slow: 0.5s;
+$animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+
+// 间距
+$spacing-xs: $size-xs;
+$spacing-sm: $size-sm;
+$spacing-md: $size-md;
+$spacing-lg: $size-lg;
+$spacing-xl: $size-xl;
+
+// 导出到CSS变量（供JS使用）
+:root {
+  // 主题色
+  --color-primary: #{$color-primary};
+  --color-success: #{$color-success};
+  --color-warning: #{$color-warning};
+  --color-danger: #{$color-danger};
+  --color-info: #{$color-info};
+
+  // 文字色
+  --color-text-primary: #{$color-text-primary};
+  --color-text-regular: #{$color-text-regular};
+  --color-text-secondary: #{$color-text-secondary};
+  --color-text-placeholder: #{$color-text-placeholder};
+
+  // 尺寸
+  --size-base: #{$size-base};
+  --size-xs: #{$size-xs};
+  --size-sm: #{$size-sm};
+  --size-md: #{$size-md};
+  --size-lg: #{$size-lg};
+  --size-xl: #{$size-xl};
+
+  // 字体
+  --font-family: #{$font-family};
+  --font-size-xs: #{$font-size-xs};
+  --font-size-sm: #{$font-size-sm};
+  --font-size-base: #{$font-size-base};
+  --font-size-md: #{$font-size-md};
+  --font-size-lg: #{$font-size-lg};
+  --font-size-xl: #{$font-size-xl};
+
+  // 圆角
+  --border-radius-sm: #{$border-radius-sm};
+  --border-radius-base: #{$border-radius-base};
+  --border-radius-lg: #{$border-radius-lg};
+  --border-radius-xl: #{$border-radius-xl};
+  --border-radius-round: #{$border-radius-round};
+}
+
+// 通用样式类
+.text-primary { color: $color-primary !important; }
+.bg-primary { background-color: $color-primary !important; }
+.border-primary { border-color: $color-primary !important; }
+
+.text-success { color: $color-success !important; }
+.bg-success { background-color: $color-success !important; }
+
+.text-warning { color: $color-warning !important; }
+.bg-warning { background-color: $color-warning !important; }
+
+.text-danger { color: $color-danger !important; }
+.bg-danger { background-color: $color-danger !important; }
+
+// 布局类
+.flex { display: flex; }
+.flex-1 { flex: 1; }
+.flex-column { flex-direction: column; }
+.flex-row { flex-direction: row; }
+.flex-wrap { flex-wrap: wrap; }
+.items-center { align-items: center; }
+.items-start { align-items: flex-start; }
+.items-end { align-items: flex-end; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.justify-around { justify-content: space-around; }
+.justify-end { justify-content: flex-end; }
+
+// 间距类
+.m-xs { margin: $spacing-xs; }
+.m-sm { margin: $spacing-sm; }
+.m-md { margin: $spacing-md; }
+.m-lg { margin: $spacing-lg; }
+.m-xl { margin: $spacing-xl; }
+
+.p-xs { padding: $spacing-xs; }
+.p-sm { padding: $spacing-sm; }
+.p-md { padding: $spacing-md; }
+.p-lg { padding: $spacing-lg; }
+.p-xl { padding: $spacing-xl; }
+
+// 文字截断
+.text-ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text-ellipsis-2 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.text-ellipsis-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
