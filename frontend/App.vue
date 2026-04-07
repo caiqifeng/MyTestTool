@@ -6,7 +6,7 @@
 
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
-import { useUserStore } from './src/stores/user.store'
+import { useUserStore } from './src/store/user.store'
 
 // 应用启动
 onLaunch(() => {
