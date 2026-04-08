@@ -1,3 +1,92 @@
-<view class="container">
-  <text>cart页面</text>
+<view class="page-container">
+  <view class="cart-page">
+    <!-- 头部 -->
+    <view class="cart-header">
+      <text class="cart-title">购物车</text>
+      <text wx:if="{{selectedCount > 0}}" class="cart-edit" bindtap="toggleEditMode">
+        {{editMode ? '完成' : '编辑'}}
+      </text>
+    </view>
+
+    <!-- 购物车为空 -->
+    <view wx:if="{{totalQuantity === 0}}" class="cart-empty">
+      <view class="empty-icon">🛒</view>
+      <text class="empty-text">购物车是空的</text>
+      <view class="empty-action" bindtap="handleGoHome">
+        <text class="empty-action-text">去逛逛</text>
+      </view>
+    </view>
+
+    <!-- 购物车商品列表 -->
+    <view wx:else class="cart-content">
+      <view class="cart-items">
+        <block wx:for="{{items}}" wx:key="id">
+          <view class="cart-item">
+            <view class="item-select" bindtap="toggleSelect" data-id="{{item.id}}">
+              <view class="select-checkbox {{selectedItems.indexOf(item.id) !== -1 ? 'selected' : ''}}">
+                <text wx:if="{{selectedItems.indexOf(item.id) !== -1}}">✓</text>
+              </view>
+            </view>
+
+            <image class="item-image" src="{{item.image}}" mode="aspectFill" />
+
+            <view class="item-info">
+              <text class="item-name">{{item.name}}</text>
+              <text wx:if="{{item.specs}}" class="item-specs">
+                {{Object.values(item.specs).join(' ')}}
+              </text>
+              <view class="item-bottom">
+                <text class="item-price">¥{{item.price}}</text>
+
+                <view class="item-quantity">
+                  <text class="quantity-btn {{item.quantity <= 1 ? 'disabled' : ''}}" bindtap="decreaseQuantity" data-id="{{item.id}}">-</text>
+                  <text class="quantity-value">{{item.quantity}}</text>
+                  <text class="quantity-btn" bindtap="increaseQuantity" data-id="{{item.id}}">+</text>
+                </view>
+              </view>
+            </view>
+
+            <view wx:if="{{editMode}}" class="item-delete" bindtap="removeItem" data-id="{{item.id}}">
+              <text class="delete-icon">×</text>
+            </view>
+          </view>
+        </block>
+      </view>
+
+      <!-- 全选 -->
+      <view class="cart-select-all">
+        <view class="select-all-checkbox" bindtap="toggleSelectAll">
+          <view class="select-checkbox {{isAllSelected ? 'selected' : ''}}">
+            <text wx:if="{{isAllSelected}}">✓</text>
+          </view>
+          <text class="select-all-text">全选</text>
+        </view>
+
+        <view wx:if="{{!editMode}}" class="select-all-delete" bindtap="deleteSelected">
+          <text class="delete-text">删除</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部结算栏 -->
+    <view wx:if="{{totalQuantity > 0}}" class="cart-footer">
+      <view class="footer-left">
+        <view class="total-price">
+          <text class="total-label">合计：</text>
+          <text class="total-value">¥{{totalPrice.toFixed(2)}}</text>
+        </view>
+        <text wx:if="{{coupon}}" class="coupon-text">
+          已使用优惠券：{{coupon.name}}
+        </text>
+      </view>
+
+      <view class="footer-right">
+        <view class="settle-btn {{selectedCount === 0 ? 'disabled' : ''}}" bindtap="handleSettle">
+          <text class="settle-text">
+            {{editMode ? '删除' : '结算(' + selectedCount + ')'}}
+          </text>
+        </view>
+      </view>
+    </view>
+  </view>
 </view>
