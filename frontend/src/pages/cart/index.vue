@@ -124,14 +124,14 @@ onMounted(() => {
       name: '奶油可颂',
       price: 18,
       quantity: 2,
-      image: 'https://via.placeholder.com/200x200/FF6B35/FFFFFF?text=可颂',
+      image: 'https://source.unsplash.com/featured/200x200/?croissant,bakery',
     })
     cartStore.addItem({
       productId: '2',
       name: '巧克力蛋糕',
       price: 68,
       quantity: 1,
-      image: 'https://via.placeholder.com/200x200/4ECDC4/FFFFFF?text=蛋糕',
+      image: 'https://source.unsplash.com/featured/200x200/?chocolate,cake,dessert',
       specs: { size: '6寸', flavor: '巧克力' },
     })
   }

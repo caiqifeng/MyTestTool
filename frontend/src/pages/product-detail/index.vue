@@ -78,7 +78,7 @@
           </text>
           <image
             class="detail-image"
-            src="https://via.placeholder.com/750x500/FF6B35/FFFFFF?text=商品详情图"
+            src="https://source.unsplash.com/featured/750x500/?bakery,bread,pastry"
             mode="widthFix"
           />
         </view>
@@ -135,9 +135,9 @@ const product = ref({
   price: 18,
   originalPrice: 22,
   images: [
-    'https://via.placeholder.com/750x750/FF6B35/FFFFFF?text=可颂1',
-    'https://via.placeholder.com/750x750/4ECDC4/FFFFFF?text=可颂2',
-    'https://via.placeholder.com/750x750/52C41A/FFFFFF?text=可颂3',
+    'https://source.unsplash.com/random/750x750/?croissant,french,pastry,bakery',
+    'https://source.unsplash.com/random/750x750/?bread,bakery,food',
+    'https://source.unsplash.com/random/750x750/?pastry,dessert,sweet',
   ],
   categoryId: '1',
   categoryName: '面包',
