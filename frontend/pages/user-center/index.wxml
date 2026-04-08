@@ -1,3 +1,102 @@
-<view class="container">
-  <text>user-center页面</text>
+<view class="page-container">
+  <view class="user-center-page">
+    <!-- 用户信息头部 -->
+    <view class="user-header">
+      <view class="user-avatar-section" bindtap="handleLogin">
+        <image class="user-avatar" src="{{avatar}}" mode="aspectFill" />
+        <view class="user-info">
+          <text wx:if="{{isLoggedIn}}" class="user-name">{{nickname}}</text>
+          <text wx:else class="user-name">点击登录</text>
+          <text wx:if="{{isLoggedIn}}" class="user-level">普通会员</text>
+        </view>
+      </view>
+
+      <view class="user-stats">
+        <view class="stat-item" bindtap="handleNavigate" data-type="order">
+          <text class="stat-value">0</text>
+          <text class="stat-label">待付款</text>
+        </view>
+        <view class="stat-item" bindtap="handleNavigate" data-type="order">
+          <text class="stat-value">0</text>
+          <text class="stat-label">待发货</text>
+        </view>
+        <view class="stat-item" bindtap="handleNavigate" data-type="order">
+          <text class="stat-value">0</text>
+          <text class="stat-label">待收货</text>
+        </view>
+        <view class="stat-item" bindtap="handleNavigate" data-type="order">
+          <text class="stat-value">0</text>
+          <text class="stat-label">待评价</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 我的订单 -->
+    <view class="order-section">
+      <view class="section-header" bindtap="handleNavigate" data-type="order">
+        <text class="section-title">我的订单</text>
+        <text class="section-more">查看全部 ></text>
+      </view>
+
+      <view class="order-menu">
+        <view class="menu-item" bindtap="handleNavigate" data-type="order" data-subtype="all">
+          <view class="menu-icon">📦</view>
+          <text class="menu-text">全部订单</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="order" data-subtype="pending">
+          <view class="menu-icon">💰</view>
+          <text class="menu-text">待付款</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="order" data-subtype="shipped">
+          <view class="menu-icon">🚚</view>
+          <text class="menu-text">待发货</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="order" data-subtype="delivered">
+          <view class="menu-icon">📦</view>
+          <text class="menu-text">待收货</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="order" data-subtype="completed">
+          <view class="menu-icon">⭐</view>
+          <text class="menu-text">待评价</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 功能菜单 -->
+    <view class="menu-section">
+      <view class="menu-grid">
+        <view class="menu-item" bindtap="handleNavigate" data-type="address">
+          <view class="menu-icon">📍</view>
+          <text class="menu-text">收货地址</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="coupon">
+          <view class="menu-icon">🎫</view>
+          <text class="menu-text">优惠券</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="collect">
+          <view class="menu-icon">❤️</view>
+          <text class="menu-text">我的收藏</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="service">
+          <view class="menu-icon">💁</view>
+          <text class="menu-text">客服中心</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="setting">
+          <view class="menu-icon">⚙️</view>
+          <text class="menu-text">设置</text>
+        </view>
+        <view class="menu-item" bindtap="handleNavigate" data-type="about">
+          <view class="menu-icon">ℹ️</view>
+          <text class="menu-text">关于我们</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 退出登录 -->
+    <view wx:if="{{isLoggedIn}}" class="logout-section">
+      <view class="logout-btn" bindtap="handleLogout">
+        <text class="logout-text">退出登录</text>
+      </view>
+    </view>
+  </view>
 </view>
