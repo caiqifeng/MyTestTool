@@ -1,0 +1,265 @@
+/* 颜色变量 */
+:root {
+  --color-primary: #FF6B35;
+  --color-primary-light: #FF9B70;
+  --color-error: #FF4D4F;
+  --color-white: #FFFFFF;
+  --color-background: #F8F8F8;
+  --color-border: #E0E0E0;
+  --color-text-primary: #333333;
+  --color-text-secondary: #666666;
+  --color-text-tertiary: #999999;
+}
+
+/* 间距变量 */
+:root {
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-lg: 24px;
+  --spacing-xl: 32px;
+}
+
+/* 圆角变量 */
+:root {
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+  --border-radius-round: 999px;
+  --border-radius-circle: 50%;
+}
+
+/* 字体大小 */
+:root {
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-xxl: 24px;
+}
+
+/* 阴影 */
+:root {
+  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.page-container {
+  height: 100%;
+}
+
+.home-page {
+  padding-bottom: var(--spacing-xl);
+}
+
+.home-search-bar {
+  padding: var(--spacing-md);
+  background-color: var(--color-white);
+}
+
+.search-input {
+  display: flex;
+  align-items: center;
+  background-color: var(--color-background);
+  border-radius: var(--border-radius-round);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.search-icon {
+  margin-right: var(--spacing-sm);
+  color: var(--color-text-tertiary);
+}
+
+.search-input input {
+  flex: 1;
+  font-size: var(--font-size-md);
+  background: transparent;
+  border: none;
+  outline: none;
+}
+
+.search-input input::placeholder {
+  color: var(--color-text-tertiary);
+}
+
+.home-banner {
+  padding: 0 var(--spacing-md);
+}
+
+.banner-swiper {
+  height: 300rpx;
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+}
+
+.banner-image {
+  width: 100%;
+  height: 100%;
+}
+
+.category-nav {
+  padding: var(--spacing-lg) var(--spacing-md);
+}
+
+.category-scroll {
+  white-space: nowrap;
+}
+
+.category-item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: var(--spacing-xl);
+}
+
+.category-item:last-child {
+  margin-right: 0;
+}
+
+.category-icon {
+  width: 80rpx;
+  height: 80rpx;
+  background-color: var(--color-background);
+  border-radius: var(--border-radius-circle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
+  margin-bottom: var(--spacing-xs);
+}
+
+.category-name {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+}
+
+.recommended-section,
+.hot-section {
+  padding: 0 var(--spacing-md);
+  margin-bottom: var(--spacing-lg);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+}
+
+.section-title {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.section-more {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
+
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.product-item {
+  background-color: var(--color-white);
+  border-radius: var(--border-radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.product-image {
+  width: 100%;
+  height: 200rpx;
+}
+
+.product-info {
+  padding: var(--spacing-sm);
+}
+
+.product-name {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-price {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-error);
+}
+
+.product-original-price {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-tertiary);
+  text-decoration: line-through;
+  margin-left: var(--spacing-xs);
+}
+
+.product-list .product-card {
+  display: flex;
+  background-color: var(--color-white);
+  border-radius: var(--border-radius-md);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.product-list .product-card:last-child {
+  margin-bottom: 0;
+}
+
+.product-card-image {
+  width: 200rpx;
+  height: 200rpx;
+  border-radius: var(--border-radius-sm);
+  margin-right: var(--spacing-md);
+}
+
+.product-card-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.product-card-name {
+  font-size: var(--font-size-md);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: var(--spacing-xs);
+}
+
+.product-card-desc {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  margin-bottom: var(--spacing-md);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.product-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: auto;
+}
+
+.product-card-price {
+  font-size: var(--font-size-lg);
+  font-weight: 600;
+  color: var(--color-error);
+}
+
+.product-card-sales {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-tertiary);
+}
