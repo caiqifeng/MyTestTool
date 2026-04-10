@@ -17,9 +17,11 @@ interface CartItem {
 interface Coupon {
   id: string
   name: string
+  description?: string
   discount: number
   type: 'percentage' | 'fixed'
   minAmount?: number
+  expiredAt?: string
 }
 
 export const useCartStore = defineStore('cart', () => {

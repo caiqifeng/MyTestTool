@@ -56,6 +56,29 @@
         </view>
       </view>
 
+      <!-- 优惠券选择 -->
+      <view class="coupon-section">
+        <view class="section-header">
+          <text class="section-title">优惠券</text>
+          <text class="section-action" @click="handleSelectCoupon">
+            {{ cartStore.getCoupon ? '更换优惠券' : '选择优惠券' }}
+          </text>
+        </view>
+        <view v-if="cartStore.getCoupon" class="coupon-info">
+          <view class="coupon-main">
+            <text class="coupon-name">{{ cartStore.getCoupon.name }}</text>
+            <text class="coupon-desc">{{ cartStore.getCoupon.description }}</text>
+            <text class="coupon-value">
+              {{ cartStore.getCoupon.type === 'fixed' ? '¥' : '' }}{{ cartStore.getCoupon.discount }}{{ cartStore.getCoupon.type === 'percentage' ? '%' : '' }}
+            </text>
+          </view>
+          <text class="coupon-expiry">有效期至 {{ formatDate(cartStore.getCoupon.expiredAt) }}</text>
+        </view>
+        <view v-else class="coupon-empty">
+          <text class="empty-text">暂无优惠券可用</text>
+        </view>
+      </view>
+
       <!-- 订单信息 -->
       <view class="order-info-section">
         <view class="info-item">
@@ -122,6 +145,30 @@ const handleSelectAddress = () => {
     title: '地址选择功能开发中',
     icon: 'none',
   })
+}
+
+// 选择优惠券
+const handleSelectCoupon = () => {
+  uni.showToast({
+    title: '优惠券选择功能开发中',
+    icon: 'none',
+  })
+  // TODO: 实现优惠券选择弹窗
+}
+
+// 格式化日期
+const formatDate = (dateString?: string): string => {
+  if (!dateString) return ''
+  try {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+  } catch {
+    return dateString
+  }
 }
 
 const handleSubmitOrder = () => {
@@ -351,6 +398,77 @@ const handleSubmitOrder = () => {
     .product-quantity {
       font-size: $font-size-md;
       color: $color-text-secondary;
+    }
+  }
+}
+
+.coupon-section {
+  background-color: $color-white;
+  margin: $spacing-md;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
+
+  .section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: $spacing-md;
+    border-bottom: 1px solid $color-border;
+
+    .section-title {
+      font-size: $font-size-lg;
+      font-weight: 600;
+      color: $color-text-primary;
+    }
+
+    .section-action {
+      font-size: $font-size-md;
+      color: $color-primary;
+    }
+  }
+
+  .coupon-info {
+    padding: $spacing-md;
+
+    .coupon-main {
+      display: flex;
+      align-items: center;
+      gap: $spacing-sm;
+      margin-bottom: $spacing-xs;
+    }
+
+    .coupon-name {
+      font-size: $font-size-md;
+      font-weight: 600;
+      color: $color-text-primary;
+    }
+
+    .coupon-desc {
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+      flex: 1;
+    }
+
+    .coupon-value {
+      font-size: $font-size-lg;
+      font-weight: 600;
+      color: $color-primary;
+    }
+
+    .coupon-expiry {
+      display: block;
+      font-size: $font-size-sm;
+      color: $color-text-tertiary;
+    }
+  }
+
+  .coupon-empty {
+    padding: $spacing-md;
+    text-align: center;
+
+    .empty-text {
+      font-size: $font-size-md;
+      color: $color-text-tertiary;
     }
   }
 }
