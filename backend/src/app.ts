@@ -183,6 +183,11 @@ class App {
       }
     });
   }
+
+  public close(): void {
+    // 清理资源（如果有）
+    console.log('App closed');
+  }
 }
 
 export default App;

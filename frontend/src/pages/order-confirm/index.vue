@@ -146,39 +146,60 @@ const handleSubmitOrder = () => {
     content: `确认支付 ¥${finalAmount.value.toFixed(2)} 吗？`,
     success: (res) => {
       if (res.confirm) {
-        // 创建订单
-        const order = {
-          id: Date.now().toString(),
-          orderNo: 'ORD' + Date.now(),
-          status: 'pending' as const,
-          totalAmount: cartStore.getTotalPrice,
-          discountAmount: couponDiscount.value,
-          shippingFee: shippingFee.value,
-          finalAmount: finalAmount.value,
-          items: cartStore.getItems.filter(item => cartStore.selectedItems.includes(item.id)),
-          address: selectedAddress.value,
-          createdAt: new Date().toISOString(),
+        // 构建订单数据
+        const selectedCartItems = cartStore.getItems.filter(item => cartStore.selectedItems.includes(item.id))
+
+        const orderData = {
+          items: selectedCartItems.map(item => ({
+            productId: item.productId,
+            name: item.name,
+            price: item.price,
+            quantity: item.quantity,
+            image: item.image,
+            specs: item.specs || {}
+          })),
+          deliveryType: 'delivery', // 默认配送方式
+          deliveryAddressId: selectedAddress.value?.id || undefined,
+          paymentMethod: 'wechat_pay', // 默认微信支付
+          couponCode: cartStore.getCoupon?.id || undefined,
+          remark: ''
         }
 
-        // 这里应该调用API创建订单
-        console.log('创建订单:', order)
+        // 调用API创建订单
+        try {
+          await orderStore.createNewOrder(orderData)
 
-        // 清空已选商品
-        cartStore.selectedItems.forEach(itemId => {
-          cartStore.removeItem(itemId)
-        })
+          if (orderStore.error.value) {
+            throw new Error(orderStore.error.value)
+          }
 
-        uni.showToast({
-          title: '订单创建成功',
-          icon: 'success',
-        })
-
-        // 跳转到订单详情页
-        setTimeout(() => {
-          uni.navigateTo({
-            url: `/pages/order-detail/index?id=${order.id}`,
+          // 清空已选商品
+          cartStore.selectedItems.forEach(itemId => {
+            cartStore.removeItem(itemId)
           })
-        }, 1500)
+
+          uni.showToast({
+            title: '订单创建成功',
+            icon: 'success',
+          })
+
+          // 跳转到订单详情页
+          setTimeout(() => {
+            if (orderStore.getCurrentOrder) {
+              uni.navigateTo({
+                url: `/pages/order-detail/index?id=${orderStore.getCurrentOrder.id}`,
+              })
+            } else {
+              uni.navigateBack()
+            }
+          }, 1500)
+        } catch (error) {
+          console.error('创建订单失败:', error)
+          uni.showToast({
+            title: '创建订单失败，请重试',
+            icon: 'none',
+          })
+        }
       }
     }
   })

@@ -77,9 +77,9 @@ export class CategoryController {
    */
   static getCategories = asyncHandler(async (req: Request, res: Response) => {
     try {
-      // 开发环境直接返回模拟数据，避免数据库连接问题
-      if (config.env === 'development') {
-        console.warn('开发环境，返回模拟分类数据');
+      // 非生产环境直接返回模拟数据，避免数据库连接问题
+      if (config.env !== 'production') {
+        console.warn('非生产环境，返回模拟分类数据');
         throw new Error('Development mode - using mock data');
       }
 

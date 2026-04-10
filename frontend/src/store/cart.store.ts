@@ -1,6 +1,7 @@
 // frontend/src/store/cart.store.ts
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { cartApi } from '../utils/api/cart.api'
 
 interface CartItem {
   id: string
@@ -11,12 +12,6 @@ interface CartItem {
   image: string
   selected: boolean
   specs?: Record<string, string>
-}
-
-interface CartState {
-  items: CartItem[]
-  selectedItems: string[]
-  coupon?: Coupon
 }
 
 interface Coupon {
@@ -32,16 +27,20 @@ export const useCartStore = defineStore('cart', () => {
   const items = ref<CartItem[]>([])
   const selectedItems = ref<string[]>([])
   const coupon = ref<Coupon | undefined>(undefined)
+  const isLoading = ref(false)
+  const error = ref<string | null>(null)
 
   // getters
   const getItems = computed(() => items.value)
   const getSelectedItems = computed(() => selectedItems.value)
   const getCoupon = computed(() => coupon.value)
+  const getIsLoading = computed(() => isLoading.value)
+  const getError = computed(() => error.value)
 
   const getTotalPrice = computed(() => {
     return items.value.reduce((total, item) => {
       if (selectedItems.value.includes(item.id)) {
-        return total + (item.price * item.quantity)
+        return total + (item.quantity * item.price)
       }
       return total
     }, 0)
@@ -60,32 +59,109 @@ export const useCartStore = defineStore('cart', () => {
     return selectedItems.value.length === items.value.length
   })
 
-  // actions
-  const addItem = (item: Omit<CartItem, 'id' | 'selected'>) => {
-    const existingItem = items.value.find(i => i.productId === item.productId)
+  // 工具函数：将后端购物车数据转换为前端格式
+  const transformBackendCart = (backendCart: any): CartItem[] => {
+    return backendCart.items.map((item: any) => ({
+      id: item.productId || `cart_${Date.now()}_${item.productId}`, // 使用productId作为id或生成复合id
+      productId: item.productId,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      image: item.image,
+      selected: true, // 默认选中
+      specs: item.specs || {}
+    }))
+  }
 
-    if (existingItem) {
-      existingItem.quantity += item.quantity
-    } else {
-      const newItem: CartItem = {
-        ...item,
-        id: Date.now().toString(),
-        selected: true,
+  // 工具函数：更新本地购物车状态
+  const updateLocalCart = (backendCart: any) => {
+    const transformedItems = transformBackendCart(backendCart)
+    items.value = transformedItems
+    selectedItems.value = transformedItems.map(item => item.id)
+  }
+
+  // actions
+  const fetchCart = async () => {
+    try {
+      isLoading.value = true
+      error.value = null
+      const response = await cartApi.getCart()
+      if (response.success && response.data.cart) {
+        updateLocalCart(response.data.cart)
+      } else {
+        error.value = response.message || '获取购物车失败'
       }
-      items.value.push(newItem)
-      selectedItems.value.push(newItem.id)
+    } catch (err: any) {
+      error.value = err.message || '请求购物车失败'
+      console.error('获取购物车失败:', err)
+    } finally {
+      isLoading.value = false
     }
   }
 
-  const removeItem = (itemId: string) => {
-    items.value = items.value.filter(item => item.id !== itemId)
-    selectedItems.value = selectedItems.value.filter(id => id !== itemId)
+  const addItem = async (item: Omit<CartItem, 'id' | 'selected'>) => {
+    try {
+      isLoading.value = true
+      error.value = null
+      const response = await cartApi.addToCart(item.productId, item.quantity, item.specs)
+      if (response.success && response.data.cart) {
+        updateLocalCart(response.data.cart)
+      } else {
+        error.value = response.message || '添加商品到购物车失败'
+      }
+    } catch (err: any) {
+      error.value = err.message || '添加商品到购物车请求失败'
+      console.error('添加商品到购物车失败:', err)
+    } finally {
+      isLoading.value = false
+    }
   }
 
-  const updateQuantity = (itemId: string, quantity: number) => {
-    const item = items.value.find(i => i.id === itemId)
-    if (item) {
-      item.quantity = quantity > 0 ? quantity : 1
+  const removeItem = async (itemId: string) => {
+    try {
+      isLoading.value = true
+      error.value = null
+      // 从前端数据中查找对应的productId
+      const item = items.value.find(i => i.id === itemId)
+      if (item) {
+        const response = await cartApi.removeCartItem(item.productId)
+        if (response.success && response.data.cart) {
+          updateLocalCart(response.data.cart)
+        } else {
+          error.value = response.message || '删除购物车商品失败'
+        }
+      } else {
+        error.value = '未找到要删除的商品'
+      }
+    } catch (err: any) {
+      error.value = err.message || '删除购物车商品请求失败'
+      console.error('删除购物车商品失败:', err)
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  const updateQuantity = async (itemId: string, quantity: number) => {
+    try {
+      isLoading.value = true
+      error.value = null
+      // 从前端数据中查找对应的productId
+      const item = items.value.find(i => i.id === itemId)
+      if (item) {
+        const response = await cartApi.updateCartItem(item.productId, quantity)
+        if (response.success && response.data.cart) {
+          updateLocalCart(response.data.cart)
+        } else {
+          error.value = response.message || '更新购物车商品数量失败'
+        }
+      } else {
+        error.value = '未找到要更新的商品'
+      }
+    } catch (err: any) {
+      error.value = err.message || '更新购物车商品数量请求失败'
+      console.error('更新购物车商品数量失败:', err)
+    } finally {
+      isLoading.value = false
     }
   }
 
@@ -105,10 +181,23 @@ export const useCartStore = defineStore('cart', () => {
     }
   }
 
-  const clearCart = () => {
-    items.value = []
-    selectedItems.value = []
-    coupon.value = undefined
+  const clearCart = async () => {
+    try {
+      isLoading.value = true
+      error.value = null
+      const response = await cartApi.clearCart()
+      if (response.success && response.data.cart) {
+        updateLocalCart(response.data.cart)
+        coupon.value = undefined
+      } else {
+        error.value = response.message || '清空购物车失败'
+      }
+    } catch (err: any) {
+      error.value = err.message || '清空购物车请求失败'
+      console.error('清空购物车失败:', err)
+    } finally {
+      isLoading.value = false
+    }
   }
 
   const applyCoupon = (newCoupon: Coupon) => {
@@ -124,6 +213,8 @@ export const useCartStore = defineStore('cart', () => {
     items,
     selectedItems,
     coupon,
+    isLoading,
+    error,
 
     // getters
     getItems,
@@ -133,8 +224,11 @@ export const useCartStore = defineStore('cart', () => {
     getTotalQuantity,
     getSelectedCount,
     getIsAllSelected,
+    getIsLoading,
+    getError,
 
     // actions
+    fetchCart,
     addItem,
     removeItem,
     updateQuantity,

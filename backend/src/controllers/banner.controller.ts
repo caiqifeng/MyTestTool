@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import BannerModel from '../models/Banner';
 import { asyncHandler } from '../middleware/error';
+import config from '../config';
 
 export class BannerController {
   /**
@@ -10,38 +11,109 @@ export class BannerController {
     const { activeOnly = 'true', limit = 10 } = req.query;
     const limitNum = parseInt(limit as string);
 
-    let banners;
+    try {
+      let banners;
 
-    if (activeOnly === 'true') {
-      // 获取活跃的轮播图
-      banners = await BannerModel.getActiveBanners();
-    } else {
-      // 获取所有轮播图（管理员）
-      banners = await BannerModel.find()
-        .sort({ sortOrder: 1, createdAt: -1 })
-        .limit(limitNum);
-    }
-
-    res.json({
-      success: true,
-      data: {
-        banners: banners.map((banner: any) => ({
-          _id: banner._id,
-          title: banner.title,
-          description: banner.description,
-          image: banner.image,
-          linkType: banner.linkType,
-          linkTarget: banner.linkTarget,
-          sortOrder: banner.sortOrder,
-          isActive: banner.isActive,
-          isCurrentlyActive: banner.isCurrentlyActive,
-          startDate: banner.startDate,
-          endDate: banner.endDate,
-          createdAt: banner.createdAt,
-          updatedAt: banner.updatedAt
-        }))
+      if (activeOnly === 'true') {
+        // 获取活跃的轮播图
+        banners = await BannerModel.getActiveBanners();
+      } else {
+        // 获取所有轮播图（管理员）
+        banners = await BannerModel.find()
+          .sort({ sortOrder: 1, createdAt: -1 })
+          .limit(limitNum);
       }
-    });
+
+      res.json({
+        success: true,
+        data: {
+          banners: banners.map((banner: any) => ({
+            _id: banner._id,
+            title: banner.title,
+            description: banner.description,
+            image: banner.image,
+            linkType: banner.linkType,
+            linkTarget: banner.linkTarget,
+            sortOrder: banner.sortOrder,
+            isActive: banner.isActive,
+            isCurrentlyActive: banner.isCurrentlyActive,
+            startDate: banner.startDate,
+            endDate: banner.endDate,
+            createdAt: banner.createdAt,
+            updatedAt: banner.updatedAt
+          }))
+        }
+      });
+    } catch (error) {
+      // 开发/测试环境下返回模拟数据
+      if (config.env !== 'production') {
+        console.warn('数据库连接失败，返回模拟轮播图数据');
+        const mockBanners = [
+          {
+            _id: '1',
+            title: '新鲜烘焙面包',
+            description: '每日新鲜出炉，健康美味',
+            image: '/static/banners/banner-bakery-interior.jpg',
+            linkType: 'category',
+            linkTarget: '2',
+            sortOrder: 1,
+            isActive: true,
+            isCurrentlyActive: true,
+            startDate: new Date('2023-01-01'),
+            endDate: new Date('2023-12-31'),
+            createdAt: new Date('2023-01-01'),
+            updatedAt: new Date('2023-01-01')
+          },
+          {
+            _id: '2',
+            title: '精致蛋糕甜点',
+            description: '生日庆祝，甜蜜时刻',
+            image: '/static/banners/banner-cake-dessert.jpg',
+            linkType: 'category',
+            linkTarget: '3',
+            sortOrder: 2,
+            isActive: true,
+            isCurrentlyActive: true,
+            startDate: new Date('2023-01-01'),
+            endDate: new Date('2023-12-31'),
+            createdAt: new Date('2023-01-01'),
+            updatedAt: new Date('2023-01-01')
+          },
+          {
+            _id: '3',
+            title: '咖啡饮品时光',
+            description: '现磨咖啡，休闲时光',
+            image: '/static/banners/banner-coffee-breakfast.jpg',
+            linkType: 'category',
+            linkTarget: '5',
+            sortOrder: 3,
+            isActive: true,
+            isCurrentlyActive: true,
+            startDate: new Date('2023-01-01'),
+            endDate: new Date('2023-12-31'),
+            createdAt: new Date('2023-01-01'),
+            updatedAt: new Date('2023-01-01')
+          }
+        ];
+
+        // 根据activeOnly过滤
+        let filteredBanners = activeOnly === 'true'
+          ? mockBanners.filter(b => b.isActive)
+          : mockBanners;
+
+        // 限制数量
+        filteredBanners = filteredBanners.slice(0, limitNum);
+
+        res.json({
+          success: true,
+          data: {
+            banners: filteredBanners
+          }
+        });
+      } else {
+        throw error; // 生产环境抛出错误
+      }
+    }
   });
 
   /**

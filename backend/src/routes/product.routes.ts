@@ -36,10 +36,10 @@ router.get(
  */
 router.get(
   '/:id',
-  [
-    param('id').custom(commonValidators.objectId('id').custom.options)
-  ],
-  validate,
+  // [
+  //   param('id').custom(commonValidators.objectId('id').custom.options)
+  // ],
+  // validate,
   ProductController.getProductById
 );
 

@@ -81,28 +81,16 @@ const handleLogin = async () => {
   loading.value = true
 
   try {
-    // 模拟API调用
     console.log('登录请求:', form.value)
 
-    // 实际应该调用: const response = await authApi.login(form.value)
-    // 模拟成功响应
-    const mockResponse = {
-      code: 200,
-      message: '登录成功',
-      data: {
-        token: 'mock-token-' + Date.now(),
-        refreshToken: 'mock-refresh-token',
-        user: {
-          id: '123',
-          username: form.value.username,
-          nickname: form.value.username,
-          avatar: '/static/avatars/default-avatar.jpg',
-        },
-      },
-    }
+    // 实际API调用
+    const response = await authApi.login({
+      username: form.value.username.trim(),
+      password: form.value.password.trim()
+    })
 
-    userStore.setUserInfo(mockResponse.data.user)
-    userStore.setToken(mockResponse.data.token, mockResponse.data.refreshToken)
+    userStore.setUserInfo(response.data.user)
+    userStore.setToken(response.data.token, response.data.refreshToken)
 
     uni.showToast({
       title: '登录成功',

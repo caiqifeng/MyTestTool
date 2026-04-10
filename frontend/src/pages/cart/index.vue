@@ -9,8 +9,23 @@
         </text>
       </view>
 
+      <!-- 加载状态 -->
+      <view v-if="cartStore.isLoading" class="cart-loading">
+        <view class="loading-icon">⏳</view>
+        <text class="loading-text">加载中...</text>
+      </view>
+
+      <!-- 错误提示 -->
+      <view v-else-if="cartStore.error" class="cart-error">
+        <view class="error-icon">❌</view>
+        <text class="error-text">{{ cartStore.error }}</text>
+        <view class="error-action" @click="cartStore.fetchCart">
+          <text class="error-action-text">重试</text>
+        </view>
+      </view>
+
       <!-- 购物车为空 -->
-      <view v-if="cartStore.getTotalQuantity === 0" class="cart-empty">
+      <view v-else-if="cartStore.getTotalQuantity === 0" class="cart-empty">
         <view class="empty-icon">🛒</view>
         <text class="empty-text">购物车是空的</text>
         <view class="empty-action" @click="handleGoHome">
@@ -117,24 +132,8 @@ const cartStore = useCartStore()
 const editMode = ref(false)
 
 onMounted(() => {
-  // 初始化购物车数据（模拟）
-  if (cartStore.getTotalQuantity === 0) {
-    cartStore.addItem({
-      productId: '1',
-      name: '奶油可颂',
-      price: 18,
-      quantity: 2,
-      image: '/static/products/large/cart-croissant.jpg',
-    })
-    cartStore.addItem({
-      productId: '2',
-      name: '巧克力蛋糕',
-      price: 68,
-      quantity: 1,
-      image: '/static/products/large/cart-chocolate-cake.jpg',
-      specs: { size: '6寸', flavor: '巧克力' },
-    })
-  }
+  // 从后端获取购物车数据
+  cartStore.fetchCart()
 })
 
 const toggleEditMode = () => {
@@ -237,6 +236,65 @@ const handleGoHome = () => {
       font-weight: 500;
     }
   }
+}
+
+.cart-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl;
+
+  .loading-icon {
+    font-size: 80rpx;
+    margin-bottom: $spacing-md;
+    animation: rotate 1s linear infinite;
+  }
+
+  .loading-text {
+    font-size: $font-size-md;
+    color: $color-text-secondary;
+  }
+}
+
+.cart-error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl;
+
+  .error-icon {
+    font-size: 80rpx;
+    margin-bottom: $spacing-md;
+    color: $color-error;
+  }
+
+  .error-text {
+    font-size: $font-size-md;
+    color: $color-text-secondary;
+    margin-bottom: $spacing-lg;
+    text-align: center;
+    max-width: 80%;
+  }
+
+  .error-action {
+    background-color: $color-primary;
+    border-radius: $border-radius-round;
+    padding: $spacing-sm $spacing-xl;
+
+    .error-action-text {
+      color: $color-white;
+      font-weight: 500;
+    }
+  }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .cart-content {

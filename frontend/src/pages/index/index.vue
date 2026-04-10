@@ -104,76 +104,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useProductStore } from '../../store/product.store'
 
 const productStore = useProductStore()
 
 const searchKeyword = ref('')
-const banners = ref([
-  { id: 1, image: '/static/banners/banner-bakery-interior.jpg' },
-  { id: 2, image: '/static/banners/banner-cake-dessert.jpg' },
-  { id: 3, image: '/static/banners/banner-coffee-breakfast.jpg' },
-])
 
-const categories = ref([
-  { id: '1', name: '全部', icon: '🍞' },
-  { id: '2', name: '面包', icon: '🥖' },
-  { id: '3', name: '蛋糕', icon: '🍰' },
-  { id: '4', name: '甜点', icon: '🍮' },
-  { id: '5', name: '饮品', icon: '☕' },
-  { id: '6', name: '礼盒', icon: '🎁' },
-])
+// 从store获取banner数据
+const banners = computed(() => productStore.getBanners.map(banner => ({
+  id: banner.id,
+  image: banner.image
+})))
 
-const recommendedProducts = ref([
-  {
-    id: '1',
-    name: '奶油可颂',
-    price: 18,
-    originalPrice: 22,
-    images: ['/static/products/large/product-croissant.jpg'],
-  },
-  {
-    id: '2',
-    name: '巧克力蛋糕',
-    price: 68,
-    originalPrice: 88,
-    images: ['/static/products/large/product-chocolate-cake.jpg'],
-  },
-  {
-    id: '3',
-    name: '草莓慕斯',
-    price: 48,
-    images: ['/static/products/large/product-strawberry-mousse.jpg'],
-  },
-])
+// 计算属性：获取分类数据
+const categories = computed(() => productStore.getCategories)
 
-const hotProducts = ref([
-  {
-    id: '4',
-    name: '全麦面包',
-    description: '健康全麦，低脂低糖',
-    price: 28,
-    sales: 152,
-    images: ['/static/products/small/product-bread.jpg'],
-  },
-  {
-    id: '5',
-    name: '芝士蛋糕',
-    description: '浓郁芝士，入口即化',
-    price: 58,
-    sales: 98,
-    images: ['/static/products/small/product-cheesecake.jpg'],
-  },
-  {
-    id: '6',
-    name: '拿铁咖啡',
-    description: '现磨咖啡，香浓顺滑',
-    price: 25,
-    sales: 203,
-    images: ['/static/products/small/product-latte.jpg'],
-  },
-])
+// 计算属性：获取推荐产品（前3个）
+const recommendedProducts = computed(() => productStore.getProducts.slice(0, 3))
+
+// 计算属性：获取热门产品（第4-6个）
+const hotProducts = computed(() => productStore.getProducts.slice(3, 6))
 
 const handleSearch = () => {
   if (searchKeyword.value.trim()) {
@@ -202,8 +153,14 @@ const handleViewAll = () => {
 }
 
 onMounted(() => {
-  // 初始化数据
-  productStore.setProducts([...recommendedProducts.value, ...hotProducts.value])
+  // 从后端获取banner、分类和产品数据
+  productStore.fetchBanners()
+  productStore.fetchCategories()
+  productStore.fetchProducts({ limit: 6 }) // 获取前6个产品
+
+  // 更新推荐和热门产品（基于获取的数据）
+  // 注意：由于fetchProducts是异步的，这里需要在数据加载后更新
+  // 可以改用watch或computed来响应式更新
 })
 </script>
 

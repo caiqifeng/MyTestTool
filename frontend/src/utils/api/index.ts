@@ -1,8 +1,8 @@
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError } from 'axios'
+import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, InternalAxiosRequestConfig, AxiosHeaders } from 'axios'
 import { useUserStore } from '../../store/user.store'
 
-// 环境变量配置
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000/api'
+// 环境变量配置 - 开发环境使用本地后端
+const API_BASE_URL = 'http://localhost:3003/api'
 
 // 创建axios实例
 const api: AxiosInstance = axios.create({
@@ -15,13 +15,15 @@ const api: AxiosInstance = axios.create({
 
 // 请求拦截器
 api.interceptors.request.use(
-  (config: AxiosRequestConfig) => {
+  (config: InternalAxiosRequestConfig) => {
     const userStore = useUserStore()
     const token = userStore.token
 
     if (token) {
-      config.headers = config.headers || {}
-      config.headers.Authorization = `Bearer ${token}`
+      if (!config.headers) {
+        config.headers = new AxiosHeaders()
+      }
+      config.headers.set('Authorization', `Bearer ${token}`)
     }
 
     return config
@@ -55,6 +57,7 @@ api.interceptors.response.use(
 
 // API响应类型
 export interface ApiResponse<T = any> {
+  success: boolean
   code: number
   message: string
   data: T

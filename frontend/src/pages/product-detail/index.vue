@@ -120,7 +120,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useCartStore } from '../../store/cart.store'
 import { useProductStore } from '../../store/product.store'
@@ -128,49 +128,110 @@ import { useProductStore } from '../../store/product.store'
 const cartStore = useCartStore()
 const productStore = useProductStore()
 
-const product = ref({
-  id: '1',
-  name: '奶油可颂',
-  description: '新鲜烘焙的奶油可颂，外酥内软，奶香浓郁，早餐下午茶的不二选择。',
-  price: 18,
-  originalPrice: 22,
-  images: [
-    '/static/product-detail/carousel-croissant.jpg',
-    '/static/product-detail/carousel-bread.jpg',
-    '/static/product-detail/carousel-pastries.jpg',
-  ],
-  categoryId: '1',
-  categoryName: '面包',
-  stock: 100,
-  sales: 152,
-  specs: {
-    '尺寸': ['小份', '中份', '大份'],
-    '口味': ['原味', '巧克力', '抹茶'],
-  },
-  createdAt: '2023-01-01',
-})
-
+const isLoading = ref(false)
+const error = ref<string | null>(null)
 const selectedSpecs = ref<Record<string, string>>({})
 const isFavorited = ref(false)
 const quantity = ref(1)
 
+const product = computed(() => {
+  if (!productStore.getCurrentProduct) {
+    return {
+      id: '',
+      name: '',
+      description: '',
+      price: 0,
+      originalPrice: 0,
+      images: [],
+      categoryId: '',
+      categoryName: '',
+      stock: 0,
+      sales: 0,
+      specs: {},
+      createdAt: '',
+    }
+  }
+  return productStore.getCurrentProduct
+})
+
+const transformProduct = (backendProduct: any) => {
+  // 转换规格数组为记录格式
+  const convertSpecsArrayToRecord = (specsArray: any[]): Record<string, string[]> => {
+    if (!specsArray || !Array.isArray(specsArray)) {
+      return {};
+    }
+
+    const result: Record<string, string[]> = {};
+    specsArray.forEach((spec: any) => {
+      if (spec && spec.name && spec.value) {
+        if (!result[spec.name]) {
+          result[spec.name] = [];
+        }
+        result[spec.name].push(spec.value);
+      }
+    });
+    return result;
+  };
+
+  return {
+    id: backendProduct._id,
+    name: backendProduct.name,
+    description: backendProduct.description,
+    price: backendProduct.price,
+    originalPrice: backendProduct.originalPrice,
+    images: backendProduct.images || [],
+    categoryId: backendProduct.categoryId?._id || backendProduct.categoryId || '',
+    categoryName: backendProduct.categoryId?.name || '',
+    stock: backendProduct.stock || 0,
+    sales: backendProduct.salesCount || 0,
+    specs: convertSpecsArrayToRecord(backendProduct.specs),
+    createdAt: backendProduct.createdAt,
+  }
+}
+
 onLoad((options) => {
   const productId = options.id
   console.log('加载商品:', productId)
-  // 这里应该根据productId从API加载商品数据
-  productStore.setCurrentProduct(product.value)
+
+  if (productId) {
+    isLoading.value = true
+    error.value = null
+
+    productStore.fetchProductById(productId)
+      .then(() => {
+        // 数据加载完成后初始化规格
+        if (productStore.getCurrentProduct?.specs) {
+          Object.keys(productStore.getCurrentProduct.specs).forEach(specName => {
+            const values = productStore.getCurrentProduct!.specs![specName]
+            if (values.length > 0) {
+              selectedSpecs.value[specName] = values[0]
+            }
+          })
+        }
+      })
+      .catch(err => {
+        error.value = err.message || '加载商品失败'
+        console.error('加载商品失败:', err)
+      })
+      .finally(() => {
+        isLoading.value = false
+      })
 })
 
 onMounted(() => {
-  // 初始化默认规格
-  if (product.value.specs) {
-    Object.keys(product.value.specs).forEach(specName => {
-      if (product.value.specs![specName].length > 0) {
-        selectedSpecs.value[specName] = product.value.specs![specName][0]
-      }
-    })
+  // 组件挂载后，检查是否有当前产品数据
+  if (productStore.getCurrentProduct && Object.keys(selectedSpecs.value).length === 0) {
+    if (productStore.getCurrentProduct.specs) {
+      Object.keys(productStore.getCurrentProduct.specs).forEach(specName => {
+        const values = productStore.getCurrentProduct!.specs![specName]
+        if (values.length > 0) {
+          selectedSpecs.value[specName] = values[0]
+        }
+      })
+    }
   }
 })
+
 
 const selectSpec = (specName: string, value: string) => {
   selectedSpecs.value[specName] = value
