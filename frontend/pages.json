@@ -79,6 +79,14 @@
         "navigationBarBackgroundColor": "#FFFFFF",
         "navigationBarTextStyle": "black"
       }
+    },
+    {
+      "path": "pages/payment/index",
+      "style": {
+        "navigationBarTitleText": "支付订单",
+        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarTextStyle": "black"
+      }
     }
   ],
   "globalStyle": {
