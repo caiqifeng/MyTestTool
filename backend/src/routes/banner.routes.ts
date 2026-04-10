@@ -14,11 +14,11 @@ const router = Router();
  */
 router.get(
   '/',
-  [
-    query('activeOnly').optional().isIn(['true', 'false']),
-    query('limit').optional().isInt({ min: 1, max: 50 })
-  ],
-  validate,
+  // [
+  //   query('activeOnly').optional().isIn(['true', 'false']),
+  //   query('limit').optional().isInt({ min: 1, max: 50 })
+  // ],
+  // validate,
   BannerController.getBanners
 );
 

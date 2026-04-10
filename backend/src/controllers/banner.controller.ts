@@ -12,6 +12,7 @@ export class BannerController {
     const limitNum = parseInt(limit as string);
 
     try {
+      console.log('BannerController.getBanners: entering try block');
       let banners;
 
       if (activeOnly === 'true') {
@@ -45,6 +46,7 @@ export class BannerController {
         }
       });
     } catch (error) {
+      console.error('BannerController.getBanners: caught error:', error);
       // 开发/测试环境下返回模拟数据
       if (config.env !== 'production') {
         console.warn('数据库连接失败，返回模拟轮播图数据');
@@ -104,12 +106,14 @@ export class BannerController {
         // 限制数量
         filteredBanners = filteredBanners.slice(0, limitNum);
 
+        console.log('Returning mock banners:', filteredBanners.length);
         res.json({
           success: true,
           data: {
             banners: filteredBanners
           }
         });
+        console.log('Mock banners response sent');
       } else {
         throw error; // 生产环境抛出错误
       }
