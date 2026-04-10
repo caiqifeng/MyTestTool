@@ -71,6 +71,14 @@
         "navigationBarTitleText": "个人中心",
         "navigationStyle": "custom"
       }
+    },
+    {
+      "path": "pages/address-edit/index",
+      "style": {
+        "navigationBarTitleText": "地址编辑",
+        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarTextStyle": "black"
+      }
     }
   ],
   "globalStyle": {
