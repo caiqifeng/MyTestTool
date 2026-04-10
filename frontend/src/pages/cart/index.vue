@@ -124,14 +124,14 @@ onMounted(() => {
       name: '奶油可颂',
       price: 18,
       quantity: 2,
-      image: 'https://source.unsplash.com/featured/200x200/?croissant,bakery',
+      image: '/static/products/large/cart-croissant.jpg',
     })
     cartStore.addItem({
       productId: '2',
       name: '巧克力蛋糕',
       price: 68,
       quantity: 1,
-      image: 'https://source.unsplash.com/featured/200x200/?chocolate,cake,dessert',
+      image: '/static/products/large/cart-chocolate-cake.jpg',
       specs: { size: '6寸', flavor: '巧克力' },
     })
   }
@@ -185,7 +185,7 @@ const handleGoHome = () => {
 .cart-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
 }
 
 .cart-header {
@@ -242,14 +242,14 @@ const handleGoHome = () => {
 .cart-content {
   flex: 1;
   overflow-y: auto;
-  padding-bottom: 120rpx; /* 为底部结算栏留空间 */
+  padding-bottom: 220rpx; /* 为底部结算栏(120rpx) + Tabbar(100rpx)留空间 */
 }
 
 .cart-items {
   .cart-item {
     display: flex;
     align-items: center;
-    padding: $spacing-md;
+    padding: $spacing-sm $spacing-md;
     background-color: $color-white;
     margin-bottom: 1px;
 
@@ -279,10 +279,11 @@ const handleGoHome = () => {
   }
 
   .item-image {
-    width: 160rpx;
-    height: 160rpx;
+    width: 140rpx;
+    height: 140rpx;
     border-radius: $border-radius-sm;
     margin-right: $spacing-md;
+    flex-shrink: 0;
   }
 
   .item-info {
@@ -389,7 +390,7 @@ const handleGoHome = () => {
 
 .cart-footer {
   position: fixed;
-  bottom: 0;
+  bottom: 100rpx; /* Tabbar 高度，结算栏悬浮在 Tabbar 上方 */
   left: 0;
   right: 0;
   background-color: $color-white;

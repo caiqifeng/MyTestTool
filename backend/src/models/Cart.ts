@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ProductSpec } from '@shared/types';
+import { ProductSpec } from '../../../shared/dist/types';
 
 export interface ICartItem {
   productId: string;

@@ -111,9 +111,9 @@ const productStore = useProductStore()
 
 const searchKeyword = ref('')
 const banners = ref([
-  { id: 1, image: 'https://via.placeholder.com/750x300/FF6B35/FFFFFF?text=面包店Banner1' },
-  { id: 2, image: 'https://via.placeholder.com/750x300/4ECDC4/FFFFFF?text=新品上市' },
-  { id: 3, image: 'https://via.placeholder.com/750x300/52C41A/FFFFFF?text=限时优惠' },
+  { id: 1, image: '/static/banners/banner-bakery-interior.jpg' },
+  { id: 2, image: '/static/banners/banner-cake-dessert.jpg' },
+  { id: 3, image: '/static/banners/banner-coffee-breakfast.jpg' },
 ])
 
 const categories = ref([
@@ -131,20 +131,20 @@ const recommendedProducts = ref([
     name: '奶油可颂',
     price: 18,
     originalPrice: 22,
-    images: ['https://via.placeholder.com/200x200/FF6B35/FFFFFF?text=可颂'],
+    images: ['/static/products/large/product-croissant.jpg'],
   },
   {
     id: '2',
     name: '巧克力蛋糕',
     price: 68,
     originalPrice: 88,
-    images: ['https://via.placeholder.com/200x200/4ECDC4/FFFFFF?text=蛋糕'],
+    images: ['/static/products/large/product-chocolate-cake.jpg'],
   },
   {
     id: '3',
     name: '草莓慕斯',
     price: 48,
-    images: ['https://via.placeholder.com/200x200/52C41A/FFFFFF?text=慕斯'],
+    images: ['/static/products/large/product-strawberry-mousse.jpg'],
   },
 ])
 
@@ -155,7 +155,7 @@ const hotProducts = ref([
     description: '健康全麦，低脂低糖',
     price: 28,
     sales: 152,
-    images: ['https://via.placeholder.com/100x100/FF6B35/FFFFFF?text=全麦'],
+    images: ['/static/products/small/product-bread.jpg'],
   },
   {
     id: '5',
@@ -163,7 +163,7 @@ const hotProducts = ref([
     description: '浓郁芝士，入口即化',
     price: 58,
     sales: 98,
-    images: ['https://via.placeholder.com/100x100/4ECDC4/FFFFFF?text=芝士'],
+    images: ['/static/products/small/product-cheesecake.jpg'],
   },
   {
     id: '6',
@@ -171,7 +171,7 @@ const hotProducts = ref([
     description: '现磨咖啡，香浓顺滑',
     price: 25,
     sales: 203,
-    images: ['https://via.placeholder.com/100x100/52C41A/FFFFFF?text=咖啡'],
+    images: ['/static/products/small/product-latte.jpg'],
   },
 ])
 

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { ProductStatus, ProductSpec } from '@shared/types';
+import { ProductStatus, ProductSpec } from '../../../shared/dist/types';
 
 export interface IProduct extends mongoose.Document {
   name: string;

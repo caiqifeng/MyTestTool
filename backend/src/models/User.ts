@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { UserRole } from '@shared/types';
+import { UserRole } from '../../../shared/dist/types';
 
 export interface IUser extends mongoose.Document {
   openid: string;

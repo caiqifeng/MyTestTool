@@ -3,52 +3,72 @@
     {
       "path": "pages/index/index",
       "style": {
-        "navigationBarTitleText": "面包店首页"
+        "navigationBarTitleText": "面包店首页",
+        "navigationStyle": "custom",
+        "disableScroll": false
       }
     },
     {
       "path": "pages/login/index",
       "style": {
-        "navigationBarTitleText": "登录"
+        "navigationBarTitleText": "登录",
+        "navigationBarBackgroundColor": "#FF6B35",
+        "navigationBarTextStyle": "white",
+        "navigationStyle": "default"
       }
     },
     {
       "path": "pages/product-detail/index",
       "style": {
-        "navigationBarTitleText": "商品详情"
+        "navigationBarTitleText": "商品详情",
+        "navigationStyle": "custom"
       }
     },
     {
       "path": "pages/cart/index",
       "style": {
-        "navigationBarTitleText": "购物车"
+        "navigationBarTitleText": "购物车",
+        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "default"
       }
     },
     {
       "path": "pages/order-confirm/index",
       "style": {
-        "navigationBarTitleText": "订单确认"
+        "navigationBarTitleText": "订单确认",
+        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarTextStyle": "black"
       }
     },
     {
       "path": "pages/user-center/index",
       "style": {
-        "navigationBarTitleText": "个人中心"
+        "navigationBarTitleText": "个人中心",
+        "navigationStyle": "custom"
       }
     }
   ],
   "globalStyle": {
     "navigationBarTextStyle": "black",
-    "navigationBarTitleText": "面包店小程序",
-    "navigationBarBackgroundColor": "#F8F8F8",
+    "navigationBarTitleText": "Break 面包店",
+    "navigationBarBackgroundColor": "#FFFFFF",
     "backgroundColor": "#F8F8F8",
-    "navigationStyle": "custom"
+    "navigationStyle": "custom",
+    "app-plus": {
+      "background": "#F8F8F8",
+      "titleNView": false
+    }
   },
   "tabBar": {
     "color": "#999999",
     "selectedColor": "#FF6B35",
     "backgroundColor": "#FFFFFF",
-    "borderStyle": "black",
+    "borderStyle": "white",
+    "height": "60px",
+    "fontSize": "11px",
+    "iconWidth": "28px",
+    "spacing": "4px",
     "list": [
       {
         "pagePath": "pages/index/index",
@@ -68,6 +88,12 @@
         "iconPath": "static/tabbar/user.png",
         "selectedIconPath": "static/tabbar/user-active.png"
       }
-    ]
+    ],
+    "borderColor": "#F0F0F0",
+    "borderTop": "1px solid #F0F0F0"
+  },
+  "easycom": {
+    "autoscan": true,
+    "custom": {}
   }
 }

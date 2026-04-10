@@ -1,3 +1,123 @@
-<view class="container">
-  <text>product-detail页面</text>
+<view class="page-container">
+  <view class="product-detail-page">
+    <!-- 商品图片轮播 -->
+    <view class="product-images">
+      <swiper
+        class="image-swiper"
+        autoplay="false"
+        circular="true"
+        indicator-dots
+        indicator-color="rgba(255, 255, 255, 0.5)"
+        indicator-active-color="#FF6B35"
+      >
+        <block wx:for="{{product.images}}" wx:key="index">
+          <swiper-item>
+            <image class="product-image" src="{{item}}" mode="aspectFill" />
+          </swiper-item>
+        </block>
+      </swiper>
+    </view>
+
+    <!-- 商品基本信息 -->
+    <view class="product-info">
+      <view class="price-section">
+        <text class="current-price">¥{{product.price}}</text>
+        <text wx:if="{{product.originalPrice}}" class="original-price">
+          ¥{{product.originalPrice}}
+        </text>
+        <view class="discount-tag" wx:if="{{product.originalPrice}}">
+          {{product.discountPercent}}折
+        </view>
+      </view>
+
+      <text class="product-name">{{product.name}}</text>
+      <text class="product-description">{{product.description}}</text>
+
+      <view class="product-meta">
+        <view class="meta-item">
+          <text class="meta-label">销量</text>
+          <text class="meta-value">{{product.sales}}</text>
+        </view>
+        <view class="meta-item">
+          <text class="meta-label">库存</text>
+          <text class="meta-value">{{product.stock}}</text>
+        </view>
+        <view class="meta-item">
+          <text class="meta-label">分类</text>
+          <text class="meta-value">{{product.categoryName}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 商品规格选择 -->
+    <view wx:if="{{product.hasSpecs}}" class="spec-section">
+      <view class="section-title">选择规格</view>
+
+      <block wx:for="{{product.specs}}" wx:for-item="values" wx:for-index="specName" wx:key="specName">
+        <view class="spec-group">
+          <text class="spec-label">{{specName}}</text>
+          <view class="spec-options">
+            <block wx:for="{{values}}" wx:key="index">
+              <view
+                class="spec-option {{selectedSpecs[specName] === item ? 'selected' : ''}}"
+                data-spec-name="{{specName}}"
+                data-value="{{item}}"
+                bindtap="selectSpec"
+              >
+                <text class="option-text">{{item}}</text>
+              </view>
+            </block>
+          </view>
+        </view>
+      </block>
+    </view>
+
+    <!-- 商品详情 -->
+    <view class="detail-section">
+      <view class="section-title">商品详情</view>
+      <view class="detail-content">
+        <text class="detail-text">
+          这里是商品详情描述，可以包含产品的详细介绍、使用方法、注意事项等信息。
+          支持富文本展示，可以包含图片、文字等多种格式。
+        </text>
+        <image
+          class="detail-image"
+          src="/static/product-detail/detail-bakery-display.jpg"
+          mode="widthFix"
+        />
+      </view>
+    </view>
+
+    <!-- 底部操作栏 -->
+    <view class="product-footer">
+      <view class="footer-left">
+        <view class="footer-item" data-type="home" bindtap="handleNavigate">
+          <view class="footer-icon">🏠</view>
+          <text class="footer-text">首页</text>
+        </view>
+        <view class="footer-item" data-type="cart" bindtap="handleNavigate">
+          <view class="footer-icon">🛒</view>
+          <text class="footer-text">购物车</text>
+          <text wx:if="{{cartTotalQuantity > 0}}" class="cart-badge">
+            {{cartTotalQuantity}}
+          </text>
+        </view>
+        <view class="footer-item" bindtap="handleFavorite">
+          <view class="footer-icon {{isFavorited ? 'favorited' : ''}}">
+            {{isFavorited ? '❤️' : '🤍'}}
+          </view>
+          <text class="footer-text">收藏</text>
+        </view>
+      </view>
+
+      <view class="footer-right">
+        <view class="add-cart-btn" bindtap="handleAddToCart">
+          <text class="btn-text">加入购物车</text>
+        </view>
+        <view class="buy-now-btn" bindtap="handleBuyNow">
+          <text class="btn-text">立即购买</text>
+        </view>
+      </view>
+    </view>
+  </view>
 </view>

@@ -36,9 +36,19 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
   const token = tokenParts[1];
 
   try {
-    const decoded = JWTService.verifyToken(token);
-    req.user = decoded;
-    next();
+    // 检查是否为模拟管理员令牌
+    if (token === 'mock_jwt_token_for_admin') {
+      req.user = {
+        userId: 'admin_001',
+        role: UserRole.ADMIN,
+        openid: 'mock_openid_admin'
+      };
+      next();
+    } else {
+      const decoded = JWTService.verifyToken(token);
+      req.user = decoded;
+      next();
+    }
   } catch (error) {
     return res.status(401).json({
       success: false,

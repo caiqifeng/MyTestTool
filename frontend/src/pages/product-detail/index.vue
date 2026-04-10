@@ -78,7 +78,7 @@
           </text>
           <image
             class="detail-image"
-            src="https://source.unsplash.com/featured/750x500/?bakery,bread,pastry"
+            src="/static/product-detail/detail-bakery-display.jpg"
             mode="widthFix"
           />
         </view>
@@ -135,9 +135,9 @@ const product = ref({
   price: 18,
   originalPrice: 22,
   images: [
-    'https://source.unsplash.com/random/750x750/?croissant,french,pastry,bakery',
-    'https://source.unsplash.com/random/750x750/?bread,bakery,food',
-    'https://source.unsplash.com/random/750x750/?pastry,dessert,sweet',
+    '/static/product-detail/carousel-croissant.jpg',
+    '/static/product-detail/carousel-bread.jpg',
+    '/static/product-detail/carousel-pastries.jpg',
   ],
   categoryId: '1',
   categoryName: '面包',

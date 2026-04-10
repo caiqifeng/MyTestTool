@@ -1,1 +1,28 @@
-/* 小程序全局样式 */
+/* 小程序全局样式 - 极简优化版 */
+/* 全局重置与基础样式 */
+page {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+              'Helvetica Neue', Arial, sans-serif, 'Apple Color Emoji';
+  font-size: 32rpx;
+  color: #333333;
+  background-color: #F8F8F8;
+  line-height: 1.5;
+}
+
+/* 全局通用样式 */
+.container {
+  padding: 32rpx;
+  background-color: #FFFFFF;
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.06);
+}
+
+/* 全局颜色定义 - 简化版 */
+.text-primary { color: #333333; }
+.text-secondary { color: #666666; }
+.text-tertiary { color: #999999; }
+.text-error { color: #FF4D4F; }
+.text-primary { color: #FF6B35; }
+.bg-white { background-color: #FFFFFF; }
+.bg-gray { background-color: #F8F8F8; }
+.border { border-color: #E0E0E0; }

@@ -2,9 +2,9 @@ Page({
   data: {
     searchKeyword: '',
     banners: [
-      { id: 1, image: 'https://source.unsplash.com/random/750x300/?bakery,interior,bread,store' },
-      { id: 2, image: 'https://source.unsplash.com/random/750x300/?cake,dessert,sweet,pastry' },
-      { id: 3, image: 'https://source.unsplash.com/random/750x300/?coffee,drink,bakery,breakfast' },
+      { id: 1, image: '/static/banners/banner-bakery-interior.jpg' },
+      { id: 2, image: '/static/banners/banner-cake-dessert.jpg' },
+      { id: 3, image: '/static/banners/banner-coffee-breakfast.jpg' },
     ],
     categories: [
       { id: '1', name: '全部', icon: '🍞' },
@@ -20,20 +20,20 @@ Page({
         name: '奶油可颂',
         price: 18,
         originalPrice: 22,
-        images: ['https://source.unsplash.com/random/200x200/?croissant,french,pastry,bakery'],
+        images: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='],
       },
       {
         id: '2',
         name: '巧克力蛋糕',
         price: 68,
         originalPrice: 88,
-        images: ['https://source.unsplash.com/random/200x200/?chocolate,cake,dessert,sweet'],
+        images: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='],
       },
       {
         id: '3',
         name: '草莓慕斯',
         price: 48,
-        images: ['https://source.unsplash.com/random/200x200/?strawberry,mousse,dessert,berry'],
+        images: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='],
       },
     ],
     hotProducts: [
@@ -43,7 +43,7 @@ Page({
         description: '健康全麦，低脂低糖',
         price: 28,
         sales: 152,
-        images: ['https://source.unsplash.com/random/100x100/?bread,whole,wheat,healthy'],
+        images: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='],
       },
       {
         id: '5',
@@ -51,7 +51,7 @@ Page({
         description: '浓郁芝士，入口即化',
         price: 58,
         sales: 98,
-        images: ['https://source.unsplash.com/random/100x100/?cheesecake,cheese,dessert,cake'],
+        images: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='],
       },
       {
         id: '6',
@@ -59,7 +59,7 @@ Page({
         description: '现磨咖啡，香浓顺滑',
         price: 25,
         sales: 203,
-        images: ['https://source.unsplash.com/random/100x100/?latte,coffee,drink,cafe'],
+        images: ['data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='],
       },
     ],
   },

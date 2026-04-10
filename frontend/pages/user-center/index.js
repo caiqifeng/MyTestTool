@@ -2,7 +2,7 @@ Page({
   data: {
     isLoggedIn: false,
     nickname: '',
-    avatar: 'https://source.unsplash.com/random/100x100/?portrait,avatar,user,profile',
+    avatar: '/static/avatars/default-avatar.png',
   },
 
   onLoad: function() {
@@ -13,7 +13,7 @@ Page({
       this.setData({
         isLoggedIn: true,
         nickname: userInfo.nickname || '用户',
-        avatar: userInfo.avatar || 'https://source.unsplash.com/random/100x100/?portrait,avatar,user,profile',
+        avatar: userInfo.avatar || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==',
       })
     }
   },
@@ -26,7 +26,7 @@ Page({
         id: '123',
         username: 'testuser',
         nickname: '测试用户',
-        avatar: 'https://source.unsplash.com/random/100x100/?portrait,avatar,user,profile',
+        avatar: '/static/avatars/default-avatar.png',
         createdAt: '2023-01-01',
       }
 
@@ -59,7 +59,7 @@ Page({
           that.setData({
             isLoggedIn: false,
             nickname: '',
-            avatar: 'https://source.unsplash.com/random/100x100/?portrait,avatar,user,profile',
+            avatar: '/static/avatars/default-avatar.png',
           })
 
           wx.showToast({

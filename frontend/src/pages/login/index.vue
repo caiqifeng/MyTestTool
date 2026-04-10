@@ -96,7 +96,7 @@ const handleLogin = async () => {
           id: '123',
           username: form.value.username,
           nickname: form.value.username,
-          avatar: 'https://via.placeholder.com/100x100/FF6B35/FFFFFF?text=用户',
+          avatar: '/static/avatars/default-avatar.jpg',
         },
       },
     }

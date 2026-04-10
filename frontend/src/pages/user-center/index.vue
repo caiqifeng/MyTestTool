@@ -114,7 +114,7 @@ import { ref } from 'vue'
 import { useUserStore } from '../../store/user.store'
 
 const userStore = useUserStore()
-const defaultAvatar = 'https://via.placeholder.com/100x100/FF6B35/FFFFFF?text=用户'
+const defaultAvatar = '/static/avatars/default-avatar.jpg'
 
 const handleLogin = () => {
   if (!userStore.getIsLoggedIn) {

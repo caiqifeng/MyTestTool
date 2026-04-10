@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { OrderStatus, DeliveryType, PaymentMethod, PaymentStatus, OrderItem, ProductSpec } from '@shared/types';
+import { OrderStatus, DeliveryType, PaymentMethod, PaymentStatus, OrderItem, ProductSpec } from '../../../shared/dist/types';
 
 export interface IOrder extends mongoose.Document {
   orderNumber: string;

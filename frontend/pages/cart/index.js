@@ -9,7 +9,7 @@ Page({
         name: '奶油可颂',
         price: 18,
         quantity: 2,
-        image: 'https://source.unsplash.com/featured/200x200/?croissant,bakery',
+        image: '/static/products/large/cart-croissant.jpg',
         specs: null,
       },
       {
@@ -18,11 +18,15 @@ Page({
         name: '巧克力蛋糕',
         price: 68,
         quantity: 1,
-        image: 'https://source.unsplash.com/featured/200x200/?chocolate,cake,dessert',
+        image: '/static/products/large/cart-chocolate-cake.jpg',
         specs: { size: '6寸', flavor: '巧克力' },
       },
     ],
     coupon: null,
+    selectedCount: 0,
+    totalQuantity: 0,
+    totalPrice: 0,
+    isAllSelected: false,
   },
 
   onLoad: function() {

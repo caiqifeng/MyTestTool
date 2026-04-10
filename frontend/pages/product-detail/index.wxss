@@ -1,8 +1,248 @@
-.container {
+/* 商品详情页面样式 */
+.page-container {
+  min-height: 100vh;
+  background-color: #F8F8F8;
+}
+
+.product-detail-page {
+  padding-bottom: 120rpx; /* 为底部操作栏留空间 */
+}
+
+/* 商品图片轮播 */
+.product-images .image-swiper {
+  height: 750rpx;
+}
+
+.product-images .product-image {
+  width: 100%;
+  height: 100%;
+}
+
+/* 商品基本信息 */
+.product-info {
+  background-color: #FFFFFF;
+  padding: 32rpx;
+  margin-bottom: 32rpx;
+}
+
+.price-section {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
+  align-items: baseline;
+  margin-bottom: 16rpx;
+}
+
+.price-section .current-price {
+  font-size: 48rpx;
+  font-weight: 600;
+  color: #FF4D4F;
+  margin-right: 16rpx;
+}
+
+.price-section .original-price {
   font-size: 32rpx;
-  color: #333;
+  color: #999999;
+  text-decoration: line-through;
+  margin-right: 32rpx;
+}
+
+.price-section .discount-tag {
+  background-color: #FF4D4F;
+  color: #FFFFFF;
+  font-size: 24rpx;
+  padding: 4rpx 16rpx;
+  border-radius: 8rpx;
+}
+
+.product-name {
+  display: block;
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 16rpx;
+}
+
+.product-description {
+  display: block;
+  font-size: 32rpx;
+  color: #666666;
+  margin-bottom: 32rpx;
+  line-height: 1.5;
+}
+
+.product-meta {
+  display: flex;
+  justify-content: space-around;
+  padding-top: 32rpx;
+  border-top: 1px solid #E0E0E0;
+}
+
+.product-meta .meta-item {
+  text-align: center;
+  flex: 1;
+}
+
+.product-meta .meta-label {
+  display: block;
+  font-size: 28rpx;
+  color: #999999;
+  margin-bottom: 8rpx;
+}
+
+.product-meta .meta-value {
+  display: block;
+  font-size: 32rpx;
+  color: #333333;
+  font-weight: 500;
+}
+
+/* 规格选择和详情区域 */
+.spec-section,
+.detail-section {
+  background-color: #FFFFFF;
+  padding: 32rpx;
+  margin-bottom: 32rpx;
+}
+
+.section-title {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #333333;
+  margin-bottom: 32rpx;
+}
+
+.spec-group {
+  margin-bottom: 48rpx;
+}
+
+.spec-group:last-child {
+  margin-bottom: 0;
+}
+
+.spec-label {
+  display: block;
+  font-size: 32rpx;
+  color: #333333;
+  margin-bottom: 16rpx;
+}
+
+.spec-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.spec-option {
+  border: 1px solid #E0E0E0;
+  border-radius: 16rpx;
+  padding: 16rpx 32rpx;
+  font-size: 32rpx;
+  color: #666666;
+  transition: all 0.2s ease;
+}
+
+.spec-option.selected {
+  border-color: #FF6B35;
+  background-color: rgba(255, 107, 53, 0.1);
+  color: #FF6B35;
+}
+
+/* 商品详情 */
+.detail-content .detail-text {
+  display: block;
+  font-size: 32rpx;
+  color: #666666;
+  line-height: 1.6;
+  margin-bottom: 32rpx;
+}
+
+.detail-content .detail-image {
+  width: 100%;
+  border-radius: 16rpx;
+}
+
+/* 底部操作栏 */
+.product-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #FFFFFF;
+  border-top: 1px solid #E0E0E0;
+  padding: 16rpx 32rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+}
+
+.product-footer .footer-left {
+  display: flex;
+  align-items: center;
+}
+
+.product-footer .footer-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 48rpx;
+}
+
+.product-footer .footer-item:last-child {
+  margin-right: 0;
+}
+
+.product-footer .footer-icon {
+  font-size: 40rpx;
+  margin-bottom: 8rpx;
+}
+
+.product-footer .footer-icon.favorited {
+  color: #FF4D4F;
+}
+
+.product-footer .footer-text {
+  font-size: 24rpx;
+  color: #666666;
+}
+
+.product-footer .cart-badge {
+  position: absolute;
+  top: -20rpx;
+  right: -20rpx;
+  background-color: #FF4D4F;
+  color: #FFFFFF;
+  font-size: 24rpx;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.product-footer .footer-right {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.product-footer .add-cart-btn,
+.product-footer .buy-now-btn {
+  border-radius: 999px;
+  padding: 16rpx 48rpx;
+}
+
+.product-footer .add-cart-btn {
+  background-color: #666666;
+}
+
+.product-footer .buy-now-btn {
+  background-color: #FF6B35;
+}
+
+.product-footer .btn-text {
+  color: #FFFFFF;
+  font-weight: 500;
+  font-size: 32rpx;
 }
