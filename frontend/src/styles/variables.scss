@@ -55,3 +55,22 @@ $shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
 $shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
 $shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.16);
 $shadow-xl: 0 12px 48px rgba(0, 0, 0, 0.2);
+
+// 星级评分颜色
+$color-star-active: #FFD700;  // 金色
+$color-star-inactive: #E0E0E0; // 浅灰色
+
+// 工具mixin
+@mixin text-ellipsis($lines: 1) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: $lines;
+  -webkit-box-orient: vertical;
+}
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
