@@ -4,6 +4,9 @@ import ProductModel from '../models/Product';
 import { asyncHandler } from '../middleware/error';
 import config from '../config';
 
+// 非生产环境下的模拟购物车存储
+const mockCarts = new Map<string, any[]>();
+
 export class CartController {
   /**
    * 添加商品到购物车
@@ -19,25 +22,42 @@ export class CartController {
     try {
       const { productId, quantity, specs } = req.body;
 
-      // 非生产环境直接返回模拟数据
+      // 非生产环境使用模拟购物车存储
       if (config.env !== 'production') {
-        console.warn('非生产环境，返回模拟购物车数据');
+        console.warn('非生产环境，使用模拟购物车存储');
+        const userId = req.user.userId;
+        const userCart = mockCarts.get(userId) || [];
+
+        // 检查是否已存在相同productId和specs的商品
+        const existingItemIndex = userCart.findIndex(item =>
+          item.productId === productId &&
+          JSON.stringify(item.specs) === JSON.stringify(specs || [])
+        );
+
+        if (existingItemIndex >= 0) {
+          // 更新数量
+          userCart[existingItemIndex].quantity += quantity;
+        } else {
+          // 添加新商品
+          userCart.push({
+            productId,
+            name: '模拟商品',
+            price: 18.0,
+            quantity,
+            image: '/static/product-detail/carousel-croissant.jpg',
+            specs: specs || []
+          });
+        }
+
+        mockCarts.set(userId, userCart);
+
         return res.json({
           success: true,
           data: {
             cart: {
               _id: 'mock_cart_id',
-              userId: req.user.userId,
-              items: [
-                {
-                  productId,
-                  name: '模拟商品',
-                  price: 18.0,
-                  quantity,
-                  image: '/static/product-detail/carousel-croissant.jpg',
-                  specs: specs || []
-                }
-              ],
+              userId,
+              items: userCart,
               updatedAt: new Date()
             }
           },
@@ -125,16 +145,19 @@ export class CartController {
       });
     }
 
-    // 非生产环境直接返回模拟数据
+    // 非生产环境使用模拟购物车存储
     if (config.env !== 'production') {
       console.warn('非生产环境，返回模拟购物车数据');
+      const userId = req.user.userId;
+      const userCart = mockCarts.get(userId) || [];
+
       return res.json({
         success: true,
         data: {
           cart: {
             _id: 'mock_cart_id',
-            userId: req.user.userId,
-            items: [],
+            userId,
+            items: userCart,
             updatedAt: new Date()
           }
         }
@@ -266,6 +289,51 @@ export class CartController {
       });
     }
 
+    // 非生产环境使用模拟购物车存储
+    if (config.env !== 'production') {
+      console.warn('非生产环境，更新模拟购物车商品数量');
+      const userId = req.user.userId;
+      const userCart = mockCarts.get(userId) || [];
+
+      // 查找商品（仅匹配productId，不考虑specs）
+      const itemIndex = userCart.findIndex(item => item.productId === productId);
+      if (itemIndex >= 0) {
+        if (quantity > 0) {
+          userCart[itemIndex].quantity = quantity;
+        } else {
+          // 数量为0，移除商品
+          userCart.splice(itemIndex, 1);
+        }
+      } else {
+        // 商品不存在于购物车中，如果quantity>0则添加
+        if (quantity > 0) {
+          userCart.push({
+            productId,
+            name: '模拟商品',
+            price: 18.0,
+            quantity,
+            image: '/static/product-detail/carousel-croissant.jpg',
+            specs: []
+          });
+        }
+      }
+
+      mockCarts.set(userId, userCart);
+
+      return res.json({
+        success: true,
+        data: {
+          cart: {
+            _id: 'mock_cart_id',
+            userId,
+            items: userCart,
+            updatedAt: new Date()
+          }
+        },
+        message: quantity > 0 ? '购物车商品数量已更新' : '商品已从购物车移除'
+      });
+    }
+
     // 更新购物车商品数量
     const cart = await CartModel.updateItemQuantity(req.user.userId, productId, quantity);
 
@@ -303,6 +371,30 @@ export class CartController {
 
     const { productId } = req.params;
 
+    // 非生产环境使用模拟购物车存储
+    if (config.env !== 'production') {
+      console.warn('非生产环境，从模拟购物车移除商品');
+      const userId = req.user.userId;
+      const userCart = mockCarts.get(userId) || [];
+
+      // 移除匹配productId的商品（仅匹配productId，不考虑specs）
+      const filteredCart = userCart.filter(item => item.productId !== productId);
+      mockCarts.set(userId, filteredCart);
+
+      return res.json({
+        success: true,
+        data: {
+          cart: {
+            _id: 'mock_cart_id',
+            userId,
+            items: filteredCart,
+            updatedAt: new Date()
+          }
+        },
+        message: '商品已从购物车移除'
+      });
+    }
+
     const cart = await CartModel.removeItem(req.user.userId, productId);
 
     if (!cart) {
@@ -337,6 +429,26 @@ export class CartController {
       });
     }
 
+    // 非生产环境使用模拟购物车存储
+    if (config.env !== 'production') {
+      console.warn('非生产环境，清空模拟购物车');
+      const userId = req.user.userId;
+      mockCarts.set(userId, []);
+
+      return res.json({
+        success: true,
+        data: {
+          cart: {
+            _id: 'mock_cart_id',
+            userId,
+            items: [],
+            updatedAt: new Date()
+          }
+        },
+        message: '购物车已清空'
+      });
+    }
+
     const cart = await CartModel.clearCart(req.user.userId);
 
     if (!cart) {
@@ -368,6 +480,21 @@ export class CartController {
       return res.status(401).json({
         success: false,
         message: '未认证'
+      });
+    }
+
+    // 非生产环境使用模拟购物车存储
+    if (config.env !== 'production') {
+      console.warn('非生产环境，获取模拟购物车商品数量');
+      const userId = req.user.userId;
+      const userCart = mockCarts.get(userId) || [];
+      const totalItems = userCart.reduce((sum, item) => sum + item.quantity, 0);
+
+      return res.json({
+        success: true,
+        data: {
+          count: totalItems
+        }
       });
     }
 

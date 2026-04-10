@@ -1,18 +1,33 @@
 <template>
   <view class="page-container">
     <view class="home-page">
-      <!-- 搜索栏 -->
-      <view class="home-search-bar">
-        <view class="search-input">
-          <text class="search-icon">🔍</text>
-          <input
-            type="text"
-            placeholder="搜索面包、蛋糕..."
-            v-model="searchKeyword"
-            @confirm="handleSearch"
-          />
+      <!-- 加载状态 -->
+      <view v-if="productStore.isLoading" class="loading-section">
+        <text class="loading-text">加载中...</text>
+      </view>
+
+      <!-- 错误状态 -->
+      <view v-else-if="productStore.error" class="error-section">
+        <text class="error-text">{{ productStore.error }}</text>
+        <view class="retry-btn" @click="refreshData">
+          <text class="retry-text">重试</text>
         </view>
       </view>
+
+      <!-- 正常显示内容 -->
+      <view v-else>
+        <!-- 搜索栏 -->
+        <view class="home-search-bar">
+          <view class="search-input">
+            <text class="search-icon">🔍</text>
+            <input
+              type="text"
+              placeholder="搜索面包、蛋糕..."
+              v-model="searchKeyword"
+              @confirm="handleSearch"
+            />
+          </view>
+        </view>
 
       <!-- Banner轮播 -->
       <view class="home-banner">
@@ -152,15 +167,22 @@ const handleViewAll = () => {
   // 跳转到商品列表页
 }
 
-onMounted(() => {
-  // 从后端获取banner、分类和产品数据
-  productStore.fetchBanners()
-  productStore.fetchCategories()
-  productStore.fetchProducts({ limit: 6 }) // 获取前6个产品
+const refreshData = async () => {
+  try {
+    // 并行获取所有数据
+    await Promise.all([
+      productStore.fetchBanners(),
+      productStore.fetchCategories(),
+      productStore.fetchProducts({ limit: 6 })
+    ])
+  } catch (error) {
+    console.error('刷新数据失败:', error)
+  }
+}
 
-  // 更新推荐和热门产品（基于获取的数据）
-  // 注意：由于fetchProducts是异步的，这里需要在数据加载后更新
-  // 可以改用watch或computed来响应式更新
+onMounted(() => {
+  // 页面加载时获取数据
+  refreshData()
 })
 </script>
 
@@ -169,6 +191,56 @@ onMounted(() => {
 
 .home-page {
   padding-bottom: $spacing-xl;
+}
+
+.loading-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl 0;
+  background-color: $color-white;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
+  margin: $spacing-md;
+
+  .loading-text {
+    font-size: $font-size-md;
+    color: $color-text-secondary;
+    margin-bottom: $spacing-md;
+  }
+}
+
+.error-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl 0;
+  background-color: $color-white;
+  border-radius: $border-radius-md;
+  box-shadow: $shadow-sm;
+  margin: $spacing-md;
+
+  .error-text {
+    font-size: $font-size-md;
+    color: $color-text-secondary;
+    margin-bottom: $spacing-md;
+    text-align: center;
+    max-width: 80%;
+  }
+
+  .retry-btn {
+    background-color: $color-primary;
+    border-radius: $border-radius-round;
+    padding: $spacing-sm $spacing-lg;
+
+    .retry-text {
+      color: $color-white;
+      font-weight: 500;
+      font-size: $font-size-md;
+    }
+  }
 }
 
 .home-search-bar {

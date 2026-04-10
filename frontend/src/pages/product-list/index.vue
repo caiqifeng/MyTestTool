@@ -140,9 +140,13 @@ const page = ref(1)
 const limit = ref(12)
 const total = ref(0)
 const hasMore = ref(true)
+const keyword = ref('')
 
 // 计算页面标题
 const pageTitle = computed(() => {
+  if (keyword.value) {
+    return `搜索结果：${keyword.value}`
+  }
   if (category.value) {
     return category.value.name
   }
@@ -183,6 +187,12 @@ const fetchProducts = async (reset = true) => {
     // 获取URL参数
     const urlParams = uni.getCurrentPages()[uni.getCurrentPages().length - 1].options
     const categoryId = urlParams.categoryId
+    const searchKeyword = urlParams.keyword
+
+    if (searchKeyword) {
+      queryParams.keyword = searchKeyword
+      keyword.value = searchKeyword
+    }
 
     if (categoryId) {
       queryParams.categoryId = categoryId

@@ -140,8 +140,8 @@ class App {
 
     // 静态文件服务
     this.app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-    // 静态资源服务（图片、CSS、JS等）
-    this.app.use('/static', express.static(path.join(__dirname, '../public/static')));
+    // 静态资源服务（图片、CSS、JS等）- 指向前端的static目录
+    this.app.use('/static', express.static(path.join(__dirname, '../../frontend/static')));
     // 管理页面静态文件服务，禁用缓存
     this.app.use('/admin', express.static(path.join(__dirname, '../public'), {
       setHeaders: (res) => {

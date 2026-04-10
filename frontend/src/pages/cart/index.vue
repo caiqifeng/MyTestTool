@@ -126,6 +126,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { useCartStore } from '../../store/cart.store'
 
 const cartStore = useCartStore()
@@ -133,6 +134,11 @@ const editMode = ref(false)
 
 onMounted(() => {
   // 从后端获取购物车数据
+  cartStore.fetchCart()
+})
+
+onShow(() => {
+  // 页面显示时刷新购物车数据
   cartStore.fetchCart()
 })
 

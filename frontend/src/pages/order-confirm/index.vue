@@ -171,7 +171,7 @@ const formatDate = (dateString?: string): string => {
   }
 }
 
-const handleSubmitOrder = () => {
+const handleSubmitOrder = async () => {
   if (!selectedAddress.value) {
     uni.showToast({
       title: '请选择收货地址',
