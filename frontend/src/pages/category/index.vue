@@ -71,7 +71,12 @@
             class="product-card"
             @click="handleProductClick(product)"
           >
-            <image class="product-image" :src="product.images?.[0] || '/static/products/small/product-bread.jpg'" mode="aspectFill" />
+            <view class="product-image-wrapper">
+              <image class="product-image" :src="product.images?.[0] || '/static/products/small/product-bread.jpg'" mode="aspectFill" />
+              <view v-if="product.stock === 0" class="sold-out-mask">
+                <text class="sold-out-text">售罄</text>
+              </view>
+            </view>
             <view class="product-info">
               <text class="product-name">{{ product.name }}</text>
               <view class="product-price">
@@ -413,6 +418,34 @@ onMounted(() => {
     font-size: $font-size-sm;
     color: $color-text-tertiary;
     text-decoration: line-through;
+  }
+
+  .product-image-wrapper {
+    position: relative;
+    width: 100%;
+  }
+
+  .sold-out-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    border-radius: $border-radius-md;
+
+    .sold-out-text {
+      color: $color-white;
+      font-size: $font-size-md;
+      font-weight: 600;
+      padding: $spacing-xs $spacing-md;
+      background-color: rgba(0, 0, 0, 0.8);
+      border-radius: $border-radius-sm;
+    }
   }
 }
 </style>

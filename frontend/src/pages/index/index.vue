@@ -77,7 +77,12 @@
             :key="product.id"
             @click="handleProductClick(product.id)"
           >
-            <image class="product-image" :src="product.images[0]" mode="aspectFill" />
+            <view class="product-image-wrapper">
+              <image class="product-image" :src="product.images[0]" mode="aspectFill" />
+              <view v-if="product.stock === 0" class="sold-out-mask">
+                <text class="sold-out-text">售罄</text>
+              </view>
+            </view>
             <view class="product-info">
               <text class="product-name">{{ product.name }}</text>
               <text class="product-price">¥{{ product.price }}</text>
@@ -102,7 +107,12 @@
             :key="product.id"
             @click="handleProductClick(product.id)"
           >
-            <image class="product-card-image" :src="product.images[0]" mode="aspectFill" />
+            <view class="product-card-image-wrapper">
+              <image class="product-card-image" :src="product.images[0]" mode="aspectFill" />
+              <view v-if="product.stock === 0" class="sold-out-mask">
+                <text class="sold-out-text">售罄</text>
+              </view>
+            </view>
             <view class="product-card-info">
               <text class="product-card-name">{{ product.name }}</text>
               <text class="product-card-desc">{{ product.description }}</text>
@@ -448,6 +458,35 @@ onMounted(() => {
   .product-card-sales {
     font-size: $font-size-sm;
     color: $color-text-tertiary;
+  }
+}
+
+.product-image-wrapper,
+.product-card-image-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+.sold-out-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  border-radius: $border-radius-md;
+
+  .sold-out-text {
+    color: $color-white;
+    font-size: $font-size-md;
+    font-weight: 600;
+    padding: $spacing-xs $spacing-md;
+    background-color: rgba(0, 0, 0, 0.8);
+    border-radius: $border-radius-sm;
   }
 }
 </style>

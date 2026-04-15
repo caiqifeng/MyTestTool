@@ -1,0 +1,71 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6
+    container_name: break_mini_app_mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: break_mini_app
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      - app_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: break_mini_app_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - app_network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: break_mini_app_backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      MONGODB_URI: mongodb://mongodb:27017/break_mini_app
+      JWT_SECRET: ${JWT_SECRET:-your_jwt_secret_key_here}
+      WECHAT_APP_ID: ${WECHAT_APP_ID}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET}
+      WECHAT_MCH_ID: ${WECHAT_MCH_ID}
+      WECHAT_API_KEY: ${WECHAT_API_KEY}
+      WECHAT_API_V3_KEY: ${WECHAT_API_V3_KEY}
+      WECHAT_USE_MOCK_PAYMENT: ${WECHAT_USE_MOCK_PAYMENT:-false}
+      WECHAT_CERT_PATH: /app/cert/wechat_cert.pem
+      WECHAT_KEY_PATH: /app/cert/wechat_key.pem
+      REDIS_URL: redis://redis:6379
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend/cert:/app/cert:ro
+      - ./backend/logs:/app/logs
+    depends_on:
+      - mongodb
+      - redis
+    networks:
+      - app_network
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000/health', (r) => {if(r.statusCode===200)process.exit(0);else process.exit(1);})"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  mongodb_data:
+  redis_data:
+
+networks:
+  app_network:
+    driver: bridge

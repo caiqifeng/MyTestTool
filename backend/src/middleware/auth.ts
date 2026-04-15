@@ -22,7 +22,7 @@ export const authMiddleware = (req: Request, res: Response, next: NextFunction) 
   if (config.env !== 'production' && !authHeader) {
     req.user = {
       userId: 'dev_user_001',
-      role: UserRole.USER,
+      role: UserRole.CUSTOMER,
       openid: 'dev_openid_001'
     };
     return next();

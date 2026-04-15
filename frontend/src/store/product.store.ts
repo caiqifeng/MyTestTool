@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { productApi } from '../utils/api/product.api'
 import { bannerApi } from '../utils/api/banner.api'
+import { STATIC_BASE_URL } from '../utils/api/index'
 
 interface Product {
   id: string
@@ -86,7 +87,10 @@ export const useProductStore = defineStore('product', () => {
     description: backendProduct.description,
     price: backendProduct.price,
     originalPrice: backendProduct.originalPrice,
-    images: backendProduct.images || [],
+    images: (backendProduct.images || []).map(imagePath => {
+      // 如果已经是完整URL，直接返回；否则加上静态资源基础URL
+      return imagePath.startsWith('http') ? imagePath : `${STATIC_BASE_URL}${imagePath}`
+    }),
     categoryId: backendProduct.categoryId?._id || backendProduct.categoryId || '',
     categoryName: backendProduct.categoryId?.name || '',
     stock: backendProduct.stock || 0,
@@ -150,7 +154,7 @@ export const useProductStore = defineStore('product', () => {
           id: banner._id,
           title: banner.title,
           description: banner.description,
-          image: banner.image,
+          image: banner.image.startsWith('http') ? banner.image : `${STATIC_BASE_URL}${banner.image}`,
           linkType: banner.linkType,
           linkTarget: banner.linkTarget,
           sortOrder: banner.sortOrder,

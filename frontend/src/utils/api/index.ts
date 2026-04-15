@@ -2,7 +2,8 @@ import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse, AxiosError, In
 import { useUserStore } from '../../store/user.store'
 
 // 环境变量配置 - 开发环境使用本地后端
-const API_BASE_URL = 'http://localhost:3003/api'
+const API_BASE_URL = 'http://localhost:3000/api'
+export const STATIC_BASE_URL = 'http://localhost:3000'
 
 // 创建axios实例
 const api: AxiosInstance = axios.create({

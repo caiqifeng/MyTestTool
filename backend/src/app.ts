@@ -21,6 +21,7 @@ import addressRoutes from './routes/address.routes';
 import couponRoutes from './routes/coupon.routes';
 import bannerRoutes from './routes/banner.routes';
 import categoryRoutes from './routes/category.routes';
+import paymentRoutes from './routes/payment.routes';
 import ProductController from './controllers/product.controller';
 
 class App {
@@ -126,6 +127,7 @@ class App {
     this.app.use('/api/coupons', couponRoutes);
     this.app.use('/api/banners', bannerRoutes);
     this.app.use('/api/categories', categoryRoutes);
+    this.app.use('/api/payments', paymentRoutes);
 
     // 测试路由
     this.app.get('/api/test', (req, res) => {

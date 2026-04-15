@@ -230,11 +230,11 @@ const handleSubmitOrder = async () => {
             icon: 'success',
           })
 
-          // 跳转到订单详情页
+          // 跳转到支付页面
           setTimeout(() => {
             if (orderStore.getCurrentOrder) {
               uni.navigateTo({
-                url: `/pages/order-detail/index?id=${orderStore.getCurrentOrder.id}`,
+                url: `/pages/payment/index?orderId=${orderStore.getCurrentOrder.id}`,
               })
             } else {
               uni.navigateBack()

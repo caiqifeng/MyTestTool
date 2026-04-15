@@ -14,6 +14,10 @@ interface Config {
     appSecret: string;
     mchId: string;
     apiKey: string;
+    apiV3Key: string;
+    useMockPayment: boolean;
+    certPath: string;
+    keyPath: string;
   };
   redisUrl: string;
   corsOrigin: string[];
@@ -32,7 +36,11 @@ const config: Config = {
     appId: process.env.WECHAT_APP_ID || '',
     appSecret: process.env.WECHAT_APP_SECRET || '',
     mchId: process.env.WECHAT_MCH_ID || '',
-    apiKey: process.env.WECHAT_API_KEY || ''
+    apiKey: process.env.WECHAT_API_KEY || '',
+    apiV3Key: process.env.WECHAT_API_V3_KEY || '',
+    useMockPayment: process.env.WECHAT_USE_MOCK_PAYMENT !== 'false', // 默认true，除非显式设置为false
+    certPath: process.env.WECHAT_CERT_PATH || '',
+    keyPath: process.env.WECHAT_KEY_PATH || ''
   },
   redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   corsOrigin: (process.env.CORS_ORIGIN || 'http://localhost:8080').split(','),

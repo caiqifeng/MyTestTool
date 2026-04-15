@@ -1,14 +1,23 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
 import axios from 'axios'
 import MockAdapter from 'axios-mock-adapter'
+import { setActivePinia, createPinia } from 'pinia'
 import api, { get, post } from './index'
 
 describe('API Configuration', () => {
   let mock: MockAdapter
 
   beforeEach(() => {
-    mock = new MockAdapter(axios)
-    vi.clearAllMocks()
+    // 设置Pinia
+    setActivePinia(createPinia())
+    mock = new MockAdapter(api) // 使用api实例而不是全局axios
+    jest.clearAllMocks()
+    // 抑制测试中的console.error输出
+    jest.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    // 恢复console.error
+    jest.restoreAllMocks()
   })
 
   afterEach(() => {
@@ -16,7 +25,7 @@ describe('API Configuration', () => {
   })
 
   it('should have correct base URL', () => {
-    expect(api.defaults.baseURL).toBe('http://localhost:3000/api')
+    expect(api.defaults.baseURL).toBe('http://localhost:3003/api')
   })
 
   it('should have correct timeout', () => {

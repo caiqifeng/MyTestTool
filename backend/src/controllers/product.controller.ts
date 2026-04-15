@@ -114,7 +114,7 @@ export class ProductController {
         }
       });
     } catch (error) {
-      // 如果数据库连接失败，返回模拟数据
+      // 如果数据库连接失败，返回模拟商品数据
       console.warn('数据库连接失败，返回模拟商品数据');
 
       const mockProducts = [
@@ -125,7 +125,7 @@ export class ProductController {
           price: 18,
           originalPrice: 22,
           categoryId: { _id: '1', name: '面包', icon: '🥖' },
-          images: ['/static/product-detail/carousel-croissant.jpg'],
+          images: ['/static/products/large/product-croissant.jpg'],
           stock: 100,
           salesCount: 152,
           status: ProductStatus.ACTIVE,
@@ -144,7 +144,7 @@ export class ProductController {
           price: 68,
           originalPrice: 88,
           categoryId: { _id: '3', name: '蛋糕', icon: '🍰' },
-          images: ['/static/product-detail/carousel-croissant.jpg'],
+          images: ['/static/products/large/product-chocolate-cake.jpg'],
           stock: 50,
           salesCount: 89,
           status: ProductStatus.ACTIVE,
@@ -155,6 +155,81 @@ export class ProductController {
           sortOrder: 2,
           createdAt: new Date('2023-01-02'),
           updatedAt: new Date('2023-01-02')
+        },
+        {
+          _id: '3',
+          name: '草莓慕斯',
+          description: '清新草莓搭配丝滑慕斯，甜而不腻，夏日必备。',
+          price: 58,
+          originalPrice: 78,
+          categoryId: { _id: '3', name: '蛋糕', icon: '🍰' },
+          images: ['/static/products/large/product-strawberry-mousse.jpg'],
+          stock: 0,
+          salesCount: 67,
+          status: ProductStatus.OUT_OF_STOCK,
+          specs: [
+            { name: '尺寸', value: '6寸' },
+            { name: '口味', value: '草莓' }
+          ],
+          sortOrder: 3,
+          createdAt: new Date('2023-01-03'),
+          updatedAt: new Date('2023-01-03')
+        },
+        {
+          _id: '4',
+          name: '原味吐司',
+          description: '手工揉制，经典原味，早餐三明治首选。',
+          price: 15,
+          originalPrice: 18,
+          categoryId: { _id: '1', name: '面包', icon: '🍞' },
+          images: ['/static/products/small/product-bread.jpg'],
+          stock: 200,
+          salesCount: 234,
+          status: ProductStatus.ACTIVE,
+          specs: [
+            { name: '重量', value: '400g' }
+          ],
+          sortOrder: 4,
+          createdAt: new Date('2023-01-04'),
+          updatedAt: new Date('2023-01-04')
+        },
+        {
+          _id: '5',
+          name: '芝士蛋糕',
+          description: '重乳酪芝士蛋糕，口感浓郁醇厚，芝士控最爱。',
+          price: 48,
+          originalPrice: 68,
+          categoryId: { _id: '3', name: '蛋糕', icon: '🍰' },
+          images: ['/static/products/small/product-cheesecake.jpg'],
+          stock: 40,
+          salesCount: 92,
+          status: ProductStatus.ACTIVE,
+          specs: [
+            { name: '尺寸', value: '6寸' },
+            { name: '口味', value: '芝士' }
+          ],
+          sortOrder: 5,
+          createdAt: new Date('2023-01-05'),
+          updatedAt: new Date('2023-01-05')
+        },
+        {
+          _id: '6',
+          name: '拿铁咖啡',
+          description: '精选阿拉比卡豆，现磨浓缩搭配鲜牛奶，香气浓郁。',
+          price: 22,
+          originalPrice: 28,
+          categoryId: { _id: '2', name: '饮品', icon: '☕' },
+          images: ['/static/products/small/product-latte.jpg'],
+          stock: 0,
+          salesCount: 189,
+          status: ProductStatus.OUT_OF_STOCK,
+          specs: [
+            { name: '温度', value: '热饮' },
+            { name: '糖度', value: '半糖' }
+          ],
+          sortOrder: 6,
+          createdAt: new Date('2023-01-06'),
+          updatedAt: new Date('2023-01-06')
         }
       ];
 
@@ -262,7 +337,7 @@ export class ProductController {
           price: 18,
           originalPrice: 22,
           categoryId: { _id: '1', name: '面包', icon: '🥖' },
-          images: ['/static/product-detail/carousel-croissant.jpg'],
+          images: ['/static/products/large/product-croissant.jpg'],
           stock: 100,
           salesCount: 152,
           status: ProductStatus.ACTIVE,
@@ -281,7 +356,7 @@ export class ProductController {
           price: 68,
           originalPrice: 88,
           categoryId: { _id: '3', name: '蛋糕', icon: '🍰' },
-          images: ['/static/product-detail/carousel-croissant.jpg'],
+          images: ['/static/products/large/product-chocolate-cake.jpg'],
           stock: 50,
           salesCount: 89,
           status: ProductStatus.ACTIVE,
@@ -292,6 +367,81 @@ export class ProductController {
           sortOrder: 2,
           createdAt: new Date('2023-01-02'),
           updatedAt: new Date('2023-01-02')
+        },
+        {
+          _id: '3',
+          name: '草莓慕斯',
+          description: '清新草莓搭配丝滑慕斯，甜而不腻，夏日必备。',
+          price: 58,
+          originalPrice: 78,
+          categoryId: { _id: '3', name: '蛋糕', icon: '🍰' },
+          images: ['/static/products/large/product-strawberry-mousse.jpg'],
+          stock: 0,
+          salesCount: 67,
+          status: ProductStatus.OUT_OF_STOCK,
+          specs: [
+            { name: '尺寸', value: '6寸' },
+            { name: '口味', value: '草莓' }
+          ],
+          sortOrder: 3,
+          createdAt: new Date('2023-01-03'),
+          updatedAt: new Date('2023-01-03')
+        },
+        {
+          _id: '4',
+          name: '原味吐司',
+          description: '手工揉制，经典原味，早餐三明治首选。',
+          price: 15,
+          originalPrice: 18,
+          categoryId: { _id: '1', name: '面包', icon: '🍞' },
+          images: ['/static/products/small/product-bread.jpg'],
+          stock: 200,
+          salesCount: 234,
+          status: ProductStatus.ACTIVE,
+          specs: [
+            { name: '重量', value: '400g' }
+          ],
+          sortOrder: 4,
+          createdAt: new Date('2023-01-04'),
+          updatedAt: new Date('2023-01-04')
+        },
+        {
+          _id: '5',
+          name: '芝士蛋糕',
+          description: '重乳酪芝士蛋糕，口感浓郁醇厚，芝士控最爱。',
+          price: 48,
+          originalPrice: 68,
+          categoryId: { _id: '3', name: '蛋糕', icon: '🍰' },
+          images: ['/static/products/small/product-cheesecake.jpg'],
+          stock: 40,
+          salesCount: 92,
+          status: ProductStatus.ACTIVE,
+          specs: [
+            { name: '尺寸', value: '6寸' },
+            { name: '口味', value: '芝士' }
+          ],
+          sortOrder: 5,
+          createdAt: new Date('2023-01-05'),
+          updatedAt: new Date('2023-01-05')
+        },
+        {
+          _id: '6',
+          name: '拿铁咖啡',
+          description: '精选阿拉比卡豆，现磨浓缩搭配鲜牛奶，香气浓郁。',
+          price: 22,
+          originalPrice: 28,
+          categoryId: { _id: '2', name: '饮品', icon: '☕' },
+          images: ['/static/products/small/product-latte.jpg'],
+          stock: 0,
+          salesCount: 189,
+          status: ProductStatus.OUT_OF_STOCK,
+          specs: [
+            { name: '温度', value: '热饮' },
+            { name: '糖度', value: '半糖' }
+          ],
+          sortOrder: 6,
+          createdAt: new Date('2023-01-06'),
+          updatedAt: new Date('2023-01-06')
         }
       ];
 

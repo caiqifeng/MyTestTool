@@ -12,7 +12,12 @@
           indicator-active-color="#FF6B35"
         >
           <swiper-item v-for="(image, index) in product.images" :key="index">
-            <image class="product-image" :src="image" mode="aspectFill" />
+            <view class="image-wrapper">
+              <image class="product-image" :src="image" mode="aspectFill" />
+              <view v-if="product.stock === 0" class="sold-out-mask">
+                <text class="sold-out-text">售罄</text>
+              </view>
+            </view>
           </swiper-item>
         </swiper>
       </view>
@@ -107,11 +112,19 @@
         </view>
 
         <view class="footer-right">
-          <view class="add-cart-btn" @click="handleAddToCart">
-            <text class="btn-text">加入购物车</text>
+          <view
+            class="add-cart-btn"
+            :class="{ 'disabled': product.stock === 0 }"
+            @click="product.stock > 0 && handleAddToCart()"
+          >
+            <text class="btn-text">{{ product.stock === 0 ? '已售罄' : '加入购物车' }}</text>
           </view>
-          <view class="buy-now-btn" @click="handleBuyNow">
-            <text class="btn-text">立即购买</text>
+          <view
+            class="buy-now-btn"
+            :class="{ 'disabled': product.stock === 0 }"
+            @click="product.stock > 0 && handleBuyNow()"
+          >
+            <text class="btn-text">{{ product.stock === 0 ? '已售罄' : '立即购买' }}</text>
           </view>
         </view>
       </view>
@@ -539,6 +552,42 @@ const handleFavorite = () => {
     color: $color-white;
     font-weight: 500;
     font-size: $font-size-md;
+  }
+
+  .disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background-color: $color-text-tertiary !important;
+  }
+}
+
+.product-images {
+  .image-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
+
+  .sold-out-mask {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+
+    .sold-out-text {
+      color: $color-white;
+      font-size: $font-size-lg;
+      font-weight: 600;
+      padding: $spacing-sm $spacing-lg;
+      background-color: rgba(0, 0, 0, 0.8);
+      border-radius: $border-radius-sm;
+    }
   }
 }
 </style>

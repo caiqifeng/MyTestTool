@@ -109,14 +109,24 @@
           <text class="retry-text">重试</text>
         </view>
       </view>
+
+      <!-- 支付轮询状态 -->
+      <view v-if="isPolling" class="polling-overlay">
+        <text class="polling-text">支付处理中...</text>
+        <view v-if="remainingTime !== null" class="polling-timer">
+          <text class="timer-text">剩余时间: {{ formatTime(remainingTime) }}</text>
+        </view>
+      </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { useOrderStore } from '../../store/order.store'
+import { paymentApi } from '../../utils/api/payment.api'
+import { PaymentPollingService, type PaymentStatus } from '../../utils/payment'
 
 const orderStore = useOrderStore()
 
@@ -153,6 +163,11 @@ const selectedMethod = ref('wechat')
 const showPaymentResult = ref(false)
 const paymentSuccess = ref(false)
 const paymentResultMessage = ref('')
+
+// 支付轮询
+const pollingService = ref<PaymentPollingService | null>(null)
+const isPolling = ref(false)
+const remainingTime = ref<number | null>(null)
 
 // 页面加载
 onLoad((options) => {
@@ -199,41 +214,120 @@ const handlePayment = async () => {
     return
   }
 
+  // 只支持微信支付
+  if (selectedMethod.value !== 'wechat') {
+    uni.showToast({
+      title: '目前仅支持微信支付',
+      icon: 'none'
+    })
+    return
+  }
+
   isLoading.value = true
+  error.value = null
 
   try {
-    // 模拟支付API调用
-    await simulatePayment()
+    // 1. 创建支付订单，获取微信支付参数
+    const paymentResponse = await paymentApi.createPayment({
+      orderId: order.value._id
+    })
 
-    // 支付成功
-    paymentSuccess.value = true
-    paymentResultMessage.value = `订单 ${order.value.orderNo} 支付成功`
-    showPaymentResult.value = true
+    if (!paymentResponse.success || !paymentResponse.data) {
+      throw new Error(paymentResponse.message || '创建支付订单失败')
+    }
+
+    const { paymentParams } = paymentResponse.data
+
+    // 2. 调用微信支付
+    const paymentResult = await paymentApi.handleWechatPayment(paymentParams)
+
+    if (paymentResult) {
+      // 支付发起成功，启动轮询检查支付结果
+      startPaymentPolling()
+    } else {
+      throw new Error('支付失败')
+    }
   } catch (err: any) {
     // 支付失败
+    console.error('支付失败:', err)
     paymentSuccess.value = false
     paymentResultMessage.value = err.message || '支付失败，请重试'
     showPaymentResult.value = true
+    error.value = err.message || '支付失败'
   } finally {
     isLoading.value = false
   }
 }
 
-// 模拟支付API调用
-const simulatePayment = (): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    // 模拟网络延迟
-    setTimeout(() => {
-      // 模拟支付成功（90%成功率）
-      const success = Math.random() < 0.9
+/**
+ * 启动支付状态轮询
+ */
+const startPaymentPolling = () => {
+  if (!order.value) return
 
-      if (success) {
-        resolve()
-      } else {
-        reject(new Error('支付失败，请检查账户余额或重试'))
+  // 停止现有的轮询
+  if (pollingService.value) {
+    pollingService.value.stop()
+  }
+
+  isPolling.value = true
+  remainingTime.value = null
+
+  pollingService.value = PaymentPollingService.startPolling(
+    order.value._id,
+    {
+      interval: 3000, // 3秒轮询一次
+      timeout: 5 * 60 * 1000, // 5分钟超时
+
+      onSuccess: (status: PaymentStatus) => {
+        // 支付成功
+        isPolling.value = false
+        paymentSuccess.value = true
+        paymentResultMessage.value = `订单 ${order.value?.orderNumber} 支付成功`
+        showPaymentResult.value = true
+
+        // 更新本地订单状态
+        if (order.value) {
+          order.value.paymentStatus = 'paid'
+        }
+      },
+
+      onError: (error: Error) => {
+        // 支付失败
+        isPolling.value = false
+        paymentSuccess.value = false
+        paymentResultMessage.value = error.message || '支付失败'
+        showPaymentResult.value = true
+        console.error('支付轮询错误:', error)
+      },
+
+      onTimeout: () => {
+        // 支付超时
+        isPolling.value = false
+        paymentSuccess.value = false
+        paymentResultMessage.value = '支付超时，请重新支付'
+        showPaymentResult.value = true
+        remainingTime.value = 0
+      },
+
+      onStatusChange: (status: PaymentStatus) => {
+        // 状态变化
+        remainingTime.value = status.remainingTime
+        console.log('支付状态变化:', status.paymentStatus, '剩余时间:', status.remainingTime)
       }
-    }, 1500)
-  })
+    }
+  )
+}
+
+/**
+ * 停止支付轮询
+ */
+const stopPaymentPolling = () => {
+  if (pollingService.value) {
+    pollingService.value.stop()
+    pollingService.value = null
+  }
+  isPolling.value = false
 }
 
 // 支付成功后处理
@@ -272,8 +366,21 @@ const handleCloseResult = () => {
   showPaymentResult.value = false
 }
 
+// 格式化时间
+const formatTime = (seconds: number | null): string => {
+  if (seconds === null || seconds <= 0) return '00:00'
+  const mins = Math.floor(seconds / 60)
+  const secs = seconds % 60
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+}
+
 onMounted(() => {
   // 页面初始化
+})
+
+onUnmounted(() => {
+  // 组件卸载时停止轮询
+  stopPaymentPolling()
 })
 </script>
 
@@ -576,7 +683,8 @@ onMounted(() => {
 }
 
 .loading-overlay,
-.error-overlay {
+.error-overlay,
+.polling-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -590,10 +698,24 @@ onMounted(() => {
   z-index: 1000;
 
   .loading-text,
-  .error-text {
+  .error-text,
+  .polling-text {
     font-size: $font-size-lg;
     color: $color-text-secondary;
     margin-bottom: $spacing-md;
+  }
+
+  .polling-timer {
+    margin-top: $spacing-md;
+    padding: $spacing-sm $spacing-md;
+    background-color: rgba($color-primary, 0.1);
+    border-radius: $border-radius-round;
+
+    .timer-text {
+      font-size: $font-size-md;
+      color: $color-primary;
+      font-weight: 500;
+    }
   }
 
   .retry-btn {
