@@ -12,31 +12,17 @@
           <view class="filter-tabs">
             <view
               class="filter-tab"
-              :class="{ 'active': filterStatus === 'all' }"
-              @click="setFilterStatus('all')"
-            >
-              <text class="tab-text">全部</text>
-            </view>
-            <view
-              class="filter-tab"
               :class="{ 'active': filterStatus === 'available' }"
               @click="setFilterStatus('available')"
             >
-              <text class="tab-text">可用</text>
+              <text class="tab-text">可领取</text>
             </view>
             <view
               class="filter-tab"
-              :class="{ 'active': filterStatus === 'used' }"
-              @click="setFilterStatus('used')"
+              :class="{ 'active': filterStatus === 'my' }"
+              @click="setFilterStatus('my')"
             >
-              <text class="tab-text">已使用</text>
-            </view>
-            <view
-              class="filter-tab"
-              :class="{ 'active': filterStatus === 'expired' }"
-              @click="setFilterStatus('expired')"
-            >
-              <text class="tab-text">已过期</text>
+              <text class="tab-text">我的优惠券</text>
             </view>
           </view>
         </scroll-view>
@@ -101,8 +87,11 @@
               </view>
             </view>
 
-            <!-- 状态标签 -->
-            <view class="coupon-status" :class="getCouponStatusClass(coupon)">
+            <!-- 领取按钮或状态标签 -->
+            <view v-if="filterStatus === 'available' && !coupon.isClaimed" class="claim-btn" @click="handleClaimCoupon(coupon)">
+              <text class="claim-text">立即领取</text>
+            </view>
+            <view v-else class="coupon-status" :class="getCouponStatusClass(coupon)">
               <text class="status-text">{{ getCouponStatusText(coupon) }}</text>
             </view>
           </view>
@@ -110,8 +99,8 @@
       </view>
 
       <!-- 领取优惠券按钮 -->
-      <view v-if="filteredCoupons.length > 0" class="get-coupon-section">
-        <view class="get-coupon-btn" @click="handleGetCoupons">
+      <view v-if="filterStatus === 'my' && filteredCoupons.length > 0" class="get-coupon-section">
+        <view class="get-coupon-btn" @click="setFilterStatus('available')">
           <text class="get-coupon-text">领取更多优惠券</text>
         </view>
       </view>
@@ -144,34 +133,22 @@ interface Coupon {
   updatedAt: string
   isUsed?: boolean
   isValid?: boolean
+  isClaimed?: boolean
 }
 
 const coupons = ref<Coupon[]>([])
-const filterStatus = ref('all')
+const myCoupons = ref<Coupon[]>([])
+const filterStatus = ref('available')
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 
 // 过滤优惠券
 const filteredCoupons = computed(() => {
-  const now = new Date()
-
-  return coupons.value.filter(coupon => {
-    const endDate = new Date(coupon.endDate)
-    const isExpired = endDate < now
-    const isAvailable = coupon.isActive && !isExpired && coupon.usedCount < (coupon.usageLimit || Infinity)
-
-    switch (filterStatus.value) {
-      case 'available':
-        return isAvailable && !coupon.isUsed
-      case 'used':
-        return coupon.isUsed
-      case 'expired':
-        return isExpired || !coupon.isActive
-      case 'all':
-      default:
-        return true
-    }
-  })
+  if (filterStatus.value === 'available') {
+    return coupons.value
+  } else {
+    return myCoupons.value
+  }
 })
 
 // 获取优惠券状态类
@@ -199,14 +176,13 @@ const getCouponStatusText = (coupon: Coupon): string => {
   }
 }
 
-// 获取优惠券列表
-const fetchCoupons = async () => {
+// 获取可领取优惠券列表
+const fetchAvailableCoupons = async () => {
   isLoading.value = true
   error.value = null
 
   try {
-    // 这里使用用户优惠券API
-    const response = await couponApi.getUserCoupons()
+    const response = await couponApi.getAvailableCoupons()
     if (response.success && response.data.coupons) {
       coupons.value = response.data.coupons
     } else {
@@ -220,9 +196,39 @@ const fetchCoupons = async () => {
   }
 }
 
+// 获取我的优惠券列表
+const fetchMyCoupons = async () => {
+  isLoading.value = true
+  error.value = null
+
+  try {
+    const response = await couponApi.getUserCoupons()
+    if (response.success && response.data.coupons) {
+      myCoupons.value = response.data.coupons
+    } else {
+      throw new Error(response.message || '获取优惠券列表失败')
+    }
+  } catch (err: any) {
+    error.value = err.message || '获取优惠券列表失败'
+    console.error('获取优惠券列表失败:', err)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// 获取优惠券列表
+const fetchCoupons = async () => {
+  if (filterStatus.value === 'available') {
+    await fetchAvailableCoupons()
+  } else {
+    await fetchMyCoupons()
+  }
+}
+
 // 设置筛选状态
 const setFilterStatus = (status: string) => {
   filterStatus.value = status
+  fetchCoupons()
 }
 
 // 格式化日期
@@ -235,12 +241,30 @@ const formatDate = (dateString: string): string => {
 }
 
 // 领取优惠券
-const handleGetCoupons = () => {
-  uni.showToast({
-    title: '优惠券领取功能开发中',
-    icon: 'none'
-  })
-  // TODO: 实现优惠券领取页面
+const handleClaimCoupon = async (coupon: Coupon) => {
+  try {
+    uni.showLoading({ title: '领取中...' })
+    const response = await couponApi.claimCoupon(coupon.code)
+
+    if (response.success) {
+      uni.showToast({
+        title: '领取成功',
+        icon: 'success'
+      })
+      // 刷新列表
+      await fetchCoupons()
+    } else {
+      throw new Error(response.message || '领取失败')
+    }
+  } catch (err: any) {
+    console.error('领取优惠券失败:', err)
+    uni.showToast({
+      title: err.message || '领取失败',
+      icon: 'none'
+    })
+  } finally {
+    uni.hideLoading()
+  }
 }
 
 onMounted(() => {
@@ -474,6 +498,22 @@ onMounted(() => {
   .status-text {
     font-size: $font-size-xs;
     font-weight: 500;
+  }
+
+  .claim-btn {
+    position: absolute;
+    top: $spacing-md;
+    right: $spacing-md;
+    background-color: $color-primary;
+    padding: 8rpx 16rpx;
+    border-radius: $border-radius-round;
+    box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15);
+
+    .claim-text {
+      font-size: $font-size-sm;
+      font-weight: 600;
+      color: $color-white;
+    }
   }
 }
 

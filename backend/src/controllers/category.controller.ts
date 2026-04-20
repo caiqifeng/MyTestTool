@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import CategoryModel from '../models/Category';
+import { ProductModel } from '../models/Product';
 import { asyncHandler } from '../middleware/error';
 import config from '../config';
 
@@ -340,7 +341,14 @@ export class CategoryController {
       });
     }
 
-    // TODO: 检查是否有商品属于该分类
+    // 检查是否有商品属于该分类
+    const productsCount = await ProductModel.countDocuments({ categoryId: id });
+    if (productsCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `该分类下还有 ${productsCount} 个商品，请先删除或移动这些商品`
+      });
+    }
 
     // 删除分类
     await CategoryModel.findByIdAndDelete(id);
