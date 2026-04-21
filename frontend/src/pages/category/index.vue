@@ -208,18 +208,19 @@ onMounted(() => {
 @import '../../styles/variables.scss';
 
 .category-page {
-  padding-bottom: $spacing-xl;
+  padding-bottom: 140rpx;
 }
 
 .category-header {
-  padding: $spacing-lg $spacing-md;
-  background-color: $color-white;
+  padding: $spacing-xl $spacing-md $spacing-lg;
+  background: linear-gradient(180deg, #FFFFFF 0%, #FFFBF5 100%);
   border-bottom: 1px solid $color-border;
 
   .category-title {
-    font-size: $font-size-xl;
-    font-weight: 600;
+    font-size: 44rpx;
+    font-weight: 500;
     color: $color-text-primary;
+    letter-spacing: 2rpx;
   }
 }
 
@@ -235,8 +236,7 @@ onMounted(() => {
     justify-content: center;
     padding: $spacing-xl 0;
     background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    border-radius: $border-radius-lg;
   }
 
   .loading-text,
@@ -244,6 +244,7 @@ onMounted(() => {
   .empty-text {
     font-size: $font-size-md;
     color: $color-text-secondary;
+    font-weight: 400;
     margin-bottom: $spacing-md;
   }
 
@@ -265,8 +266,9 @@ onMounted(() => {
   }
 
   .empty-subtext {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 }
 
@@ -282,23 +284,24 @@ onMounted(() => {
   .category-card {
     display: flex;
     align-items: center;
-    padding: $spacing-md;
-    background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    padding: $spacing-lg;
+    background: linear-gradient(135deg, #FFFFFF 0%, #FFF9F0 100%);
+    border-radius: $border-radius-xl;
     cursor: pointer;
     transition: all 0.2s ease;
+    box-shadow: 0 2rpx 12rpx rgba(166, 124, 82, 0.06);
 
     &:active {
-      opacity: 0.8;
+      background: linear-gradient(135deg, #FFF9F0 0%, #F5EDE3 100%);
+      transform: scale(0.98);
     }
   }
 
   .category-icon {
-    width: 60rpx;
-    height: 60rpx;
+    width: 72rpx;
+    height: 72rpx;
     border-radius: $border-radius-circle;
-    background-color: rgba($color-primary, 0.1);
+    background: linear-gradient(135deg, rgba($color-primary, 0.12) 0%, rgba($color-primary, 0.06) 100%);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -306,7 +309,7 @@ onMounted(() => {
   }
 
   .icon-text {
-    font-size: 28rpx;
+    font-size: 32rpx;
   }
 
   .category-info {
@@ -317,14 +320,15 @@ onMounted(() => {
 
   .category-name {
     font-size: $font-size-md;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
     margin-bottom: 2rpx;
   }
 
   .category-desc {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
     @include text-ellipsis(1);
   }
 
@@ -334,7 +338,7 @@ onMounted(() => {
 
   .arrow-text {
     font-size: $font-size-lg;
-    color: $color-text-tertiary;
+    color: $color-text-secondary;
   }
 }
 
@@ -342,8 +346,7 @@ onMounted(() => {
   margin: $spacing-md;
   padding: $spacing-md;
   background-color: $color-white;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-sm;
+  border-radius: $border-radius-lg;
 
   .section-header {
     display: flex;
@@ -355,13 +358,14 @@ onMounted(() => {
   }
 
   .section-title {
-    font-size: $font-size-lg;
-    font-weight: 600;
+    font-size: $font-size-md;
+    font-weight: 500;
     color: $color-text-primary;
   }
 
   .section-more {
-    font-size: $font-size-sm;
+    font-size: $font-size-xs;
+    font-weight: 300;
     color: $color-primary;
     cursor: pointer;
   }
@@ -373,9 +377,9 @@ onMounted(() => {
   gap: $spacing-md;
 
   .product-card {
-    border-radius: $border-radius-md;
+    border-radius: $border-radius-lg;
     overflow: hidden;
-    box-shadow: $shadow-sm;
+    background-color: $color-card-bg;
     cursor: pointer;
     transition: all 0.2s ease;
 
@@ -396,7 +400,8 @@ onMounted(() => {
 
   .product-name {
     display: block;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 400;
     color: $color-text-primary;
     margin-bottom: $spacing-sm;
     @include text-ellipsis(1);
@@ -409,14 +414,15 @@ onMounted(() => {
   }
 
   .current-price {
-    font-size: $font-size-lg;
-    font-weight: 600;
-    color: $color-error;
+    font-size: $font-size-md;
+    font-weight: 500;
+    color: $color-primary;
   }
 
   .original-price {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
     text-decoration: line-through;
   }
 

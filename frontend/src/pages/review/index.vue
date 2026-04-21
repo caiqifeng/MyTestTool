@@ -383,7 +383,7 @@ onMounted(() => {
 
   .review-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -393,8 +393,7 @@ onMounted(() => {
 .overall-review-section {
   background-color: $color-white;
   margin: $spacing-md;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-sm;
+  border-radius: $border-radius-lg;
 }
 
 .section-header {
@@ -402,8 +401,8 @@ onMounted(() => {
   border-bottom: 1px solid $color-border;
 
   .section-title {
-    font-size: $font-size-lg;
-    font-weight: 600;
+    font-size: $font-size-md;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -423,14 +422,15 @@ onMounted(() => {
   }
 
   .info-label {
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 300;
     color: $color-text-secondary;
   }
 
   .info-value {
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
     color: $color-text-primary;
-    font-weight: 500;
+    font-weight: 400;
   }
 }
 
@@ -452,7 +452,7 @@ onMounted(() => {
   .product-image {
     width: 120rpx;
     height: 120rpx;
-    border-radius: $border-radius-sm;
+    border-radius: $border-radius-md;
     margin-right: $spacing-md;
   }
 
@@ -463,20 +463,23 @@ onMounted(() => {
   }
 
   .product-name {
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 400;
     color: $color-text-primary;
     margin-bottom: $spacing-xs;
     @include text-ellipsis(2);
   }
 
   .product-specs {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
     margin-bottom: $spacing-xs;
   }
 
   .product-quantity {
-    font-size: $font-size-sm;
+    font-size: $font-size-xs;
+    font-weight: 300;
     color: $color-text-secondary;
   }
 }
@@ -496,8 +499,8 @@ onMounted(() => {
 .rating-label,
 .comment-label {
   display: block;
-  font-size: $font-size-md;
-  font-weight: 500;
+  font-size: $font-size-sm;
+  font-weight: 400;
   color: $color-text-primary;
   margin-bottom: $spacing-sm;
 }
@@ -546,8 +549,9 @@ onMounted(() => {
 .comment-count {
   display: block;
   text-align: right;
-  font-size: $font-size-sm;
-  color: $color-text-tertiary;
+  font-size: $font-size-xs;
+  font-weight: 300;
+  color: $color-text-secondary;
   margin-top: $spacing-xs;
 }
 
@@ -579,7 +583,7 @@ onMounted(() => {
   }
 
   &.submit {
-    background-color: $color-primary;
+    background-color: $color-accent;
   }
 
   .action-text {

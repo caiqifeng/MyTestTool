@@ -141,7 +141,7 @@ const handleWechatLogin = () => {
   .login-title {
     display: block;
     font-size: $font-size-xxl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
     margin-bottom: $spacing-sm;
   }
@@ -149,6 +149,7 @@ const handleWechatLogin = () => {
   .login-subtitle {
     display: block;
     font-size: $font-size-md;
+    font-weight: 300;
     color: $color-text-secondary;
   }
 }
@@ -162,12 +163,12 @@ const handleWechatLogin = () => {
       font-size: $font-size-md;
       color: $color-text-primary;
       margin-bottom: $spacing-sm;
-      font-weight: 500;
+      font-weight: 400;
     }
 
     .form-input {
       border: 1px solid $color-border;
-      border-radius: $border-radius-md;
+      border-radius: $border-radius-lg;
       padding: $spacing-md;
       font-size: $font-size-md;
       color: $color-text-primary;
@@ -175,7 +176,7 @@ const handleWechatLogin = () => {
       width: 100%;
 
       &::placeholder {
-        color: $color-text-tertiary;
+        color: $color-text-secondary;
       }
     }
   }
@@ -184,8 +185,8 @@ const handleWechatLogin = () => {
     margin-top: $spacing-xl;
 
     .login-btn {
-      background-color: $color-primary;
-      border-radius: $border-radius-round;
+      background-color: $color-accent;
+      border-radius: $border-radius-lg;
       padding: $spacing-md;
       text-align: center;
       margin-bottom: $spacing-lg;
@@ -193,7 +194,7 @@ const handleWechatLogin = () => {
       .login-btn-text {
         color: $color-white;
         font-weight: 500;
-        font-size: $font-size-lg;
+        font-size: $font-size-md;
       }
     }
 
@@ -202,7 +203,8 @@ const handleWechatLogin = () => {
 
       .register-text {
         color: $color-primary;
-        font-size: $font-size-md;
+        font-size: $font-size-sm;
+        font-weight: 300;
       }
     }
   }
@@ -216,7 +218,8 @@ const handleWechatLogin = () => {
   .social-title {
     display: block;
     text-align: center;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 300;
     color: $color-text-secondary;
     margin-bottom: $spacing-lg;
   }

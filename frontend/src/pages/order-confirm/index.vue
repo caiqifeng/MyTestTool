@@ -367,7 +367,7 @@ const handleSubmitOrder = async () => {
 
   .order-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -377,9 +377,8 @@ const handleSubmitOrder = async () => {
 .order-info-section {
   background-color: $color-white;
   margin: $spacing-md;
-  border-radius: $border-radius-md;
+  border-radius: $border-radius-lg;
   padding: $spacing-md;
-  box-shadow: $shadow-sm;
 }
 
 .section-header {
@@ -389,13 +388,14 @@ const handleSubmitOrder = async () => {
   margin-bottom: $spacing-md;
 
   .section-title {
-    font-size: $font-size-lg;
-    font-weight: 600;
+    font-size: $font-size-md;
+    font-weight: 500;
     color: $color-text-primary;
   }
 
   .section-action {
-    font-size: $font-size-md;
+    font-size: $font-size-xs;
+    font-weight: 300;
     color: $color-primary;
   }
 }
@@ -409,19 +409,21 @@ const handleSubmitOrder = async () => {
 
     .address-name {
       font-size: $font-size-md;
-      font-weight: 600;
+      font-weight: 500;
       color: $color-text-primary;
     }
 
     .address-phone {
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 300;
       color: $color-text-secondary;
     }
   }
 
   .address-detail {
     display: block;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 300;
     color: $color-text-secondary;
     line-height: 1.4;
   }
@@ -436,13 +438,14 @@ const handleSubmitOrder = async () => {
   border-radius: $border-radius-md;
 
   .empty-text {
-    font-size: $font-size-md;
-    color: $color-text-tertiary;
+    font-size: $font-size-sm;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 
   .empty-icon {
-    font-size: $font-size-lg;
-    color: $color-text-tertiary;
+    font-size: $font-size-md;
+    color: $color-text-secondary;
   }
 }
 
@@ -460,7 +463,7 @@ const handleSubmitOrder = async () => {
   .product-image {
     width: 120rpx;
     height: 120rpx;
-    border-radius: $border-radius-sm;
+    border-radius: $border-radius-md;
     margin-right: $spacing-md;
   }
 
@@ -470,15 +473,17 @@ const handleSubmitOrder = async () => {
     flex-direction: column;
 
     .product-name {
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 400;
       color: $color-text-primary;
       margin-bottom: $spacing-xs;
       @include text-ellipsis(1);
     }
 
     .product-specs {
-      font-size: $font-size-sm;
-      color: $color-text-tertiary;
+      font-size: $font-size-xs;
+      font-weight: 300;
+      color: $color-text-secondary;
       margin-bottom: $spacing-sm;
     }
 
@@ -490,13 +495,14 @@ const handleSubmitOrder = async () => {
     }
 
     .product-price {
-      font-size: $font-size-lg;
-      font-weight: 600;
-      color: $color-error;
+      font-size: $font-size-md;
+      font-weight: 500;
+      color: $color-primary;
     }
 
     .product-quantity {
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 300;
       color: $color-text-secondary;
     }
   }
@@ -505,8 +511,7 @@ const handleSubmitOrder = async () => {
 .coupon-section {
   background-color: $color-white;
   margin: $spacing-md;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-sm;
+  border-radius: $border-radius-lg;
 
   .section-header {
     display: flex;
@@ -516,13 +521,14 @@ const handleSubmitOrder = async () => {
     border-bottom: 1px solid $color-border;
 
     .section-title {
-      font-size: $font-size-lg;
-      font-weight: 600;
+      font-size: $font-size-md;
+      font-weight: 500;
       color: $color-text-primary;
     }
 
     .section-action {
-      font-size: $font-size-md;
+      font-size: $font-size-xs;
+      font-weight: 300;
       color: $color-primary;
     }
   }
@@ -538,27 +544,29 @@ const handleSubmitOrder = async () => {
     }
 
     .coupon-name {
-      font-size: $font-size-md;
-      font-weight: 600;
+      font-size: $font-size-sm;
+      font-weight: 400;
       color: $color-text-primary;
     }
 
     .coupon-desc {
-      font-size: $font-size-sm;
+      font-size: $font-size-xs;
+      font-weight: 300;
       color: $color-text-secondary;
       flex: 1;
     }
 
     .coupon-value {
-      font-size: $font-size-lg;
-      font-weight: 600;
+      font-size: $font-size-md;
+      font-weight: 500;
       color: $color-primary;
     }
 
     .coupon-expiry {
       display: block;
-      font-size: $font-size-sm;
-      color: $color-text-tertiary;
+      font-size: $font-size-xs;
+      font-weight: 300;
+      color: $color-text-secondary;
     }
   }
 
@@ -567,8 +575,9 @@ const handleSubmitOrder = async () => {
     text-align: center;
 
     .empty-text {
-      font-size: $font-size-md;
-      color: $color-text-tertiary;
+      font-size: $font-size-sm;
+      font-weight: 300;
+      color: $color-text-secondary;
     }
   }
 }
@@ -591,14 +600,15 @@ const handleSubmitOrder = async () => {
   }
 
   .info-label {
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 300;
     color: $color-text-secondary;
   }
 
   .info-value {
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
     color: $color-text-primary;
-    font-weight: 500;
+    font-weight: 400;
 
     &.coupon {
       color: $color-primary;
@@ -606,8 +616,8 @@ const handleSubmitOrder = async () => {
 
     &.total-price {
       font-size: $font-size-xl;
-      color: $color-error;
-      font-weight: 600;
+      color: $color-primary;
+      font-weight: 500;
     }
   }
 }
@@ -634,21 +644,21 @@ const handleSubmitOrder = async () => {
 
     .total-price {
       font-size: $font-size-xl;
-      font-weight: 600;
-      color: $color-error;
+      font-weight: 500;
+      color: $color-primary;
     }
   }
 
   .footer-right {
     .submit-btn {
-      background-color: $color-primary;
-      border-radius: $border-radius-round;
+      background-color: $color-accent;
+      border-radius: $border-radius-lg;
       padding: $spacing-sm $spacing-xl;
 
       .submit-text {
         color: $color-white;
         font-size: $font-size-md;
-        font-weight: 600;
+        font-weight: 500;
       }
     }
   }
@@ -682,14 +692,14 @@ const handleSubmitOrder = async () => {
       border-bottom: 1px solid $color-border;
 
       .modal-title {
-        font-size: $font-size-lg;
-        font-weight: 600;
+        font-size: $font-size-md;
+        font-weight: 500;
         color: $color-text-primary;
       }
 
       .modal-close {
         font-size: 48rpx;
-        color: $color-text-tertiary;
+        color: $color-text-secondary;
         line-height: 1;
       }
     }
@@ -702,8 +712,8 @@ const handleSubmitOrder = async () => {
       .coupon-card {
         position: relative;
         display: flex;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-radius: $border-radius-md;
+        background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+        border-radius: $border-radius-lg;
         padding: $spacing-md;
         margin-bottom: $spacing-md;
         color: $color-white;
@@ -724,7 +734,7 @@ const handleSubmitOrder = async () => {
 
           .coupon-amount {
             font-size: 48rpx;
-            font-weight: 700;
+            font-weight: 500;
           }
 
           .coupon-condition {
@@ -741,13 +751,13 @@ const handleSubmitOrder = async () => {
           justify-content: center;
 
           .coupon-name {
-            font-size: $font-size-md;
-            font-weight: 600;
+            font-size: $font-size-sm;
+            font-weight: 400;
             margin-bottom: $spacing-xs;
           }
 
           .coupon-desc {
-            font-size: $font-size-sm;
+            font-size: $font-size-xs;
             opacity: 0.9;
             margin-bottom: $spacing-xs;
           }
@@ -801,12 +811,12 @@ const handleSubmitOrder = async () => {
       }
 
       .cancel-btn {
-        background-color: $color-bg-secondary;
+        background-color: $color-background;
         color: $color-text-secondary;
       }
 
       .confirm-btn {
-        background-color: $color-primary;
+        background-color: $color-accent;
         color: $color-white;
       }
     }

@@ -1,5 +1,5 @@
 // frontend/src/styles/global.scss
-/* 全局样式 */
+/* 全局样式 - 日式原木烘焙风 */
 @import './variables.scss';
 @import './mixins.scss';
 
@@ -17,9 +17,10 @@ html, body {
   background-color: $color-background;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* 通用类 */
+/* 通用容器 */
 .container {
   padding: $spacing-md;
 }
@@ -29,6 +30,7 @@ html, body {
   background-color: $color-background;
 }
 
+/* 文本工具类 */
 .text-center {
   text-align: center;
 }
@@ -53,6 +55,7 @@ html, body {
   @include text-ellipsis(3);
 }
 
+/* 弹性布局工具类 */
 .flex-center {
   @include flex-center;
 }
@@ -65,7 +68,7 @@ html, body {
   @include flex-column;
 }
 
-/* 工具类 */
+/* 间距工具类 */
 .mt-sm { margin-top: $spacing-sm !important; }
 .mt-md { margin-top: $spacing-md !important; }
 .mt-lg { margin-top: $spacing-lg !important; }

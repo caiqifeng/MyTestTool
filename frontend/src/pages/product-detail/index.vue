@@ -9,7 +9,7 @@
           :circular="true"
           indicator-dots
           indicator-color="rgba(255, 255, 255, 0.5)"
-          indicator-active-color="#FF6B35"
+          indicator-active-color="#8B6A3E"
         >
           <swiper-item v-for="(image, index) in product.images" :key="index">
             <view class="image-wrapper">
@@ -341,22 +341,24 @@ const handleFavorite = () => {
 
   .current-price {
     font-size: $font-size-xxl;
-    font-weight: 600;
-    color: $color-error;
+    font-weight: 500;
+    color: $color-primary;
     margin-right: $spacing-sm;
   }
 
   .original-price {
     font-size: $font-size-md;
-    color: $color-text-tertiary;
+    font-weight: 300;
+    color: $color-text-secondary;
     text-decoration: line-through;
     margin-right: $spacing-md;
   }
 
   .discount-tag {
-    background-color: $color-error;
+    background-color: $color-accent;
     color: $color-white;
     font-size: $font-size-xs;
+    font-weight: 400;
     padding: 2rpx 8rpx;
     border-radius: $border-radius-sm;
   }
@@ -365,14 +367,15 @@ const handleFavorite = () => {
 .product-name {
   display: block;
   font-size: $font-size-lg;
-  font-weight: 600;
+  font-weight: 500;
   color: $color-text-primary;
   margin-bottom: $spacing-sm;
 }
 
 .product-description {
   display: block;
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
+  font-weight: 300;
   color: $color-text-secondary;
   margin-bottom: $spacing-md;
   line-height: 1.5;
@@ -391,16 +394,17 @@ const handleFavorite = () => {
 
   .meta-label {
     display: block;
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
     margin-bottom: $spacing-xs;
   }
 
   .meta-value {
     display: block;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
     color: $color-text-primary;
-    font-weight: 500;
+    font-weight: 400;
   }
 }
 
@@ -412,8 +416,8 @@ const handleFavorite = () => {
 }
 
 .section-title {
-  font-size: $font-size-lg;
-  font-weight: 600;
+  font-size: $font-size-md;
+  font-weight: 500;
   color: $color-text-primary;
   margin-bottom: $spacing-md;
 }
@@ -428,7 +432,8 @@ const handleFavorite = () => {
 
 .spec-label {
   display: block;
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
+  font-weight: 400;
   color: $color-text-primary;
   margin-bottom: $spacing-sm;
 }
@@ -441,9 +446,9 @@ const handleFavorite = () => {
 
 .spec-option {
   border: 1px solid $color-border;
-  border-radius: $border-radius-md;
+  border-radius: $border-radius-lg;
   padding: $spacing-sm $spacing-md;
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
   color: $color-text-secondary;
   transition: all 0.2s ease;
 
@@ -457,7 +462,8 @@ const handleFavorite = () => {
 .detail-content {
   .detail-text {
     display: block;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 300;
     color: $color-text-secondary;
     line-height: 1.6;
     margin-bottom: $spacing-md;
@@ -465,7 +471,7 @@ const handleFavorite = () => {
 
   .detail-image {
     width: 100%;
-    border-radius: $border-radius-md;
+    border-radius: $border-radius-lg;
   }
 }
 
@@ -504,7 +510,7 @@ const handleFavorite = () => {
     margin-bottom: 4rpx;
 
     &.favorited {
-      color: $color-error;
+      color: $color-primary;
     }
   }
 
@@ -517,7 +523,7 @@ const handleFavorite = () => {
     position: absolute;
     top: -10rpx;
     right: -10rpx;
-    background-color: $color-error;
+    background-color: $color-accent;
     color: $color-white;
     font-size: $font-size-xs;
     width: 36rpx;
@@ -536,16 +542,21 @@ const handleFavorite = () => {
 
   .add-cart-btn,
   .buy-now-btn {
-    border-radius: $border-radius-round;
+    border-radius: $border-radius-lg;
     padding: $spacing-sm $spacing-lg;
   }
 
   .add-cart-btn {
-    background-color: $color-secondary;
+    background-color: $color-background;
+    border: 1px solid $color-primary;
+
+    .btn-text {
+      color: $color-primary;
+    }
   }
 
   .buy-now-btn {
-    background-color: $color-primary;
+    background-color: $color-accent;
   }
 
   .btn-text {

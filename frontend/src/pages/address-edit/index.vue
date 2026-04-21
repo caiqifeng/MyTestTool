@@ -439,7 +439,7 @@ onMounted(() => {
 
   .edit-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -448,8 +448,7 @@ onMounted(() => {
   padding: $spacing-md;
   background-color: $color-white;
   margin: $spacing-md;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-sm;
+  border-radius: $border-radius-lg;
 }
 
 .form-group {
@@ -472,7 +471,7 @@ onMounted(() => {
 .form-label {
   display: block;
   font-size: $font-size-md;
-  font-weight: 500;
+  font-weight: 400;
   color: $color-text-primary;
   margin-bottom: $spacing-sm;
 }
@@ -486,7 +485,7 @@ onMounted(() => {
   outline: none;
 
   &::placeholder {
-    color: $color-text-tertiary;
+    color: $color-text-secondary;
   }
 }
 
@@ -499,17 +498,19 @@ onMounted(() => {
 
   .region-text {
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-primary;
   }
 
   .region-placeholder {
     font-size: $font-size-md;
-    color: $color-text-tertiary;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 
   .region-arrow {
     font-size: $font-size-xl;
-    color: $color-text-tertiary;
+    color: $color-text-secondary;
     transform: rotate(90deg);
   }
 }
@@ -559,6 +560,7 @@ onMounted(() => {
 
 .checkbox-label {
   font-size: $font-size-md;
+  font-weight: 400;
   color: $color-text-primary;
 }
 
@@ -590,7 +592,7 @@ onMounted(() => {
   }
 
   &.save {
-    background-color: $color-primary;
+    background-color: $color-accent;
   }
 
   .action-text {
@@ -622,7 +624,7 @@ onMounted(() => {
 .region-picker-content {
   width: 100%;
   background-color: $color-white;
-  border-radius: $border-radius-md $border-radius-md 0 0;
+  border-radius: $border-radius-lg $border-radius-lg 0 0;
   max-height: 70vh;
   display: flex;
   flex-direction: column;

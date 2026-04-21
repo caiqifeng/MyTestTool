@@ -1,30 +1,33 @@
 // frontend/src/styles/variables.scss
-// 品牌色系 - 温暖面包感
-$color-primary: #FF6B35;    // 橙色 - 主按钮、重要元素
-$color-primary-light: #FF9B70; // 浅橙色 - 悬浮状态
-$color-primary-dark: #D94B1A;  // 深橙色 - 按下状态
+// 品牌色系 - Cycle&Cycle 日式烘焙风
 
-// 辅助色 - 清新感
-$color-secondary: #4ECDC4;     // 青绿色 - 次要按钮、标签
-$color-secondary-light: #8AE0D8;
-$color-secondary-dark: #2BA9A1;
+// === 主色调：暖棕色（面包烘焙色） ===
+$color-primary: #A67C52;        // 暖棕色 - 按钮、图标、重点文字
+$color-primary-light: #C9A882;  // 浅暖棕 - 悬浮状态
+$color-primary-dark: #8B6A3E;   // 深暖棕 - 按下状态
 
-// 中性色
-$color-text-primary: #333333;   // 主要文字
-$color-text-secondary: #666666; // 次要文字
-$color-text-tertiary: #999999;  // 辅助文字
-$color-border: #E0E0E0;         // 边框色
-$color-background: #F8F8F8;     // 背景色
+// === 点缀色：暖橙色（行动引导） ===
+$color-accent: #D4956C;         // 暖橙色 - 立即注册/去结算等主按钮
+$color-accent-light: #E5B08F;   // 浅暖橙 - 悬浮态
+$color-accent-dark: #C17D52;    // 深暖橙 - 按下态
+
+// === 中性色 - 日式极简灰阶 ===
+$color-text-primary: #3C2A21;   // 深棕色 - 正文/标题
+$color-text-secondary: #9B8B7E; // 暖灰色 - 次要文字/说明
+$color-text-tertiary: #C4B5A8;  // 浅暖灰 - 辅助文字
+$color-border: #EBE5DD;         // 边框色
+$color-background: #FFFBF5;     // 奶白色 - 全局页面底色（面粉质感）
+$color-card-bg: #F8F3EB;        // 浅米色 - 卡片底色
 $color-white: #FFFFFF;
-$color-black: #000000;
+$color-black: #1A1410;
 
-// 功能色
-$color-success: #52C41A;        // 成功
-$color-warning: #FAAD14;        // 警告
-$color-error: #FF4D4F;          // 错误
-$color-info: #1890FF;           // 信息
+// === 功能色 ===
+$color-success: #7BA05B;
+$color-warning: #D4A24E;
+$color-error: #C45C4A;
+$color-info: #7A9EAE;
 
-// 间距系统
+// === 间距系统 ===
 $spacing-unit: 8px;
 $spacing-xs: $spacing-unit * 0.5;  // 4px
 $spacing-sm: $spacing-unit;        // 8px
@@ -33,16 +36,17 @@ $spacing-lg: $spacing-unit * 3;    // 24px
 $spacing-xl: $spacing-unit * 4;    // 32px
 $spacing-xxl: $spacing-unit * 6;   // 48px
 
-// 圆角系统
-$border-radius-sm: 4px;
-$border-radius-md: 8px;
-$border-radius-lg: 12px;
-$border-radius-xl: 16px;
+// === 圆角系统 - 大圆角（面包松软感） ===
+$border-radius-sm: 8px;
+$border-radius-md: 12px;
+$border-radius-lg: 16px;
+$border-radius-xl: 20px;
 $border-radius-round: 999px;
+$border-radius-circle: 50%;
 
-// 字体系统
-$font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-              'Helvetica Neue', Arial, sans-serif, 'Apple Color Emoji';
+// === 字体系统 ===
+$font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC',
+              'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
 $font-size-xs: 12px;
 $font-size-sm: 14px;
 $font-size-md: 16px;
@@ -50,17 +54,17 @@ $font-size-lg: 18px;
 $font-size-xl: 20px;
 $font-size-xxl: 24px;
 
-// 阴影系统
-$shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.08);
-$shadow-md: 0 4px 12px rgba(0, 0, 0, 0.12);
-$shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.16);
-$shadow-xl: 0 12px 48px rgba(0, 0, 0, 0.2);
+// === 阴影系统 - 极简无阴影（靠留白形成层级） ===
+$shadow-sm: none;
+$shadow-md: none;
+$shadow-lg: none;
+$shadow-xl: none;
 
-// 星级评分颜色
-$color-star-active: #FFD700;  // 金色
-$color-star-inactive: #E0E0E0; // 浅灰色
+// === 星级评分颜色 ===
+$color-star-active: #D4A24E;  // 琥珀金
+$color-star-inactive: #E5D9CA; // 浅米棕
 
-// 工具mixin
+// === 工具 mixin ===
 @mixin text-ellipsis($lines: 1) {
   overflow: hidden;
   text-overflow: ellipsis;

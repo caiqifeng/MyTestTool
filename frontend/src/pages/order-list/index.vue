@@ -315,7 +315,7 @@ onMounted(() => {
 
   .order-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -384,21 +384,21 @@ onMounted(() => {
     justify-content: center;
     padding: $spacing-xl 0;
     background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    border-radius: $border-radius-lg;
   }
 
   .loading-text,
   .error-text,
   .empty-text {
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-secondary;
     margin-bottom: $spacing-md;
   }
 
   .retry-btn {
     background-color: $color-primary;
-    border-radius: $border-radius-round;
+    border-radius: $border-radius-lg;
     padding: $spacing-sm $spacing-lg;
 
     .retry-text {
@@ -414,16 +414,16 @@ onMounted(() => {
   }
 
   .empty-subtext {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 }
 
 .orders-list {
   .order-card {
     background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    border-radius: $border-radius-lg;
     margin-bottom: $spacing-md;
     overflow: hidden;
 
@@ -441,29 +441,30 @@ onMounted(() => {
   }
 
   .order-card-no {
-    font-size: $font-size-sm;
+    font-size: $font-size-xs;
+    font-weight: 300;
     color: $color-text-secondary;
   }
 
   .order-card-status {
     font-size: $font-size-sm;
-    font-weight: 500;
+    font-weight: 400;
 
     &.status-pending {
-      color: $color-error;
+      color: $color-primary;
     }
     &.status-paid {
       color: $color-primary;
     }
     &.status-shipped {
-      color: $color-primary-light;
+      color: $color-primary;
     }
     &.status-delivered {
       color: $color-success;
     }
     &.status-cancelled,
     &.status-refunded {
-      color: $color-text-tertiary;
+      color: $color-text-secondary;
     }
     &.status-completed {
       color: $color-text-secondary;
@@ -479,7 +480,7 @@ onMounted(() => {
       position: relative;
       width: 120rpx;
       height: 120rpx;
-      border-radius: $border-radius-sm;
+      border-radius: $border-radius-md;
       overflow: hidden;
     }
 
@@ -523,14 +524,15 @@ onMounted(() => {
     }
 
     .info-label {
-      font-size: $font-size-sm;
+      font-size: $font-size-xs;
+      font-weight: 300;
       color: $color-text-secondary;
     }
 
     .info-value {
       font-size: $font-size-sm;
       color: $color-text-primary;
-      font-weight: 500;
+      font-weight: 400;
     }
   }
 
@@ -554,7 +556,10 @@ onMounted(() => {
         border: 1px solid $color-border;
       }
 
-      &.primary,
+      &.primary {
+        background-color: $color-accent;
+      }
+
       &.review,
       &.confirm {
         background-color: $color-primary;

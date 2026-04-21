@@ -276,7 +276,7 @@ onMounted(() => {
 
   .order-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -289,13 +289,14 @@ onMounted(() => {
 
   .status-text {
     display: block;
-    font-size: $font-size-xxl;
-    font-weight: 600;
+    font-size: $font-size-xl;
+    font-weight: 500;
     margin-bottom: $spacing-sm;
   }
 
   .status-desc {
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 300;
     opacity: 0.9;
   }
 }
@@ -305,8 +306,7 @@ onMounted(() => {
 .order-info-section {
   background-color: $color-white;
   margin: $spacing-md;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-sm;
+  border-radius: $border-radius-lg;
 }
 
 .section-header {
@@ -314,8 +314,8 @@ onMounted(() => {
   border-bottom: 1px solid $color-border;
 
   .section-title {
-    font-size: $font-size-lg;
-    font-weight: 600;
+    font-size: $font-size-md;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -331,19 +331,21 @@ onMounted(() => {
 
     .address-name {
       font-size: $font-size-md;
-      font-weight: 600;
+      font-weight: 500;
       color: $color-text-primary;
     }
 
     .address-phone {
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 300;
       color: $color-text-secondary;
     }
   }
 
   .address-detail {
     display: block;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 300;
     color: $color-text-secondary;
     line-height: 1.4;
   }
@@ -365,7 +367,7 @@ onMounted(() => {
   .product-image {
     width: 120rpx;
     height: 120rpx;
-    border-radius: $border-radius-sm;
+    border-radius: $border-radius-md;
     margin-right: $spacing-md;
   }
 
@@ -375,15 +377,17 @@ onMounted(() => {
     flex-direction: column;
 
     .product-name {
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 400;
       color: $color-text-primary;
       margin-bottom: $spacing-xs;
       @include text-ellipsis(1);
     }
 
     .product-specs {
-      font-size: $font-size-sm;
-      color: $color-text-tertiary;
+      font-size: $font-size-xs;
+      font-weight: 300;
+      color: $color-text-secondary;
       margin-bottom: $spacing-sm;
     }
 
@@ -395,13 +399,14 @@ onMounted(() => {
     }
 
     .product-price {
-      font-size: $font-size-lg;
-      font-weight: 600;
-      color: $color-error;
+      font-size: $font-size-md;
+      font-weight: 500;
+      color: $color-primary;
     }
 
     .product-quantity {
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 300;
       color: $color-text-secondary;
     }
   }
@@ -428,19 +433,20 @@ onMounted(() => {
     }
 
     .info-label {
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 300;
       color: $color-text-secondary;
     }
 
     .info-value {
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
       color: $color-text-primary;
-      font-weight: 500;
+      font-weight: 400;
 
       &.total-price {
         font-size: $font-size-xl;
-        color: $color-error;
-        font-weight: 600;
+        color: $color-primary;
+        font-weight: 500;
       }
     }
   }
@@ -468,8 +474,8 @@ onMounted(() => {
 
     .total-price {
       font-size: $font-size-xl;
-      font-weight: 600;
-      color: $color-error;
+      font-weight: 500;
+      color: $color-primary;
     }
   }
 
@@ -488,7 +494,10 @@ onMounted(() => {
         border: 1px solid $color-border;
       }
 
-      &.primary,
+      &.primary {
+        background-color: $color-accent;
+      }
+
       &.review,
       &.confirm {
         background-color: $color-primary;

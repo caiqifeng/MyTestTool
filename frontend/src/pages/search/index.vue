@@ -224,7 +224,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   background-color: $color-white;
-  border-radius: $border-radius-round;
+  border-radius: $border-radius-lg;
   padding: $spacing-sm $spacing-md;
   border: 1px solid $color-border;
 }
@@ -232,7 +232,7 @@ onMounted(() => {
 .search-icon {
   margin-right: $spacing-sm;
   font-size: $font-size-md;
-  color: $color-text-tertiary;
+  color: $color-text-secondary;
 }
 
 .search-input {
@@ -249,7 +249,7 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-size: $font-size-xl;
-  color: $color-text-tertiary;
+  color: $color-text-secondary;
   cursor: pointer;
 }
 
@@ -258,13 +258,14 @@ onMounted(() => {
 }
 
 .cancel-text {
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
+  font-weight: 400;
   color: $color-primary;
 }
 
 .section-title {
-  font-size: $font-size-lg;
-  font-weight: 600;
+  font-size: $font-size-md;
+  font-weight: 500;
   color: $color-text-primary;
   margin-bottom: $spacing-md;
 }
@@ -285,7 +286,7 @@ onMounted(() => {
 .search-tag {
   background-color: $color-white;
   border: 1px solid $color-border;
-  border-radius: $border-radius-round;
+  border-radius: $border-radius-lg;
   padding: $spacing-sm $spacing-md;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -296,7 +297,8 @@ onMounted(() => {
 }
 
 .tag-text {
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
+  font-weight: 400;
   color: $color-text-primary;
 }
 
@@ -309,7 +311,8 @@ onMounted(() => {
 
 .clear-history {
   font-size: $font-size-sm;
-  color: $color-text-tertiary;
+  font-weight: 300;
+  color: $color-text-secondary;
   cursor: pointer;
 }
 
@@ -330,12 +333,13 @@ onMounted(() => {
   .history-icon {
     margin-right: $spacing-md;
     font-size: $font-size-md;
-    color: $color-text-tertiary;
+    color: $color-text-secondary;
   }
 
   .history-text {
     flex: 1;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 400;
     color: $color-text-primary;
   }
 
@@ -346,7 +350,7 @@ onMounted(() => {
     align-items: center;
     justify-content: center;
     font-size: $font-size-xl;
-    color: $color-text-tertiary;
+    color: $color-text-secondary;
     cursor: pointer;
   }
 }
@@ -368,12 +372,13 @@ onMounted(() => {
   .suggestion-icon {
     margin-right: $spacing-md;
     font-size: $font-size-md;
-    color: $color-text-tertiary;
+    color: $color-text-secondary;
   }
 
   .suggestion-text {
     flex: 1;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 400;
     color: $color-text-primary;
   }
 }
@@ -393,14 +398,16 @@ onMounted(() => {
   }
 
   .no-results-text {
-    font-size: $font-size-lg;
+    font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-primary;
     margin-bottom: $spacing-sm;
   }
 
   .no-results-subtext {
-    font-size: $font-size-md;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 }
 </style>

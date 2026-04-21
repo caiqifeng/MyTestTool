@@ -33,7 +33,7 @@ interface Props {
 const props = withDefaults(defineProps<Props>(), {
   type: 'spinner',
   size: 'medium',
-  color: '#FF6B35',
+  color: '#8B6A3E',
   fullscreen: false,
 })
 

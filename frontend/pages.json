@@ -12,8 +12,8 @@
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "登录",
-        "navigationBarBackgroundColor": "#FF6B35",
-        "navigationBarTextStyle": "white",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black",
         "navigationStyle": "default"
       }
     },
@@ -28,7 +28,7 @@
       "path": "pages/cart/index",
       "style": {
         "navigationBarTitleText": "购物车",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black",
         "navigationStyle": "default"
       }
@@ -37,7 +37,7 @@
       "path": "pages/order-confirm/index",
       "style": {
         "navigationBarTitleText": "订单确认",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -45,7 +45,7 @@
       "path": "pages/order-list/index",
       "style": {
         "navigationBarTitleText": "我的订单",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -53,7 +53,7 @@
       "path": "pages/order-detail/index",
       "style": {
         "navigationBarTitleText": "订单详情",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -61,7 +61,7 @@
       "path": "pages/address-list/index",
       "style": {
         "navigationBarTitleText": "收货地址",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -76,7 +76,7 @@
       "path": "pages/address-edit/index",
       "style": {
         "navigationBarTitleText": "地址编辑",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -84,7 +84,7 @@
       "path": "pages/payment/index",
       "style": {
         "navigationBarTitleText": "支付订单",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -92,7 +92,7 @@
       "path": "pages/review/index",
       "style": {
         "navigationBarTitleText": "评价订单",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -100,7 +100,7 @@
       "path": "pages/category/index",
       "style": {
         "navigationBarTitleText": "商品分类",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -108,7 +108,7 @@
       "path": "pages/product-list/index",
       "style": {
         "navigationBarTitleText": "商品列表",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -116,7 +116,7 @@
       "path": "pages/coupon-list/index",
       "style": {
         "navigationBarTitleText": "优惠券管理",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     },
@@ -124,7 +124,7 @@
       "path": "pages/search/index",
       "style": {
         "navigationBarTitleText": "搜索商品",
-        "navigationBarBackgroundColor": "#FFFFFF",
+        "navigationBarBackgroundColor": "#FFFBF5",
         "navigationBarTextStyle": "black"
       }
     }
@@ -132,21 +132,21 @@
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "Break 面包店",
-    "navigationBarBackgroundColor": "#FFFFFF",
-    "backgroundColor": "#F8F8F8",
+    "navigationBarBackgroundColor": "#FFFBF5",
+    "backgroundColor": "#FFFBF5",
     "navigationStyle": "custom",
     "app-plus": {
-      "background": "#F8F8F8",
+      "background": "#FFFBF5",
       "titleNView": false
     }
   },
   "tabBar": {
-    "color": "#999999",
-    "selectedColor": "#FF6B35",
-    "backgroundColor": "#FFFFFF",
+    "color": "#B8A898",
+    "selectedColor": "#A67C52",
+    "backgroundColor": "#FFFBF5",
     "borderStyle": "white",
-    "height": "60px",
-    "fontSize": "11px",
+    "height": "56px",
+    "fontSize": "10px",
     "iconWidth": "28px",
     "spacing": "4px",
     "list": [
@@ -157,10 +157,10 @@
         "selectedIconPath": "static/tabbar/home-active.png"
       },
       {
-        "pagePath": "pages/cart/index",
-        "text": "购物车",
-        "iconPath": "static/tabbar/cart.png",
-        "selectedIconPath": "static/tabbar/cart-active.png"
+        "pagePath": "pages/category/index",
+        "text": "分类",
+        "iconPath": "static/tabbar/category.png",
+        "selectedIconPath": "static/tabbar/category-active.png"
       },
       {
         "pagePath": "pages/user-center/index",
@@ -168,9 +168,7 @@
         "iconPath": "static/tabbar/user.png",
         "selectedIconPath": "static/tabbar/user-active.png"
       }
-    ],
-    "borderColor": "#F0F0F0",
-    "borderTop": "1px solid #F0F0F0"
+    ]
   },
   "easycom": {
     "autoscan": true,

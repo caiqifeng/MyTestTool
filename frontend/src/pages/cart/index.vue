@@ -204,12 +204,13 @@ const handleGoHome = () => {
 
 .cart-title {
   font-size: $font-size-xl;
-  font-weight: 600;
+  font-weight: 500;
   color: $color-text-primary;
 }
 
 .cart-edit {
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
+  font-weight: 400;
   color: $color-primary;
 }
 
@@ -228,13 +229,14 @@ const handleGoHome = () => {
 
   .empty-text {
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-secondary;
     margin-bottom: $spacing-lg;
   }
 
   .empty-action {
-    background-color: $color-primary;
-    border-radius: $border-radius-round;
+    background-color: $color-accent;
+    border-radius: $border-radius-lg;
     padding: $spacing-sm $spacing-xl;
 
     .empty-action-text {
@@ -260,6 +262,7 @@ const handleGoHome = () => {
 
   .loading-text {
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-secondary;
   }
 }
@@ -280,6 +283,7 @@ const handleGoHome = () => {
 
   .error-text {
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-secondary;
     margin-bottom: $spacing-lg;
     text-align: center;
@@ -288,7 +292,7 @@ const handleGoHome = () => {
 
   .error-action {
     background-color: $color-primary;
-    border-radius: $border-radius-round;
+    border-radius: $border-radius-lg;
     padding: $spacing-sm $spacing-xl;
 
     .error-action-text {
@@ -313,9 +317,10 @@ const handleGoHome = () => {
   .cart-item {
     display: flex;
     align-items: center;
-    padding: $spacing-sm $spacing-md;
+    padding: $spacing-md $spacing-md;
     background-color: $color-white;
-    margin-bottom: 1px;
+    margin-bottom: $spacing-sm;
+    border-radius: $border-radius-lg;
 
     &:last-child {
       margin-bottom: 0;
@@ -345,7 +350,7 @@ const handleGoHome = () => {
   .item-image {
     width: 140rpx;
     height: 140rpx;
-    border-radius: $border-radius-sm;
+    border-radius: $border-radius-md;
     margin-right: $spacing-md;
     flex-shrink: 0;
   }
@@ -355,7 +360,8 @@ const handleGoHome = () => {
 
     .item-name {
       display: block;
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 400;
       color: $color-text-primary;
       margin-bottom: $spacing-xs;
       @include text-ellipsis(1);
@@ -363,8 +369,9 @@ const handleGoHome = () => {
 
     .item-specs {
       display: block;
-      font-size: $font-size-sm;
-      color: $color-text-tertiary;
+      font-size: $font-size-xs;
+      font-weight: 300;
+      color: $color-text-secondary;
       margin-bottom: $spacing-md;
     }
 
@@ -375,9 +382,9 @@ const handleGoHome = () => {
     }
 
     .item-price {
-      font-size: $font-size-lg;
-      font-weight: 600;
-      color: $color-error;
+      font-size: $font-size-md;
+      font-weight: 500;
+      color: $color-primary;
     }
 
     .item-quantity {
@@ -393,18 +400,18 @@ const handleGoHome = () => {
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: $font-size-lg;
+        font-size: $font-size-md;
         color: $color-text-primary;
 
         &.disabled {
-          color: $color-text-tertiary;
+          color: $color-text-secondary;
         }
       }
 
       .quantity-value {
         width: 80rpx;
         text-align: center;
-        font-size: $font-size-md;
+        font-size: $font-size-sm;
         color: $color-text-primary;
       }
     }
@@ -440,14 +447,16 @@ const handleGoHome = () => {
 
   .select-all-text {
     margin-left: $spacing-sm;
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 400;
     color: $color-text-primary;
   }
 
   .select-all-delete {
     .delete-text {
-      font-size: $font-size-md;
-      color: $color-text-tertiary;
+      font-size: $font-size-sm;
+      font-weight: 400;
+      color: $color-text-secondary;
     }
   }
 }
@@ -479,24 +488,25 @@ const handleGoHome = () => {
 
     .total-value {
       font-size: $font-size-xl;
-      font-weight: 600;
-      color: $color-error;
+      font-weight: 500;
+      color: $color-primary;
     }
 
     .coupon-text {
       font-size: $font-size-xs;
+      font-weight: 300;
       color: $color-primary;
     }
   }
 
   .footer-right {
     .settle-btn {
-      background-color: $color-primary;
-      border-radius: $border-radius-round;
+      background-color: $color-accent;
+      border-radius: $border-radius-lg;
       padding: $spacing-sm $spacing-xl;
 
       &.disabled {
-        background-color: $color-text-tertiary;
+        background-color: $color-text-secondary;
         opacity: 0.5;
       }
 

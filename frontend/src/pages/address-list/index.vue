@@ -194,7 +194,7 @@ onMounted(() => {
 
   .address-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -211,21 +211,21 @@ onMounted(() => {
     justify-content: center;
     padding: $spacing-xl 0;
     background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    border-radius: $border-radius-lg;
   }
 
   .loading-text,
   .error-text,
   .empty-text {
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-secondary;
     margin-bottom: $spacing-md;
   }
 
   .retry-btn {
     background-color: $color-primary;
-    border-radius: $border-radius-round;
+    border-radius: $border-radius-lg;
     padding: $spacing-sm $spacing-lg;
 
     .retry-text {
@@ -241,16 +241,16 @@ onMounted(() => {
   }
 
   .empty-subtext {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 }
 
 .addresses-list {
   .address-card {
     background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    border-radius: $border-radius-lg;
     margin-bottom: $spacing-md;
     overflow: hidden;
 
@@ -275,17 +275,19 @@ onMounted(() => {
 
       .address-name {
         font-size: $font-size-md;
-        font-weight: 600;
+        font-weight: 500;
         color: $color-text-primary;
       }
 
       .address-phone {
-        font-size: $font-size-md;
+        font-size: $font-size-sm;
+        font-weight: 300;
         color: $color-text-secondary;
       }
 
       .default-badge {
         font-size: $font-size-xs;
+        font-weight: 400;
         color: $color-primary;
         background-color: rgba($color-primary, 0.1);
         padding: 2rpx 8rpx;
@@ -295,7 +297,8 @@ onMounted(() => {
 
     .address-detail {
       display: block;
-      font-size: $font-size-md;
+      font-size: $font-size-sm;
+      font-weight: 300;
       color: $color-text-secondary;
       line-height: 1.4;
     }
@@ -336,8 +339,8 @@ onMounted(() => {
   padding: $spacing-md;
 
   .add-address-btn {
-    background-color: $color-primary;
-    border-radius: $border-radius-round;
+    background-color: $color-accent;
+    border-radius: $border-radius-lg;
     padding: $spacing-md;
     display: flex;
     align-items: center;

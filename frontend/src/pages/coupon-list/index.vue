@@ -286,7 +286,7 @@ onMounted(() => {
 
   .coupon-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -340,21 +340,21 @@ onMounted(() => {
     justify-content: center;
     padding: $spacing-xl 0;
     background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    border-radius: $border-radius-lg;
   }
 
   .loading-text,
   .error-text,
   .empty-text {
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-secondary;
     margin-bottom: $spacing-md;
   }
 
   .retry-btn {
     background-color: $color-primary;
-    border-radius: $border-radius-round;
+    border-radius: $border-radius-lg;
     padding: $spacing-sm $spacing-lg;
 
     .retry-text {
@@ -370,14 +370,15 @@ onMounted(() => {
   }
 
   .empty-subtext {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
     margin-bottom: $spacing-md;
   }
 
   .empty-btn {
-    background-color: $color-primary;
-    border-radius: $border-radius-round;
+    background-color: $color-accent;
+    border-radius: $border-radius-lg;
     padding: $spacing-sm $spacing-lg;
   }
 
@@ -391,11 +392,10 @@ onMounted(() => {
 .coupons-list {
   .coupon-card {
     position: relative;
-    background: linear-gradient(135deg, #ff9a9e 0%, #fad0c4 100%);
-    border-radius: $border-radius-md;
+    background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
+    border-radius: $border-radius-lg;
     padding: $spacing-md;
     margin-bottom: $spacing-md;
-    box-shadow: $shadow-sm;
     overflow: hidden;
 
     &:last-child {
@@ -403,7 +403,7 @@ onMounted(() => {
     }
 
     &.available {
-      background: linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%);
+      background: linear-gradient(135deg, $color-primary 0%, $color-primary-light 100%);
     }
 
     &.used {
@@ -430,20 +430,22 @@ onMounted(() => {
 
   .coupon-name {
     font-size: $font-size-lg;
-    font-weight: 600;
+    font-weight: 500;
+    color: $color-white;
   }
 
   .coupon-discount {
     font-size: $font-size-xl;
-    font-weight: 700;
-    color: $color-error;
+    font-weight: 500;
+    color: $color-white;
   }
 
   .coupon-desc {
     display: block;
     font-size: $font-size-sm;
+    font-weight: 300;
     margin-bottom: $spacing-sm;
-    color: rgba(0, 0, 0, 0.7);
+    color: rgba(255, 255, 255, 0.8);
   }
 
   .coupon-details {
@@ -454,7 +456,8 @@ onMounted(() => {
   .coupon-expiry {
     display: block;
     font-size: $font-size-xs;
-    color: rgba(0, 0, 0, 0.6);
+    font-weight: 300;
+    color: rgba(255, 255, 255, 0.7);
   }
 
   .coupon-conditions {
@@ -468,7 +471,7 @@ onMounted(() => {
     background-color: rgba(255, 255, 255, 0.3);
     padding: 2rpx 6rpx;
     border-radius: $border-radius-sm;
-    color: rgba(0, 0, 0, 0.7);
+    color: rgba(255, 255, 255, 0.8);
   }
 
   .coupon-status {
@@ -504,14 +507,13 @@ onMounted(() => {
     position: absolute;
     top: $spacing-md;
     right: $spacing-md;
-    background-color: $color-primary;
+    background-color: $color-accent;
     padding: 8rpx 16rpx;
-    border-radius: $border-radius-round;
-    box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.15);
+    border-radius: $border-radius-lg;
 
     .claim-text {
       font-size: $font-size-sm;
-      font-weight: 600;
+      font-weight: 500;
       color: $color-white;
     }
   }

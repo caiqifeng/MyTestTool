@@ -312,7 +312,7 @@ onMounted(() => {
 
   .product-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -366,21 +366,21 @@ onMounted(() => {
     justify-content: center;
     padding: $spacing-xl 0;
     background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    border-radius: $border-radius-lg;
   }
 
   .loading-text,
   .error-text,
   .empty-text {
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-secondary;
     margin-bottom: $spacing-md;
   }
 
   .retry-btn {
     background-color: $color-primary;
-    border-radius: $border-radius-round;
+    border-radius: $border-radius-lg;
     padding: $spacing-sm $spacing-lg;
 
     .retry-text {
@@ -396,8 +396,9 @@ onMounted(() => {
   }
 
   .empty-subtext {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 }
 
@@ -407,9 +408,8 @@ onMounted(() => {
   gap: $spacing-md;
 
   .product-card {
-    background-color: $color-white;
-    border-radius: $border-radius-md;
-    box-shadow: $shadow-sm;
+    background-color: $color-card-bg;
+    border-radius: $border-radius-lg;
     overflow: hidden;
     cursor: pointer;
     transition: all 0.2s ease;
@@ -431,8 +431,8 @@ onMounted(() => {
 
   .product-name {
     display: block;
-    font-size: $font-size-md;
-    font-weight: 600;
+    font-size: $font-size-sm;
+    font-weight: 400;
     color: $color-text-primary;
     margin-bottom: $spacing-sm;
     @include text-ellipsis(1);
@@ -440,7 +440,8 @@ onMounted(() => {
 
   .product-desc {
     display: block;
-    font-size: $font-size-sm;
+    font-size: $font-size-xs;
+    font-weight: 300;
     color: $color-text-secondary;
     margin-bottom: $spacing-sm;
     @include text-ellipsis(2);
@@ -455,14 +456,15 @@ onMounted(() => {
   }
 
   .current-price {
-    font-size: $font-size-lg;
-    font-weight: 600;
-    color: $color-error;
+    font-size: $font-size-md;
+    font-weight: 500;
+    color: $color-primary;
   }
 
   .original-price {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
     text-decoration: line-through;
   }
 
@@ -475,7 +477,8 @@ onMounted(() => {
   .sales-count,
   .stock-info {
     font-size: $font-size-xs;
-    color: $color-text-tertiary;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 }
 
@@ -488,7 +491,7 @@ onMounted(() => {
 .load-more-btn {
   background-color: $color-white;
   border: 1px solid $color-border;
-  border-radius: $border-radius-round;
+  border-radius: $border-radius-lg;
   padding: $spacing-sm $spacing-lg;
   display: inline-block;
   cursor: pointer;
@@ -500,13 +503,15 @@ onMounted(() => {
 }
 
 .load-more-text {
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
+  font-weight: 400;
   color: $color-text-primary;
 }
 
 .no-more-text {
-  font-size: $font-size-sm;
-  color: $color-text-tertiary;
+  font-size: $font-size-xs;
+  font-weight: 300;
+  color: $color-text-secondary;
 }
 
 .product-image-wrapper {

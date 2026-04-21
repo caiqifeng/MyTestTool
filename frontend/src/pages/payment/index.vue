@@ -398,7 +398,7 @@ onUnmounted(() => {
 
   .payment-title {
     font-size: $font-size-xl;
-    font-weight: 600;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -408,8 +408,7 @@ onUnmounted(() => {
 .payment-amount-section {
   background-color: $color-white;
   margin: $spacing-md;
-  border-radius: $border-radius-md;
-  box-shadow: $shadow-sm;
+  border-radius: $border-radius-lg;
 }
 
 .section-header {
@@ -417,8 +416,8 @@ onUnmounted(() => {
   border-bottom: 1px solid $color-border;
 
   .section-title {
-    font-size: $font-size-lg;
-    font-weight: 600;
+    font-size: $font-size-md;
+    font-weight: 500;
     color: $color-text-primary;
   }
 }
@@ -444,19 +443,20 @@ onUnmounted(() => {
   }
 
   .info-label {
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
+    font-weight: 300;
     color: $color-text-secondary;
   }
 
   .info-value {
-    font-size: $font-size-md;
+    font-size: $font-size-sm;
     color: $color-text-primary;
-    font-weight: 500;
+    font-weight: 400;
 
     &.total-price {
       font-size: $font-size-xl;
-      color: $color-error;
-      font-weight: 600;
+      color: $color-primary;
+      font-weight: 500;
     }
   }
 }
@@ -513,8 +513,9 @@ onUnmounted(() => {
   }
 
   .method-desc {
-    font-size: $font-size-sm;
-    color: $color-text-tertiary;
+    font-size: $font-size-xs;
+    font-weight: 300;
+    color: $color-text-secondary;
   }
 
   .method-radio {
@@ -549,6 +550,7 @@ onUnmounted(() => {
   .amount-label {
     display: block;
     font-size: $font-size-md;
+    font-weight: 400;
     color: $color-text-secondary;
     margin-bottom: $spacing-sm;
   }
@@ -556,8 +558,8 @@ onUnmounted(() => {
   .amount-value {
     display: block;
     font-size: 48rpx;
-    font-weight: 600;
-    color: $color-error;
+    font-weight: 500;
+    color: $color-primary;
   }
 }
 
@@ -589,7 +591,7 @@ onUnmounted(() => {
   }
 
   &.confirm {
-    background-color: $color-primary;
+    background-color: $color-accent;
   }
 
   .action-text {
@@ -621,7 +623,7 @@ onUnmounted(() => {
 
 .payment-result-content {
   background-color: $color-white;
-  border-radius: $border-radius-md;
+  border-radius: $border-radius-lg;
   padding: $spacing-xl;
   width: 80%;
   max-width: 500rpx;
@@ -656,14 +658,15 @@ onUnmounted(() => {
 .result-title {
   display: block;
   font-size: $font-size-xl;
-  font-weight: 600;
+  font-weight: 500;
   color: $color-text-primary;
   margin-bottom: $spacing-sm;
 }
 
 .result-message {
   display: block;
-  font-size: $font-size-md;
+  font-size: $font-size-sm;
+  font-weight: 300;
   color: $color-text-secondary;
   margin-bottom: $spacing-lg;
 }
