@@ -6,10 +6,10 @@ $color-primary: #A67C52;        // 暖棕色 - 按钮、图标、重点文字
 $color-primary-light: #C9A882;  // 浅暖棕 - 悬浮状态
 $color-primary-dark: #8B6A3E;   // 深暖棕 - 按下状态
 
-// === 点缀色：暖橙色（行动引导） ===
-$color-accent: #D4956C;         // 暖橙色 - 立即注册/去结算等主按钮
-$color-accent-light: #E5B08F;   // 浅暖橙 - 悬浮态
-$color-accent-dark: #C17D52;    // 深暖橙 - 按下态
+// === 点缀色：深暖棕色（行动引导） ===
+$color-accent: #A67C52;         // 深暖棕 - 立即注册/去结算等主按钮
+$color-accent-light: #BF9B73;   // 浅暖棕 - 悬浮态
+$color-accent-dark: #8B6A3E;    // 更深暖棕 - 按下态
 
 // === 中性色 - 日式极简灰阶 ===
 $color-text-primary: #3C2A21;   // 深棕色 - 正文/标题
@@ -24,7 +24,7 @@ $color-black: #1A1410;
 // === 功能色 ===
 $color-success: #7BA05B;
 $color-warning: #D4A24E;
-$color-error: #C45C4A;
+$color-error: #C09A82;         // 柔和灰棕 - 退出登录/删除
 $color-info: #7A9EAE;
 
 // === 间距系统 ===

@@ -150,6 +150,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useProductStore } from '../../store/product.store'
 import { useCartStore } from '../../store/cart.store'
+import { mockProducts, getRecommendedProducts, getHotProducts } from '../../data/mock-products'
 
 const productStore = useProductStore()
 const cartStore = useCartStore()
@@ -194,32 +195,8 @@ const recommendedProducts = computed(() => {
   if (products && products.length > 0) {
     return products.slice(0, 3)
   }
-  // 返回模拟数据作为fallback
-  return [
-    {
-      id: '1',
-      name: '奶油可颂',
-      price: 18,
-      originalPrice: 22,
-      images: ['/static/products/small/product-bread.jpg'],
-      stock: 152
-    },
-    {
-      id: '2',
-      name: '巧克力蛋糕',
-      price: 68,
-      originalPrice: 88,
-      images: ['/static/products/small/product-cheesecake.jpg'],
-      stock: 89
-    },
-    {
-      id: '3',
-      name: '草莓慕斯',
-      price: 48,
-      images: ['/static/products/small/product-latte.jpg'],
-      stock: 120
-    }
-  ]
+  // 使用模拟数据
+  return getRecommendedProducts(3)
 })
 
 // 计算属性：获取热门产品（第4-6个）
@@ -228,36 +205,8 @@ const hotProducts = computed(() => {
   if (products && products.length > 3) {
     return products.slice(3, 6)
   }
-  // 返回模拟数据作为fallback
-  return [
-    {
-      id: '4',
-      name: '全麦面包',
-      description: '健康全麦，低脂低糖',
-      price: 28,
-      images: ['/static/products/small/product-bread.jpg'],
-      sales: 152,
-      stock: 50
-    },
-    {
-      id: '5',
-      name: '芝士蛋糕',
-      description: '浓郁芝士，入口即化',
-      price: 58,
-      images: ['/static/products/small/product-cheesecake.jpg'],
-      sales: 98,
-      stock: 30
-    },
-    {
-      id: '6',
-      name: '拿铁咖啡',
-      description: '现磨咖啡，香浓顺滑',
-      price: 25,
-      images: ['/static/products/small/product-latte.jpg'],
-      sales: 203,
-      stock: 100
-    }
-  ]
+  // 使用模拟数据（按销量排序的热门商品）
+  return getHotProducts(3)
 })
 
 const handleGoToSearch = () => {
