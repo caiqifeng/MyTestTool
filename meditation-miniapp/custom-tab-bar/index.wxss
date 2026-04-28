@@ -1,0 +1,196 @@
+/* 自定义 TabBar - 春日清新风 */
+
+.tab-bar {
+  display: flex;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 100rpx;
+  background: #FFFFFF;
+  border-top: 1rpx solid #F0ECE4;
+  padding-bottom: env(safe-area-inset-bottom);
+  z-index: 999;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  position: relative;
+}
+
+.tab-icon-wrap {
+  width: 48rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4rpx;
+}
+
+.tab-text {
+  font-size: 20rpx;
+  color: #9A9080;
+  letter-spacing: 2rpx;
+}
+
+.tab-active .tab-text {
+  color: #6B9B7D;
+  font-weight: 500;
+}
+
+/* ============ 冥想图标（禅坐人形） ============ */
+.icon-meditate {
+  position: relative;
+  width: 36rpx;
+  height: 36rpx;
+}
+
+/* 头部圆 */
+.icon-head {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  border: 2rpx solid #9A9080;
+  transition: all 0.2s;
+}
+
+/* 身体（椭圆弧线） */
+.icon-body {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 26rpx;
+  height: 20rpx;
+  border: 2rpx solid #9A9080;
+  border-radius: 0 0 13rpx 13rpx;
+  border-top: none;
+  transition: all 0.2s;
+}
+
+/* 选中态 */
+.tab-active .icon-head {
+  border-color: #6B9B7D;
+  background: #6B9B7D;
+}
+.tab-active .icon-body {
+  border-color: #6B9B7D;
+  background: rgba(107,155,125,0.1);
+}
+
+/* ============ 记录图标（时钟） ============ */
+.icon-clock {
+  position: relative;
+  width: 34rpx;
+  height: 34rpx;
+}
+
+.clock-face {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 34rpx;
+  height: 34rpx;
+  border: 2rpx solid #9A9080;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.clock-hand-h {
+  position: absolute;
+  top: 8rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 2rpx;
+  height: 8rpx;
+  background: #9A9080;
+  border-radius: 1rpx;
+  transition: all 0.2s;
+}
+
+.clock-hand-m {
+  position: absolute;
+  top: 6rpx;
+  left: 50%;
+  transform: translateX(-50%) rotate(90deg);
+  transform-origin: bottom center;
+  width: 2rpx;
+  height: 11rpx;
+  background: #9A9080;
+  border-radius: 1rpx;
+  transition: all 0.2s;
+}
+
+.clock-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 4rpx;
+  height: 4rpx;
+  background: #9A9080;
+  border-radius: 50%;
+  transition: all 0.2s;
+}
+
+.tab-active .clock-face {
+  border-color: #6B9B7D;
+  background: rgba(107,155,125,0.06);
+}
+.tab-active .clock-hand-h,
+.tab-active .clock-hand-m {
+  background: #6B9B7D;
+}
+.tab-active .clock-dot {
+  background: #6B9B7D;
+}
+
+/* ============ 我的图标（人形） ============ */
+.icon-user {
+  position: relative;
+  width: 32rpx;
+  height: 36rpx;
+}
+
+.user-head {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  border: 2rpx solid #9A9080;
+  transition: all 0.2s;
+}
+
+.user-body {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24rpx;
+  height: 16rpx;
+  border: 2rpx solid #9A9080;
+  border-radius: 12rpx 12rpx 0 0;
+  border-bottom: none;
+  transition: all 0.2s;
+}
+
+.tab-active .user-head {
+  border-color: #6B9B7D;
+  background: #6B9B7D;
+}
+.tab-active .user-body {
+  border-color: #6B9B7D;
+  background: rgba(107,155,125,0.1);
+}

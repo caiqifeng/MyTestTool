@@ -1,0 +1,56 @@
+<!-- 历史记录页 -->
+<view class="container history-page">
+  <view class="page-header">
+    <text class="page-title">冥想记录</text>
+    <text class="page-sub">你的每一次坚持都值得记录</text>
+  </view>
+
+  <!-- 统计卡片 -->
+  <view class="summary-card">
+    <view class="summary-grid">
+      <view class="summary-item">
+        <text class="summary-num">{{stats.totalMinutes}}</text>
+        <text class="summary-label">累计分钟</text>
+      </view>
+      <view class="summary-divider"></view>
+      <view class="summary-item">
+        <text class="summary-num">{{stats.totalSessions}}</text>
+        <text class="summary-label">冥想次数</text>
+      </view>
+      <view class="summary-divider"></view>
+      <view class="summary-item">
+        <text class="summary-num">{{stats.streak}}</text>
+        <text class="summary-label">连续天数</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 空状态 -->
+  <view class="empty-state" wx:if="{{history.length === 0}}">
+    <text class="empty-icon">🧘</text>
+    <text class="empty-text">还没有冥想记录</text>
+    <text class="empty-sub">开始你的第一次冥想吧</text>
+    <button class="btn-primary empty-btn" bindtap="goHome">去冥想</button>
+  </view>
+
+  <!-- 记录列表 -->
+  <view class="record-list" wx:else>
+    <view
+      class="record-item"
+      wx:for="{{history}}"
+      wx:key="id"
+    >
+      <view class="record-icon-box">
+        <text class="record-icon">{{item.sceneIcon}}</text>
+      </view>
+      <view class="record-info">
+        <text class="record-name">{{item.sceneName}}</text>
+        <text class="record-meta">{{item.date}} {{item.time}}</text>
+      </view>
+      <view class="record-dur-box">
+        <text class="record-dur-num">{{item.duration}}</text>
+        <text class="record-dur-unit">分钟</text>
+      </view>
+    </view>
+  </view>
+</view>

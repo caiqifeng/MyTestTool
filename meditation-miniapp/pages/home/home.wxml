@@ -1,0 +1,98 @@
+<view class="container home-page">
+
+  <!-- 顶部问候区 -->
+  <view class="header">
+    <view class="greeting">
+      <text class="greeting-time">{{greeting}}</text>
+      <text class="greeting-sub">今天，给自己一点安静的时间</text>
+    </view>
+    <view class="header-right">
+      <view class="vip-badge {{isVip ? 'vip-badge--on' : ''}}" bindtap="goVip">
+        <text class="vip-badge-icon">{{isVip ? '👑' : '💎'}}</text>
+        <text class="vip-badge-text">{{isVip ? 'VIP' : '开通VIP'}}</text>
+      </view>
+      <view class="stats-badge" bindtap="goHistory">
+        <text class="stats-fire">🌿</text>
+        <text class="stats-num">{{stats.streak}}</text>
+        <text class="stats-label">天</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 今日推荐 -->
+  <view class="section" wx:if="{{featured}}">
+    <text class="section-title">今日推荐</text>
+    <view class="featured-card" style="background: linear-gradient(145deg, {{featured.bgGradient[0]}} 0%, {{featured.bgGradient[1]}} 100%)" bindtap="startFeatured">
+      <view class="featured-left">
+        <text class="featured-icon">{{featured.icon}}</text>
+      </view>
+      <view class="featured-center">
+        <text class="featured-name">{{featured.name}}</text>
+        <text class="featured-desc">{{featured.description}}</text>
+      </view>
+      <view class="featured-right">
+        <text class="featured-duration">{{featured.defaultDuration}} min</text>
+        <text class="featured-arrow">›</text>
+      </view>
+      <!-- 收费标记 -->
+      <view class="featured-lock" wx:if="{{featured.isVip && !isVip && !purchasedScenes[featured.id]}}">
+        <text class="featured-lock-icon">🔒</text>
+      </view>
+    </view>
+  </view>
+
+  <!-- 场景选择 -->
+  <view class="section">
+    <text class="section-title">选择场景</text>
+    <view class="scenes-grid">
+      <view
+        class="scene-card {{item.isVip && !isVip && !purchasedScenes[item.id] ? 'scene-card--locked' : ''}}"
+        wx:for="{{scenes}}"
+        wx:key="id"
+        bindtap="selectScene"
+        data-id="{{item.id}}"
+        style="background: linear-gradient(160deg, {{item.bgGradient[0]}} 0%, {{item.bgGradient[1]}} 100%)"
+      >
+        <view class="scene-card-top">
+          <text class="scene-card-icon">{{item.icon}}</text>
+          <view class="scene-lock-badge" wx:if="{{item.isVip && !isVip && !purchasedScenes[item.id]}}">
+            <text class="scene-lock-icon">🔒</text>
+          </view>
+        </view>
+        <text class="scene-card-name">{{item.name}}</text>
+        <text class="scene-card-desc">{{item.description}}</text>
+        <!-- 价格标签 -->
+        <view class="scene-price-tag" wx:if="{{item.isVip && !isVip && !purchasedScenes[item.id]}}">
+          <text class="scene-price-text">¥{{item.price / 100}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 底部统计 -->
+  <view class="stats-row">
+    <view class="stat-item">
+      <text class="stat-num">{{stats.totalMinutes}}</text>
+      <text class="stat-label">累计分钟</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat-item">
+      <text class="stat-num">{{stats.totalSessions}}</text>
+      <text class="stat-label">冥想次数</text>
+    </view>
+    <view class="stat-divider"></view>
+    <view class="stat-item">
+      <text class="stat-num">{{stats.streak}}</text>
+      <text class="stat-label">连续天数</text>
+    </view>
+  </view>
+
+  <!-- 底部间距（给固定按钮和TabBar留空间） -->
+  <view style="height: 320rpx;"></view>
+
+</view>
+
+<!-- 固定在底部的开始按钮 -->
+<view class="bottom-start-bar">
+  <button class="btn-primary btn-start-fixed" bindtap="openDurationSheet">开 始 冥 想</button>
+</view>

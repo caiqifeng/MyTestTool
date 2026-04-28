@@ -1,0 +1,83 @@
+<!-- 购买页面 -->
+<view class="purchase-page">
+  <!-- 顶部用户信息 -->
+  <view class="purchase-header">
+    <view class="purchase-user-row">
+      <image class="purchase-avatar" src="{{userInfo.avatarUrl || '/assets/icons/default_avatar.png'}}" mode="aspectFill"></image>
+      <view class="purchase-user-info">
+        <text class="purchase-username">{{userInfo.nickName}}</text>
+        <view class="purchase-vip-tag {{isVip ? 'purchase-vip-tag--on' : ''}}">
+          <text class="purchase-vip-tag-icon">{{isVip ? '👑' : '💎'}}</text>
+          <text class="purchase-vip-tag-text">{{isVip ? vipExpiryText + ' 到期' : '未开通会员'}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 单个场景购买（有指定场景时显示） -->
+  <view class="scene-section" wx:if="{{scene}}">
+    <text class="section-label">解锁此场景</text>
+    <view class="scene-buy-card" style="background: linear-gradient(145deg, {{scene.bgGradient[0]}}, {{scene.bgGradient[1]}})">
+      <text class="scene-buy-icon">{{scene.icon}}</text>
+      <view class="scene-buy-info">
+        <text class="scene-buy-name">{{scene.name}}</text>
+        <text class="scene-buy-desc">{{scene.description}}</text>
+      </view>
+      <view class="scene-buy-price">
+        <text class="scene-buy-price-num">¥{{scene.price / 100}}</text>
+      </view>
+    </view>
+    <button class="btn-buy-scene" bindtap="buyScene">¥{{scene.price / 100}} 解锁此场景</button>
+  </view>
+
+  <!-- 分割 -->
+  <view class="purchase-divider" wx:if="{{scene}}">
+    <view class="purchase-divider-line"></view>
+    <text class="purchase-divider-text">或开通会员，解锁全部场景</text>
+    <view class="purchase-divider-line"></view>
+  </view>
+
+  <!-- VIP会员方案 -->
+  <view class="vip-section">
+    <text class="section-label">会员方案</text>
+    <view class="vip-cards">
+      <view class="vip-card {{selectedPlan === 'monthly' ? 'vip-card--active' : ''}}" bindtap="selectPlan" data-plan="monthly">
+        <text class="vip-card-name">月度会员</text>
+        <text class="vip-card-price">¥18</text>
+        <text class="vip-card-period">/月</text>
+        <text class="vip-card-desc">解锁全部场景</text>
+      </view>
+      <view class="vip-card vip-card--hot {{selectedPlan === 'yearly' ? 'vip-card--active' : ''}}" bindtap="selectPlan" data-plan="yearly">
+        <view class="vip-card-badge">推荐</view>
+        <text class="vip-card-name">年度会员</text>
+        <text class="vip-card-price">¥128</text>
+        <text class="vip-card-period">/年</text>
+        <text class="vip-card-desc">省 ¥88</text>
+      </view>
+    </view>
+    <button class="btn-buy-vip" bindtap="buyVip">立即开通</button>
+  </view>
+
+  <!-- 会员权益 -->
+  <view class="benefits-section">
+    <text class="section-label">会员权益</text>
+    <view class="benefit-list">
+      <view class="benefit-item">
+        <text class="benefit-icon">🌿</text>
+        <text class="benefit-text">解锁全部冥想场景</text>
+      </view>
+      <view class="benefit-item">
+        <text class="benefit-icon">🎵</text>
+        <text class="benefit-text">专属白噪音音效</text>
+      </view>
+      <view class="benefit-item">
+        <text class="benefit-icon">📊</text>
+        <text class="benefit-text">详细冥想数据分析</text>
+      </view>
+      <view class="benefit-item">
+        <text class="benefit-icon">✨</text>
+        <text class="benefit-text">优先体验新场景</text>
+      </view>
+    </view>
+  </view>
+</view>

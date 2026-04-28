@@ -1,0 +1,35 @@
+<view class="tab-bar">
+  <view
+    class="tab-item {{selected === index ? 'tab-active' : ''}}"
+    wx:for="{{list}}"
+    wx:key="index"
+    bindtap="switchTab"
+    data-path="{{item.pagePath}}"
+    data-index="{{index}}"
+  >
+    <!-- 冥想图标 -->
+    <view wx:if="{{item.id === 'home'}}" class="tab-icon-wrap">
+      <view class="icon-meditate">
+        <view class="icon-head"></view>
+        <view class="icon-body"></view>
+      </view>
+    </view>
+    <!-- 记录图标 -->
+    <view wx:elif="{{item.id === 'history'}}" class="tab-icon-wrap">
+      <view class="icon-clock">
+        <view class="clock-face"></view>
+        <view class="clock-hand-h"></view>
+        <view class="clock-hand-m"></view>
+        <view class="clock-dot"></view>
+      </view>
+    </view>
+    <!-- 我的图标 -->
+    <view wx:elif="{{item.id === 'profile'}}" class="tab-icon-wrap">
+      <view class="icon-user">
+        <view class="user-head"></view>
+        <view class="user-body"></view>
+      </view>
+    </view>
+    <text class="tab-text">{{item.text}}</text>
+  </view>
+</view>

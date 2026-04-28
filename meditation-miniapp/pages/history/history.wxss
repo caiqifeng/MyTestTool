@@ -1,0 +1,105 @@
+/* 历史记录页样式 - 春日清新风 */
+.history-page { padding: 0 28rpx 200rpx; }
+
+.page-header { padding: 80rpx 0 36rpx; }
+.page-title {
+  display: block;
+  font-size: 48rpx;
+  font-weight: 300;
+  color: #3D3529;
+  letter-spacing: 4rpx;
+}
+.page-sub {
+  display: block;
+  font-size: 22rpx;
+  color: #9A9080;
+  margin-top: 8rpx;
+  letter-spacing: 1rpx;
+}
+
+/* 统计卡片 */
+.summary-card {
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 28rpx 0;
+  margin-bottom: 32rpx;
+  border: 1rpx solid #E4DFD6;
+  box-shadow: 0 2rpx 12rpx rgba(61, 53, 41, 0.04);
+}
+.summary-grid { display: flex; }
+.summary-item { flex: 1; display: flex; flex-direction: column; align-items: center; }
+.summary-num { font-size: 48rpx; font-weight: 300; color: #6B9B7D; }
+.summary-label { font-size: 20rpx; color: #9A9080; margin-top: 4rpx; }
+.summary-divider { width: 1rpx; background: #E4DFD6; }
+
+/* 空状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 100rpx 0;
+}
+.empty-icon { font-size: 88rpx; }
+.empty-text { font-size: 30rpx; color: #7A7060; margin-top: 20rpx; }
+.empty-sub { font-size: 22rpx; color: #B0A898; margin-top: 8rpx; }
+.empty-btn {
+  width: 260rpx;
+  height: 84rpx;
+  margin-top: 40rpx;
+  font-size: 26rpx;
+  letter-spacing: 4rpx;
+}
+
+/* 记录列表 */
+.record-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.record-item {
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 20rpx;
+  padding: 24rpx;
+  border: 1rpx solid #E4DFD6;
+  box-shadow: 0 2rpx 12rpx rgba(61, 53, 41, 0.04);
+}
+
+.record-icon-box {
+  width: 80rpx;
+  height: 80rpx;
+  background: #F5F2EB;
+  border-radius: 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.record-icon { font-size: 40rpx; }
+
+.record-info { flex: 1; }
+.record-name {
+  display: block;
+  font-size: 28rpx;
+  color: #3D3529;
+  letter-spacing: 1rpx;
+}
+.record-meta {
+  display: block;
+  font-size: 20rpx;
+  color: #9A9080;
+  margin-top: 4rpx;
+}
+
+.record-dur-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+}
+.record-dur-num { font-size: 36rpx; font-weight: 300; color: #6B9B7D; }
+.record-dur-unit { font-size: 18rpx; color: #9A9080; }

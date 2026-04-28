@@ -1,0 +1,33 @@
+<!-- 登录页面 -->
+<view class="login-page">
+  <!-- 顶部装饰 -->
+  <view class="login-top">
+    <text class="login-logo">🧘</text>
+    <text class="login-title">Claw 冥想</text>
+    <text class="login-sub">开启内心的平静之旅</text>
+  </view>
+
+  <!-- 登录方式 -->
+  <view class="login-card">
+    <text class="login-card-title">欢迎回来</text>
+
+    <!-- 微信一键登录 -->
+    <button class="btn-wechat" open-type="getUserInfo" bindgetuserinfo="onWechatLogin">
+      <text class="btn-wechat-icon">💬</text>
+      <text class="btn-wechat-text">微信一键登录</text>
+    </button>
+
+    <!-- 游客体验 -->
+    <view class="guest-row" bindtap="guestLogin">
+      <text class="guest-text">暂不登录，先体验一下</text>
+    </view>
+  </view>
+
+  <!-- 协议 -->
+  <view class="agreement">
+    <text class="agreement-text">登录即表示同意</text>
+    <text class="agreement-link">《用户协议》</text>
+    <text class="agreement-text">和</text>
+    <text class="agreement-link">《隐私政策》</text>
+  </view>
+</view>

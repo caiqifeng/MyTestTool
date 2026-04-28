@@ -1,0 +1,8 @@
+# 只入库小程序
+*
+!meditation-miniapp/
+!meditation-miniapp/**
+!.gitignore
+
+# 排除小程序内的工具大文件
+meditation-miniapp/_tools/

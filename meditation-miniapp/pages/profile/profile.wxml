@@ -1,0 +1,95 @@
+<!-- 我的页面 -->
+<view class="container profile-page">
+
+  <!-- 未登录状态 -->
+  <block wx:if="{{!isLoggedIn}}">
+    <view class="profile-header">
+      <view class="avatar-ring">
+        <view class="avatar-box" bindtap="goLogin">
+          <text class="avatar-emoji avatar-emoji--guest">😊</text>
+        </view>
+      </view>
+      <text class="username">点击登录</text>
+      <text class="user-sub">登录后享受完整功能</text>
+
+      <view class="btn-login" bindtap="goLogin">点击登录</view>
+    </view>
+  </block>
+
+  <!-- 已登录状态 -->
+  <block wx:else>
+    <view class="profile-header">
+      <view class="avatar-ring">
+        <view class="avatar-box">
+          <image class="avatar-img" wx:if="{{userInfo.avatarUrl}}" src="{{userInfo.avatarUrl}}" mode="aspectFill"></image>
+          <text class="avatar-emoji" wx:else>🧘</text>
+        </view>
+      </view>
+      <text class="username">{{userInfo.nickName}}</text>
+
+      <!-- VIP状态 -->
+      <view class="vip-status-badge {{isVip ? 'vip-status--on' : ''}}" bindtap="goVip">
+        <text class="vip-status-icon">{{isVip ? '👑' : '💎'}}</text>
+        <text class="vip-status-text">{{isVip ? vipExpiryText + ' 到期' : '开通会员 · 解锁全部场景'}}</text>
+      </view>
+
+      <view class="user-stats-row">
+        <view class="user-stat">
+          <text class="user-stat-num">{{stats.totalMinutes}}</text>
+          <text class="user-stat-label">分钟</text>
+        </view>
+        <view class="user-stat-dot"></view>
+        <view class="user-stat">
+          <text class="user-stat-num">{{stats.totalSessions}}</text>
+          <text class="user-stat-label">次</text>
+        </view>
+        <view class="user-stat-dot"></view>
+        <view class="user-stat">
+          <text class="user-stat-num">{{stats.streak}}</text>
+          <text class="user-stat-label">天连续</text>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 成就 -->
+  <view class="block-title">
+    <text class="block-title-text">我的成就</text>
+  </view>
+  <view class="ach-grid">
+    <view class="ach-card {{stats.totalSessions >= 1 ? 'ach-card--on' : ''}}">
+      <text class="ach-icon">🌱</text>
+      <text class="ach-name">初心者</text>
+      <text class="ach-desc">完成第一次冥想</text>
+    </view>
+    <view class="ach-card {{stats.streak >= 7 ? 'ach-card--on' : ''}}">
+      <text class="ach-icon">🌿</text>
+      <text class="ach-name">七日连续</text>
+      <text class="ach-desc">连续冥想7天</text>
+    </view>
+    <view class="ach-card {{stats.totalMinutes >= 100 ? 'ach-card--on' : ''}}">
+      <text class="ach-icon">⏱</text>
+      <text class="ach-name">百分钟</text>
+      <text class="ach-desc">累计冥想100分钟</text>
+    </view>
+    <view class="ach-card {{stats.totalSessions >= 30 ? 'ach-card--on' : ''}}">
+      <text class="ach-icon">🏆</text>
+      <text class="ach-name">30次勋章</text>
+      <text class="ach-desc">完成30次冥想</text>
+    </view>
+  </view>
+
+  <!-- 设置 -->
+  <view class="block-title">
+    <text class="block-title-text">设置</text>
+  </view>
+  <view class="settings-card">
+    <view class="setting-row">
+      <text class="setting-label">每日提醒</text>
+      <switch checked="{{reminder}}" bindchange="toggleReminder" color="#6B9B7D"/>
+    </view>
+  </view>
+
+  <!-- 底部间距 -->
+  <view style="height: 60rpx;"></view>
+</view>

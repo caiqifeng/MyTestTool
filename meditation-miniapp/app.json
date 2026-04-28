@@ -1,0 +1,59 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/session/session",
+    "pages/history/history",
+    "pages/profile/profile",
+    "pages/login/login",
+    "pages/purchase/purchase"
+  ],
+  "tabBar": {
+    "color": "#9A9080",
+    "selectedColor": "#6B9B7D",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "冥想",
+        "iconPath": "assets/icons/home.png",
+        "selectedIconPath": "assets/icons/home_active.png"
+      },
+      {
+        "pagePath": "pages/history/history",
+        "text": "记录",
+        "iconPath": "assets/icons/history.png",
+        "selectedIconPath": "assets/icons/history_active.png"
+      },
+      {
+        "pagePath": "pages/profile/profile",
+        "text": "我的",
+        "iconPath": "assets/icons/profile.png",
+        "selectedIconPath": "assets/icons/profile_active.png"
+      }
+    ],
+    "custom": true
+  },
+  "window": {
+    "backgroundTextStyle": "dark",
+    "navigationBarBackgroundColor": "#FFFFFF",
+    "navigationBarTitleText": "冥想",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#F7F4EE"
+  },
+  "subpackages": [
+    {
+      "root": "audioPackage",
+      "name": "audio1",
+      "pages": []
+    },
+    {
+      "root": "audioPackage2",
+      "name": "audio2",
+      "pages": []
+    }
+  ],
+  "style": "v2",
+  "requiredBackgroundModes": ["audio"],
+  "sitemapLocation": "sitemap.json"
+}
