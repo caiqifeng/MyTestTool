@@ -3,19 +3,14 @@
   <!-- 顶部问候区 -->
   <view class="header">
     <view class="greeting">
-      <text class="greeting-time">{{greeting}}</text>
+      <view class="greeting-top">
+        <text class="greeting-time">{{greeting}}</text>
+        <view class="vip-badge {{isVip ? 'vip-badge--on' : ''}}" bindtap="goVip">
+          <text class="vip-badge-icon">{{isVip ? '👑' : '💎'}}</text>
+          <text class="vip-badge-text">{{isVip ? 'VIP' : '开通VIP'}}</text>
+        </view>
+      </view>
       <text class="greeting-sub">今天，给自己一点安静的时间</text>
-    </view>
-    <view class="header-right">
-      <view class="vip-badge {{isVip ? 'vip-badge--on' : ''}}" bindtap="goVip">
-        <text class="vip-badge-icon">{{isVip ? '👑' : '💎'}}</text>
-        <text class="vip-badge-text">{{isVip ? 'VIP' : '开通VIP'}}</text>
-      </view>
-      <view class="stats-badge" bindtap="goHistory">
-        <text class="stats-fire">🌿</text>
-        <text class="stats-num">{{stats.streak}}</text>
-        <text class="stats-label">天</text>
-      </view>
     </view>
   </view>
 
@@ -55,16 +50,15 @@
       >
         <view class="scene-card-top">
           <text class="scene-card-icon">{{item.icon}}</text>
-          <view class="scene-lock-badge" wx:if="{{item.isVip && !isVip && !purchasedScenes[item.id]}}">
-            <text class="scene-lock-icon">🔒</text>
+          <view class="scene-card-top-right" wx:if="{{item.isVip && !isVip && !purchasedScenes[item.id]}}">
+            <text class="scene-price-inline">¥{{item.price / 100}}</text>
+            <view class="scene-lock-badge">
+              <text class="scene-lock-icon">🔒</text>
+            </view>
           </view>
         </view>
         <text class="scene-card-name">{{item.name}}</text>
         <text class="scene-card-desc">{{item.description}}</text>
-        <!-- 价格标签 -->
-        <view class="scene-price-tag" wx:if="{{item.isVip && !isVip && !purchasedScenes[item.id]}}">
-          <text class="scene-price-text">¥{{item.price / 100}}</text>
-        </view>
       </view>
     </view>
   </view>
