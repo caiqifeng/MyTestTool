@@ -88,23 +88,22 @@ Page({
   },
 
   onReady: function() {
-    // 延迟1秒自动开始冥想（给页面渲染时间）
     var self = this
     var scene = this.data.scene
     var audioType = scene ? scene.audioType : ''
     var isCDN = !!(AUDIO_CDN[audioType] && AUDIO_CDN[audioType].length > 0)
 
+    // onReady 里只启动计时器和呼吸动画，不播音频
+    // 音频必须在用户手势（点击）时触发，否则 iOS 真机静默失败
     var doStart = function() {
       wx.setKeepScreenOn({ keepScreenOn: true })
-      setTimeout(function() { self.startTimer() }, 200)
+      setTimeout(function() { self.startTimerOnly() }, 200)
     }
 
     if (isCDN) {
-      // CDN 模式：延迟1秒直接开始
-      console.log('CDN 音频模式，1秒后自动开始')
       setTimeout(doStart, 1000)
     } else {
-      // 本地分包模式：先 loadSubpackage，成功后再开始
+      // 分包预加载（只加载，不播放）
       var pack2Types = { night_ambient: true, singing_bowl: true }
       var packName = pack2Types[audioType] ? 'audio2' : 'audio1'
 
@@ -113,10 +112,12 @@ Page({
           name: packName,
           success: function() {
             console.log('分包加载成功: ' + packName)
+            self._subpackageReady = true
             doStart()
           },
           fail: function(err) {
             console.error('分包加载失败:', JSON.stringify(err))
+            self._subpackageReady = false
             doStart()
           }
         })
@@ -192,13 +193,50 @@ Page({
     }
   },
 
+  startTimerOnly: function() {
+    // 页面加载时自动调用：只启动计时器和呼吸动画，不播音频
+    // 音频等待用户第一次点击播放按钮时才触发（iOS 真机要求手势）
+    var self = this
+    var duration = this.data.duration
+
+    this.setData({ isPlaying: true })
+
+    this.timer = new MeditationTimer({
+      duration: duration,
+      onTick: function(info) {
+        self.setData({
+          timerMinutes: info.minutes,
+          timerSeconds: info.seconds,
+          progress: info.progress
+        })
+      },
+      onPhaseChange: function(phase) {
+        var hints = { inhale: '4 秒', hold: '7 秒', exhale: '8 秒' }
+        var labels = { inhale: '吸气', hold: '屏息', exhale: '呼气' }
+        self.setData({
+          breathPhase: phase.name,
+          breathLabel: labels[phase.name] || '',
+          breathHint: hints[phase.name] || ''
+        })
+      },
+      onComplete: function() {
+        self.onMeditationComplete()
+      }
+    })
+
+    this.timer.start()
+    this.startGuideRotation()
+    // 标记音频还未播放，等用户第一次触摸屏幕后触发
+    this._audioStarted = false
+  },
+
   startTimer: function() {
     var self = this
     var duration = this.data.duration
 
     this.setData({ isPlaying: true })
 
-    // 播放背景音频
+    // 用户手势触发，直接播放音频
     this.startBgAudio()
 
     this.timer = new MeditationTimer({
@@ -263,6 +301,12 @@ Page({
     this._playBtnTouchActive = true
     this._playBtnMoved = false
 
+    // 用户第一次触摸：触发音频（iOS 真机需要手势才能播放）
+    if (!this._audioStarted && this.data.isPlaying) {
+      this._audioStarted = true
+      this.startBgAudio()
+    }
+
     if (this.data.isPlaying) return // 播放中不处理长按，等 tap → togglePlay
 
     var self = this
@@ -323,6 +367,7 @@ Page({
   resumePlay: function() {
     if (this.timer) this.timer.resume()
     this.setData({ isPlaying: true })
+    this._audioStarted = true
     this.startGuideRotation()
     if (this.bgAudio) {
       try { this.bgAudio.play() } catch (e) {
