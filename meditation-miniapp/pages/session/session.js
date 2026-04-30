@@ -294,6 +294,14 @@ Page({
     }
   },
 
+  // 页面任意位置第一次触摸：触发音频（iOS 真机需要手势链路才能播放）
+  onPageFirstTouch: function() {
+    if (!this._audioStarted && this.data.isPlaying) {
+      this._audioStarted = true
+      this.startBgAudio()
+    }
+  },
+
   // 中间按钮 touchstart：记录时间 + 启动长按检测
   onPlayBtnTouchStart: function(e) {
     if (e.touches.length > 1) return // 忽略多点触控
@@ -301,10 +309,14 @@ Page({
     this._playBtnTouchActive = true
     this._playBtnMoved = false
 
-    // 用户第一次触摸：触发音频（iOS 真机需要手势才能播放）
+    // 按钮区域的 catchtouchstart 会阻断冒泡，这里也需要触发音频
+    // 用 _justStartedAudio 标记本次按下触发了音频，touchend 里跳过暂停
     if (!this._audioStarted && this.data.isPlaying) {
       this._audioStarted = true
+      this._justStartedAudio = true
       this.startBgAudio()
+    } else {
+      this._justStartedAudio = false
     }
 
     if (this.data.isPlaying) return // 播放中不处理长按，等 tap → togglePlay
@@ -348,6 +360,12 @@ Page({
     }
     wasLongPressing = this.data.longPressing
     this.setData({ longPressing: false, longPressSec: 0 })
+
+    // 如果本次按下是首次触发音频，不执行暂停，让音频播起来
+    if (this._justStartedAudio) {
+      this._justStartedAudio = false
+      return
+    }
 
     if (this.data.isPlaying) {
       // 播放中松手 → 暂停

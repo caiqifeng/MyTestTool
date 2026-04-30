@@ -1,5 +1,5 @@
 <!-- 冥想播放页 -->
-<view class="session-page" wx:if="{{scene}}">
+<view class="session-page" wx:if="{{scene}}" bindtouchstart="onPageFirstTouch">
 
   <!-- 场景背景图（模糊） -->
   <image class="scene-bg" src="{{scene.bgImage}}" mode="aspectFill"></image>
