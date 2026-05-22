@@ -10,6 +10,8 @@ from yolo_game_verify.context import load_verification_context
 from yolo_game_verify.data.manifest import build_manifest
 from yolo_game_verify.data.reporting import write_dataset_manifest
 from yolo_game_verify.data.scanner import scan_frame_assets
+from yolo_game_verify.detectors.adapter import DetectorAdapter
+from yolo_game_verify.detectors.template import TemplateDetector
 from yolo_game_verify.generation.generator import generate_case_draft
 from yolo_game_verify.generation.loader import load_node_capabilities
 from yolo_game_verify.generation.reporting import write_generated_case_draft
@@ -47,8 +49,16 @@ def evaluate_frames(
     min_frames: int = typer.Option(2),
     out: Path = typer.Option(...),
     context: Path | None = typer.Option(None, exists=True, file_okay=True, dir_okay=False),
+    template: Path | None = typer.Option(None, exists=True, file_okay=True, dir_okay=False),
+    template_label: str = typer.Option("reward_popup"),
+    template_threshold: float = typer.Option(0.9),
 ) -> None:
     evidence_frames = _load_frames(frames)
+    if template is not None:
+        adapter = DetectorAdapter(
+            [TemplateDetector(label=template_label, template_path=template, threshold=template_threshold)]
+        )
+        evidence_frames = [adapter.enrich_frame(frame) for frame in evidence_frames]
     assertion = TemporalAssertion(
         assertion_id=f"{required_label}_visible",
         required_label=required_label,
