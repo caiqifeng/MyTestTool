@@ -79,6 +79,16 @@ yolo-game-verify generate-case-draft `
 
 Generated drafts include compatible structured steps, a behavior-tree draft, assertion configuration, generation evidence, risk level, and a `draft` review state.
 
+## Review Generated Draft
+
+```powershell
+yolo-game-verify review-draft --draft reports\daily_task_draft.json --reviewer qa_lead --approved --out reports\daily_task_reviewed.json
+yolo-game-verify trial-draft --draft reports\daily_task_reviewed.json --run-id trial_001 --result pass --report-path reports\trial.json --out reports\daily_task_trialed.json
+yolo-game-verify promote-draft --draft reports\daily_task_trialed.json --out reports\daily_task_official.json
+```
+
+Generated cases only become `official` after human approval and at least one passing trial run. High-risk drafts are blocked for manual review.
+
 ## Summarize Learning Signals
 
 ```powershell
