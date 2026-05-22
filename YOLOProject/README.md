@@ -27,6 +27,18 @@ yolo-game-verify evaluate-frames `
   --context examples\context\pc_mmorpg_blackbox.json
 ```
 
+Template matching can be used for deterministic local smoke runs:
+
+```powershell
+yolo-game-verify evaluate-frames `
+  --frames path\to\frames `
+  --required-label reward_popup `
+  --min-frames 1 `
+  --template path\to\reward_template.png `
+  --template-label reward_popup `
+  --out reports\reward_popup.json
+```
+
 The report result is one of:
 
 - `pass`: required evidence appeared in enough frames.
