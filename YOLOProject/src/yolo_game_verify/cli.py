@@ -6,6 +6,7 @@ from yolo_game_verify.assertions.temporal import evaluate_temporal_assertion
 from yolo_game_verify.cases.loader import load_structured_case
 from yolo_game_verify.cases.reporting import write_case_report
 from yolo_game_verify.cases.runner import evaluate_structured_case
+from yolo_game_verify.context import load_verification_context
 from yolo_game_verify.generation.generator import generate_case_draft
 from yolo_game_verify.generation.loader import load_node_capabilities
 from yolo_game_verify.generation.reporting import write_generated_case_draft
@@ -30,12 +31,19 @@ def _load_frames(frame_dir: Path) -> list[EvidenceFrame]:
     return [EvidenceFrame.from_path(index, path) for index, path in enumerate(image_paths)]
 
 
+def _metadata_from_context(context: Path | None) -> dict[str, object]:
+    if context is None:
+        return {}
+    return {"context": load_verification_context(context).model_dump(exclude_none=True)}
+
+
 @app.command("evaluate-frames")
 def evaluate_frames(
     frames: Path = typer.Option(..., exists=True, file_okay=False, dir_okay=True),
     required_label: str = typer.Option("reward_popup"),
     min_frames: int = typer.Option(2),
     out: Path = typer.Option(...),
+    context: Path | None = typer.Option(None, exists=True, file_okay=True, dir_okay=False),
 ) -> None:
     evidence_frames = _load_frames(frames)
     assertion = TemporalAssertion(
@@ -49,7 +57,7 @@ def evaluate_frames(
         result=result,
         reason=reason,
         frames=evidence_frames,
-        metadata={"required_label": required_label, "min_frames": min_frames},
+        metadata={"required_label": required_label, "min_frames": min_frames} | _metadata_from_context(context),
     )
     write_json_report(report, out)
     typer.echo(f"{report.result}: {report.reason}")
