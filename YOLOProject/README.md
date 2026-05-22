@@ -23,7 +23,8 @@ yolo-game-verify evaluate-frames `
   --frames path\to\frames `
   --required-label reward_popup `
   --min-frames 2 `
-  --out reports\reward_popup.json
+  --out reports\reward_popup.json `
+  --context examples\context\pc_mmorpg_blackbox.json
 ```
 
 The report result is one of:
@@ -70,7 +71,10 @@ Generated drafts include compatible structured steps, a behavior-tree draft, ass
 yolo-game-verify summarize-learning `
   --reports examples\learning `
   --capabilities examples\capabilities\daily_task_nodes.json `
-  --out reports\learning_summary.json
+  --out reports\learning_summary.json `
+  --context examples\context\pc_mmorpg_blackbox.json
 ```
 
 Learning summaries aggregate observed verification reports into failure patterns, unknown evidence patterns, assertion confidence, node confidence, coverage gaps, and suggested review actions.
+
+The optional context file binds outputs to project, game version, model version, dataset version, environment, and execution id.

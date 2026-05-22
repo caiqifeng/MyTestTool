@@ -1,0 +1,8 @@
+{
+  "project": "pc_mmorpg",
+  "game_version": "1.2.3",
+  "environment": "blackbox",
+  "model_version": "yolo26-reward-v1",
+  "dataset_version": "reward-dataset-2026-05",
+  "execution_id": "local-smoke-run"
+}
