@@ -2,6 +2,9 @@
 *
 !meditation-miniapp/
 !meditation-miniapp/**
+!YOLOProject/
+!YOLOProject/docs/
+!YOLOProject/docs/**
 !.gitignore
 
 # 排除小程序内的工具大文件
