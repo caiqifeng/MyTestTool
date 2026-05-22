@@ -14,3 +14,4 @@ YOLOProject/.pytest_cache/
 YOLOProject/.venv/
 YOLOProject/reports/
 YOLOProject/**/__pycache__/
+YOLOProject/**/*.egg-info/
