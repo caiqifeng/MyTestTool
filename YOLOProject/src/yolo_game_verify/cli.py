@@ -3,6 +3,8 @@ from pathlib import Path
 import typer
 
 from yolo_game_verify.assertions.temporal import evaluate_temporal_assertion
+from yolo_game_verify.behavior.reporting import write_behavior_run_result
+from yolo_game_verify.behavior.runner import run_behavior_tree
 from yolo_game_verify.cases.loader import load_structured_case
 from yolo_game_verify.cases.reporting import write_case_report
 from yolo_game_verify.cases.runner import evaluate_structured_case
@@ -19,7 +21,7 @@ from yolo_game_verify.generation.reporting import write_generated_case_draft
 from yolo_game_verify.learning.analyzer import summarize_learning
 from yolo_game_verify.learning.loader import load_case_reports
 from yolo_game_verify.learning.reporting import write_learning_summary
-from yolo_game_verify.models import EvidenceFrame, TemporalAssertion, VerificationReport
+from yolo_game_verify.models import AssertionResult, EvidenceFrame, TemporalAssertion, VerificationReport
 from yolo_game_verify.reporting.json_report import write_json_report
 from yolo_game_verify.review.flow import promote_to_official, record_human_review, record_trial_run
 from yolo_game_verify.review.models import ReviewDecision, TrialRunResult
@@ -178,3 +180,23 @@ def promote_draft(
     promoted = promote_to_official(_load_generated_draft(draft))
     write_generated_case_draft(promoted, out)
     typer.echo(f"{promoted.review_state}: {promoted.draft_id}")
+
+
+@app.command("run-behavior-draft")
+def run_behavior_draft(
+    draft: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
+    out: Path = typer.Option(...),
+) -> None:
+    generated_draft = _load_generated_draft(draft)
+    action_handlers = {
+        child.get("node_name"): (lambda: AssertionResult.PASS)
+        for child in generated_draft.behavior_tree.root.get("children", [])
+        if child.get("type") == "action" and child.get("node_name") is not None
+    }
+    result = run_behavior_tree(
+        generated_draft.behavior_tree.root,
+        condition_handlers={},
+        action_handlers=action_handlers,
+    )
+    write_behavior_run_result(result, out)
+    typer.echo(f"{result.result}: {len(result.events)} events")
