@@ -1,0 +1,52 @@
+[
+  {
+    "node_name": "CompleteDailyTask",
+    "module": "daily_task",
+    "input_parameters": {
+      "task_type": "daily"
+    },
+    "preconditions": [
+      "quest_tracker"
+    ],
+    "execution_action": "run existing CompleteDailyTask platform node",
+    "success_state": "quest_complete_hint",
+    "failure_state": "blocked_flow_hint",
+    "available_environments": [
+      "blackbox"
+    ],
+    "risk_level": "medium",
+    "supported_assertions": [
+      {
+        "assertion_id": "quest_complete_hint_visible",
+        "required_label": "quest_complete_hint",
+        "min_confidence": 0.5,
+        "min_frames": 2
+      }
+    ]
+  },
+  {
+    "node_name": "ClaimReward",
+    "module": "daily_task",
+    "input_parameters": {
+      "reward_type": "daily"
+    },
+    "preconditions": [
+      "quest_complete_hint"
+    ],
+    "execution_action": "run existing ClaimReward platform node",
+    "success_state": "reward_popup",
+    "failure_state": "error_popup",
+    "available_environments": [
+      "blackbox"
+    ],
+    "risk_level": "low",
+    "supported_assertions": [
+      {
+        "assertion_id": "reward_popup_visible",
+        "required_label": "reward_popup",
+        "min_confidence": 0.5,
+        "min_frames": 2
+      }
+    ]
+  }
+]

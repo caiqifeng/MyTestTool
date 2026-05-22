@@ -52,3 +52,14 @@ yolo-game-verify evaluate-case `
 ```
 
 The structured case format lets the existing platform attach functional assertions to fixed execution steps without replacing scheduling.
+
+## Generate Case Draft
+
+```powershell
+yolo-game-verify generate-case-draft `
+  --case examples\cases\daily_task_case.json `
+  --capabilities examples\capabilities\daily_task_nodes.json `
+  --out reports\daily_task_draft.json
+```
+
+Generated drafts include compatible structured steps, a behavior-tree draft, assertion configuration, generation evidence, risk level, and a `draft` review state.
