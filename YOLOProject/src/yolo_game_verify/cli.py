@@ -14,12 +14,15 @@ from yolo_game_verify.detectors.adapter import DetectorAdapter
 from yolo_game_verify.detectors.template import TemplateDetector
 from yolo_game_verify.generation.generator import generate_case_draft
 from yolo_game_verify.generation.loader import load_node_capabilities
+from yolo_game_verify.generation.models import GeneratedCaseDraft
 from yolo_game_verify.generation.reporting import write_generated_case_draft
 from yolo_game_verify.learning.analyzer import summarize_learning
 from yolo_game_verify.learning.loader import load_case_reports
 from yolo_game_verify.learning.reporting import write_learning_summary
 from yolo_game_verify.models import EvidenceFrame, TemporalAssertion, VerificationReport
 from yolo_game_verify.reporting.json_report import write_json_report
+from yolo_game_verify.review.flow import promote_to_official, record_human_review, record_trial_run
+from yolo_game_verify.review.models import ReviewDecision, TrialRunResult
 
 app = typer.Typer(help="YOLO game functional verification tools.")
 
@@ -40,6 +43,10 @@ def _metadata_from_context(context: Path | None) -> dict[str, object]:
     if context is None:
         return {}
     return {"context": load_verification_context(context).model_dump(exclude_none=True)}
+
+
+def _load_generated_draft(draft_path: Path) -> GeneratedCaseDraft:
+    return GeneratedCaseDraft.model_validate_json(draft_path.read_text(encoding="utf-8"))
 
 
 @app.command("evaluate-frames")
@@ -132,3 +139,42 @@ def prepare_dataset(
     )
     write_dataset_manifest(manifest, out)
     typer.echo(f"dataset-manifest: {manifest.unique_assets}/{manifest.total_assets} unique")
+
+
+@app.command("review-draft")
+def review_draft(
+    draft: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
+    reviewer: str = typer.Option(...),
+    approved: bool = typer.Option(False),
+    notes: str = typer.Option(""),
+    out: Path = typer.Option(...),
+) -> None:
+    reviewed = record_human_review(_load_generated_draft(draft), ReviewDecision(reviewer=reviewer, approved=approved, notes=notes))
+    write_generated_case_draft(reviewed, out)
+    typer.echo(f"{reviewed.review_state}: {reviewed.draft_id}")
+
+
+@app.command("trial-draft")
+def trial_draft(
+    draft: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
+    run_id: str = typer.Option(...),
+    result: str = typer.Option(...),
+    report_path: str = typer.Option(...),
+    out: Path = typer.Option(...),
+) -> None:
+    trialed = record_trial_run(
+        _load_generated_draft(draft),
+        TrialRunResult(run_id=run_id, result=result, report_path=report_path),
+    )
+    write_generated_case_draft(trialed, out)
+    typer.echo(f"{trialed.review_state}: {trialed.draft_id}")
+
+
+@app.command("promote-draft")
+def promote_draft(
+    draft: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
+    out: Path = typer.Option(...),
+) -> None:
+    promoted = promote_to_official(_load_generated_draft(draft))
+    write_generated_case_draft(promoted, out)
+    typer.echo(f"{promoted.review_state}: {promoted.draft_id}")
