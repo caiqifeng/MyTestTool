@@ -6,6 +6,9 @@ from yolo_game_verify.assertions.temporal import evaluate_temporal_assertion
 from yolo_game_verify.cases.loader import load_structured_case
 from yolo_game_verify.cases.reporting import write_case_report
 from yolo_game_verify.cases.runner import evaluate_structured_case
+from yolo_game_verify.generation.generator import generate_case_draft
+from yolo_game_verify.generation.loader import load_node_capabilities
+from yolo_game_verify.generation.reporting import write_generated_case_draft
 from yolo_game_verify.models import EvidenceFrame, TemporalAssertion, VerificationReport
 from yolo_game_verify.reporting.json_report import write_json_report
 
@@ -58,3 +61,16 @@ def evaluate_case(
     report = evaluate_structured_case(structured_case)
     write_case_report(report, out)
     typer.echo(f"{report.result}: {report.reason}")
+
+
+@app.command("generate-case-draft")
+def generate_case_draft_command(
+    case: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
+    capabilities: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
+    out: Path = typer.Option(...),
+) -> None:
+    structured_case = load_structured_case(case)
+    node_capabilities = load_node_capabilities(capabilities)
+    draft = generate_case_draft(structured_case, node_capabilities)
+    write_generated_case_draft(draft, out)
+    typer.echo(f"{draft.review_state}: {draft.draft_id}")
