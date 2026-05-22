@@ -42,3 +42,13 @@ The report result is one of:
 - `error_popup`
 - `network_error`
 - `blocked_flow_hint`
+
+## Evaluate Structured Case
+
+```powershell
+yolo-game-verify evaluate-case `
+  --case examples\cases\daily_task_case.json `
+  --out reports\daily_task_case_report.json
+```
+
+The structured case format lets the existing platform attach functional assertions to fixed execution steps without replacing scheduling.

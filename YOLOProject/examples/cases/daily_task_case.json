@@ -1,0 +1,28 @@
+{
+  "case_id": "case_daily_task_001",
+  "case_name": "Daily task reward verification",
+  "project": "pc_mmorpg",
+  "environment": "blackbox",
+  "steps": [
+    {
+      "step_id": "step_001",
+      "name": "complete daily task",
+      "node_name": "CompleteDailyTask",
+      "frame_dir": "examples/frames/daily_task/step_001",
+      "assertions": [
+        {
+          "assertion_id": "reward_popup_visible",
+          "required_label": "reward_popup",
+          "min_confidence": 0.5,
+          "min_frames": 2
+        },
+        {
+          "assertion_id": "error_popup_absent_check",
+          "required_label": "error_popup",
+          "min_confidence": 0.5,
+          "min_frames": 1
+        }
+      ]
+    }
+  ]
+}

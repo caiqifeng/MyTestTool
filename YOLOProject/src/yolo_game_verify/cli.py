@@ -3,6 +3,9 @@ from pathlib import Path
 import typer
 
 from yolo_game_verify.assertions.temporal import evaluate_temporal_assertion
+from yolo_game_verify.cases.loader import load_structured_case
+from yolo_game_verify.cases.reporting import write_case_report
+from yolo_game_verify.cases.runner import evaluate_structured_case
 from yolo_game_verify.models import EvidenceFrame, TemporalAssertion, VerificationReport
 from yolo_game_verify.reporting.json_report import write_json_report
 
@@ -43,4 +46,15 @@ def evaluate_frames(
         metadata={"required_label": required_label, "min_frames": min_frames},
     )
     write_json_report(report, out)
+    typer.echo(f"{report.result}: {report.reason}")
+
+
+@app.command("evaluate-case")
+def evaluate_case(
+    case: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
+    out: Path = typer.Option(...),
+) -> None:
+    structured_case = load_structured_case(case)
+    report = evaluate_structured_case(structured_case)
+    write_case_report(report, out)
     typer.echo(f"{report.result}: {report.reason}")
