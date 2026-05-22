@@ -92,9 +92,11 @@ def summarize_learning_command(
     reports: Path = typer.Option(..., exists=True, file_okay=False, dir_okay=True),
     capabilities: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
     out: Path = typer.Option(...),
+    context: Path | None = typer.Option(None, exists=True, file_okay=True, dir_okay=False),
 ) -> None:
     case_reports = load_case_reports(reports)
     node_capabilities = load_node_capabilities(capabilities)
     summary = summarize_learning(case_reports, node_capabilities)
+    summary.metadata.update(_metadata_from_context(context))
     write_learning_summary(summary, out)
     typer.echo(f"learning-summary: {summary.total_reports} reports")

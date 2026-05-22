@@ -28,3 +28,4 @@ class LearningSummary(BaseModel):
     assertion_confidence: list[AssertionConfidence] = Field(default_factory=list)
     coverage_gaps: list[str] = Field(default_factory=list)
     suggested_cases: list[str] = Field(default_factory=list)
+    metadata: dict[str, object] = Field(default_factory=dict)
