@@ -9,6 +9,9 @@ from yolo_game_verify.cases.runner import evaluate_structured_case
 from yolo_game_verify.generation.generator import generate_case_draft
 from yolo_game_verify.generation.loader import load_node_capabilities
 from yolo_game_verify.generation.reporting import write_generated_case_draft
+from yolo_game_verify.learning.analyzer import summarize_learning
+from yolo_game_verify.learning.loader import load_case_reports
+from yolo_game_verify.learning.reporting import write_learning_summary
 from yolo_game_verify.models import EvidenceFrame, TemporalAssertion, VerificationReport
 from yolo_game_verify.reporting.json_report import write_json_report
 
@@ -74,3 +77,16 @@ def generate_case_draft_command(
     draft = generate_case_draft(structured_case, node_capabilities)
     write_generated_case_draft(draft, out)
     typer.echo(f"{draft.review_state}: {draft.draft_id}")
+
+
+@app.command("summarize-learning")
+def summarize_learning_command(
+    reports: Path = typer.Option(..., exists=True, file_okay=False, dir_okay=True),
+    capabilities: Path = typer.Option(..., exists=True, file_okay=True, dir_okay=False),
+    out: Path = typer.Option(...),
+) -> None:
+    case_reports = load_case_reports(reports)
+    node_capabilities = load_node_capabilities(capabilities)
+    summary = summarize_learning(case_reports, node_capabilities)
+    write_learning_summary(summary, out)
+    typer.echo(f"learning-summary: {summary.total_reports} reports")
