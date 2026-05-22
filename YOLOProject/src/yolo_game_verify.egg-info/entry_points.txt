@@ -1,0 +1,2 @@
+[console_scripts]
+yolo-game-verify = yolo_game_verify.cli:app
