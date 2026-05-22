@@ -89,6 +89,16 @@ yolo-game-verify promote-draft --draft reports\daily_task_trialed.json --out rep
 
 Generated cases only become `official` after human approval and at least one passing trial run. High-risk drafts are blocked for manual review.
 
+## Dry-Run Behavior Tree Draft
+
+```powershell
+yolo-game-verify run-behavior-draft `
+  --draft reports\daily_task_draft.json `
+  --out reports\behavior_dry_run.json
+```
+
+The dry-run runner validates behavior-tree structure with injected handlers. It does not execute game actions or replace the platform scheduler.
+
 ## Summarize Learning Signals
 
 ```powershell
