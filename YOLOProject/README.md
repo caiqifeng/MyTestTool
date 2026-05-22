@@ -78,3 +78,16 @@ yolo-game-verify summarize-learning `
 Learning summaries aggregate observed verification reports into failure patterns, unknown evidence patterns, assertion confidence, node confidence, coverage gaps, and suggested review actions.
 
 The optional context file binds outputs to project, game version, model version, dataset version, environment, and execution id.
+
+## Prepare Dataset Manifest
+
+```powershell
+yolo-game-verify prepare-dataset `
+  --frames path\to\historical\frames `
+  --project pc_mmorpg `
+  --game-version 1.2.3 `
+  --environment blackbox `
+  --out reports\dataset_manifest.json
+```
+
+Dataset manifests record image dimensions, SHA-256 hashes, duplicate relationships, and project/version/environment tags for labeling and replay evaluation.
