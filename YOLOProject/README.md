@@ -63,3 +63,14 @@ yolo-game-verify generate-case-draft `
 ```
 
 Generated drafts include compatible structured steps, a behavior-tree draft, assertion configuration, generation evidence, risk level, and a `draft` review state.
+
+## Summarize Learning Signals
+
+```powershell
+yolo-game-verify summarize-learning `
+  --reports examples\learning `
+  --capabilities examples\capabilities\daily_task_nodes.json `
+  --out reports\learning_summary.json
+```
+
+Learning summaries aggregate observed verification reports into failure patterns, unknown evidence patterns, assertion confidence, node confidence, coverage gaps, and suggested review actions.

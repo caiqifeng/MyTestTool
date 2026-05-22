@@ -1,0 +1,23 @@
+{
+  "case_id": "case_reward_fail",
+  "case_name": "Reward verification failure",
+  "project": "pc_mmorpg",
+  "environment": "blackbox",
+  "result": "fail",
+  "reason": "reward_popup did not appear",
+  "steps": [
+    {
+      "step_id": "step_001",
+      "result": "fail",
+      "reason": "reward_popup did not appear",
+      "assertion_results": [
+        {
+          "assertion_id": "reward_popup_visible",
+          "result": "fail",
+          "reason": "reward_popup did not appear"
+        }
+      ],
+      "frames": []
+    }
+  ]
+}
