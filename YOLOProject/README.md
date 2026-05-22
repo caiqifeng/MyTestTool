@@ -45,6 +45,8 @@ The report result is one of:
 - `fail`: required evidence did not appear.
 - `unknown`: evidence appeared but was not stable enough.
 
+Assertions default to `"expected": "present"`. Use `"expected": "absent"` for exception UI checks such as `error_popup` or `network_error`.
+
 ## First MVP Labels
 
 - `quest_tracker`

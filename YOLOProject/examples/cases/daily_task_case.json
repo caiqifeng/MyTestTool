@@ -19,6 +19,7 @@
         {
           "assertion_id": "error_popup_absent_check",
           "required_label": "error_popup",
+          "expected": "absent",
           "min_confidence": 0.5,
           "min_frames": 1
         }
