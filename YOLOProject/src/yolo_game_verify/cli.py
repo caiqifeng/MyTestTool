@@ -7,6 +7,9 @@ from yolo_game_verify.cases.loader import load_structured_case
 from yolo_game_verify.cases.reporting import write_case_report
 from yolo_game_verify.cases.runner import evaluate_structured_case
 from yolo_game_verify.context import load_verification_context
+from yolo_game_verify.data.manifest import build_manifest
+from yolo_game_verify.data.reporting import write_dataset_manifest
+from yolo_game_verify.data.scanner import scan_frame_assets
 from yolo_game_verify.generation.generator import generate_case_draft
 from yolo_game_verify.generation.loader import load_node_capabilities
 from yolo_game_verify.generation.reporting import write_generated_case_draft
@@ -100,3 +103,22 @@ def summarize_learning_command(
     summary.metadata.update(_metadata_from_context(context))
     write_learning_summary(summary, out)
     typer.echo(f"learning-summary: {summary.total_reports} reports")
+
+
+@app.command("prepare-dataset")
+def prepare_dataset(
+    frames: Path = typer.Option(..., exists=True, file_okay=False, dir_okay=True),
+    project: str = typer.Option(...),
+    game_version: str = typer.Option(...),
+    environment: str = typer.Option(...),
+    out: Path = typer.Option(...),
+) -> None:
+    assets = scan_frame_assets(frames)
+    manifest = build_manifest(
+        assets,
+        project=project,
+        game_version=game_version,
+        environment=environment,
+    )
+    write_dataset_manifest(manifest, out)
+    typer.echo(f"dataset-manifest: {manifest.unique_assets}/{manifest.total_assets} unique")
