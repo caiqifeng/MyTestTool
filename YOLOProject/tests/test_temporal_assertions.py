@@ -51,3 +51,33 @@ def test_temporal_assertion_fails_when_error_label_is_absent_after_all_frames():
 
     assert result == AssertionResult.FAIL
     assert reason == "error_popup did not appear"
+
+
+def test_temporal_absence_assertion_passes_when_label_never_appears():
+    assertion = TemporalAssertion(
+        assertion_id="error_absent",
+        required_label="error_popup",
+        min_frames=1,
+        expected="absent",
+    )
+    frames = [make_frame(0, None), make_frame(1, None)]
+
+    result, reason = evaluate_temporal_assertion(assertion, frames)
+
+    assert result == AssertionResult.PASS
+    assert reason == "error_popup did not appear"
+
+
+def test_temporal_absence_assertion_fails_when_label_appears():
+    assertion = TemporalAssertion(
+        assertion_id="error_absent",
+        required_label="error_popup",
+        min_frames=1,
+        expected="absent",
+    )
+    frames = [make_frame(0, "error_popup"), make_frame(1, None)]
+
+    result, reason = evaluate_temporal_assertion(assertion, frames)
+
+    assert result == AssertionResult.FAIL
+    assert reason == "error_popup appeared in 1 frame"

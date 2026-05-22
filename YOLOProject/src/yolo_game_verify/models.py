@@ -49,6 +49,7 @@ class EvidenceFrame(BaseModel):
 class TemporalAssertion(BaseModel):
     assertion_id: str
     required_label: str
+    expected: str = Field(default="present", pattern="^(present|absent)$")
     min_confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     min_frames: int = Field(default=2, ge=1)
 

@@ -12,6 +12,12 @@ def evaluate_temporal_assertion(
                 matching_frames += 1
                 break
 
+    if assertion.expected == "absent":
+        if matching_frames == 0:
+            return AssertionResult.PASS, f"{assertion.required_label} did not appear"
+        frame_word = "frame" if matching_frames == 1 else "frames"
+        return AssertionResult.FAIL, f"{assertion.required_label} appeared in {matching_frames} {frame_word}"
+
     if matching_frames >= assertion.min_frames:
         return AssertionResult.PASS, f"{assertion.required_label} appeared in {matching_frames} frames"
 
