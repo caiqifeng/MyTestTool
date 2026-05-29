@@ -1,0 +1,80 @@
+// frontend/src/styles/variables.scss
+// 品牌色系 - Cycle&Cycle 日式烘焙风
+
+// === 主色调：暖棕色（面包烘焙色） ===
+$color-primary: #A67C52;        // 暖棕色 - 按钮、图标、重点文字
+$color-primary-light: #C9A882;  // 浅暖棕 - 悬浮状态
+$color-primary-dark: #8B6A3E;   // 深暖棕 - 按下状态
+
+// === 点缀色：深暖棕色（行动引导） ===
+$color-accent: #A67C52;         // 深暖棕 - 立即注册/去结算等主按钮
+$color-accent-light: #BF9B73;   // 浅暖棕 - 悬浮态
+$color-accent-dark: #8B6A3E;    // 更深暖棕 - 按下态
+
+// === 中性色 - 日式极简灰阶 ===
+$color-text-primary: #3C2A21;   // 深棕色 - 正文/标题
+$color-text-secondary: #9B8B7E; // 暖灰色 - 次要文字/说明
+$color-text-tertiary: #C4B5A8;  // 浅暖灰 - 辅助文字
+$color-border: #EBE5DD;         // 边框色
+$color-background: #FFFBF5;     // 奶白色 - 全局页面底色（面粉质感）
+$color-card-bg: #F8F3EB;        // 浅米色 - 卡片底色
+$color-white: #FFFFFF;
+$color-black: #1A1410;
+
+// === 功能色 ===
+$color-success: #7BA05B;
+$color-warning: #D4A24E;
+$color-error: #C09A82;         // 柔和灰棕 - 退出登录/删除
+$color-info: #7A9EAE;
+
+// === 间距系统 ===
+$spacing-unit: 8px;
+$spacing-xs: $spacing-unit * 0.5;  // 4px
+$spacing-sm: $spacing-unit;        // 8px
+$spacing-md: $spacing-unit * 2;    // 16px
+$spacing-lg: $spacing-unit * 3;    // 24px
+$spacing-xl: $spacing-unit * 4;    // 32px
+$spacing-xxl: $spacing-unit * 6;   // 48px
+
+// === 圆角系统 - 大圆角（面包松软感） ===
+$border-radius-sm: 8px;
+$border-radius-md: 12px;
+$border-radius-lg: 16px;
+$border-radius-xl: 20px;
+$border-radius-round: 999px;
+$border-radius-circle: 50%;
+
+// === 字体系统 ===
+$font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Noto Sans SC',
+              'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+$font-size-xs: 12px;
+$font-size-sm: 14px;
+$font-size-md: 16px;
+$font-size-lg: 18px;
+$font-size-xl: 20px;
+$font-size-xxl: 24px;
+
+// === 阴影系统 - 极简无阴影（靠留白形成层级） ===
+$shadow-sm: none;
+$shadow-md: none;
+$shadow-lg: none;
+$shadow-xl: none;
+
+// === 星级评分颜色 ===
+$color-star-active: #D4A24E;  // 琥珀金
+$color-star-inactive: #E5D9CA; // 浅米棕
+
+// === 工具 mixin ===
+@mixin text-ellipsis($lines: 1) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: $lines;
+  -webkit-box-orient: vertical;
+}
+
+@mixin flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

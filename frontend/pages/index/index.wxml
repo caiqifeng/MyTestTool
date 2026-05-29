@@ -1,0 +1,80 @@
+<view class="page-container">
+  <view class="home-page">
+    <!-- 搜索栏 -->
+    <view class="home-search-bar">
+      <view class="search-input">
+        <text class="search-icon">🔍</text>
+        <input type="text" placeholder="搜索面包、蛋糕..." value="{{searchKeyword}}" bindconfirm="handleSearch" />
+      </view>
+    </view>
+
+    <!-- Banner轮播 -->
+    <view class="home-banner">
+      <swiper class="banner-swiper" autoplay="true" interval="3000" circular="true" indicator-dots indicator-color="rgba(255, 255, 255, 0.5)" indicator-active-color="#FF6B35">
+        <block wx:for="{{banners}}" wx:key="index">
+          <swiper-item>
+            <image class="banner-image" src="{{item.image}}" mode="aspectFill" />
+          </swiper-item>
+        </block>
+      </swiper>
+    </view>
+
+    <!-- 分类导航 -->
+    <view class="category-nav">
+      <scroll-view class="category-scroll" scroll-x>
+        <block wx:for="{{categories}}" wx:key="id">
+          <view class="category-item" bindtap="handleCategoryClick" data-id="{{item.id}}">
+            <view class="category-icon">
+              <text>{{item.icon || '🍞'}}</text>
+            </view>
+            <text class="category-name">{{item.name}}</text>
+          </view>
+        </block>
+      </scroll-view>
+    </view>
+
+    <!-- 推荐商品 -->
+    <view class="recommended-section">
+      <view class="section-header">
+        <text class="section-title">今日推荐</text>
+        <text class="section-more" bindtap="handleViewAll">查看更多 ></text>
+      </view>
+
+      <view class="product-grid">
+        <block wx:for="{{recommendedProducts}}" wx:key="id">
+          <view class="product-item" bindtap="handleProductClick" data-id="{{item.id}}">
+            <image class="product-image" src="{{item.images[0]}}" mode="aspectFill" />
+            <view class="product-info">
+              <text class="product-name">{{item.name}}</text>
+              <text class="product-price">¥{{item.price}}</text>
+              <text wx:if="{{item.originalPrice}}" class="product-original-price">¥{{item.originalPrice}}</text>
+            </view>
+          </view>
+        </block>
+      </view>
+    </view>
+
+    <!-- 热门商品 -->
+    <view class="hot-section">
+      <view class="section-header">
+        <text class="section-title">热门商品</text>
+      </view>
+
+      <view class="product-list">
+        <block wx:for="{{hotProducts}}" wx:key="id">
+          <view class="product-card" bindtap="handleProductClick" data-id="{{item.id}}">
+            <image class="product-card-image" src="{{item.images[0]}}" mode="aspectFill" />
+            <view class="product-card-info">
+              <text class="product-card-name">{{item.name}}</text>
+              <text class="product-card-desc">{{item.description}}</text>
+              <view class="product-card-bottom">
+                <text class="product-card-price">¥{{item.price}}</text>
+                <text class="product-card-sales">已售 {{item.sales}}</text>
+              </view>
+            </view>
+          </view>
+        </block>
+      </view>
+    </view>
+  </view>
+</view>

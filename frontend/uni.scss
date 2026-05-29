@@ -1,0 +1,49 @@
+/* uni.scss - uni-app全局样式 */
+
+/* 颜色变量 */
+$uni-color-primary: #FF6B35;
+$uni-color-success: #52C41A;
+$uni-color-warning: #FAAD14;
+$uni-color-error: #FF4D4F;
+$uni-color-info: #1890FF;
+
+/* 背景颜色 */
+$uni-bg-color: #F8F8F8;
+$uni-bg-color-grey: #F8F8F8;
+$uni-bg-color-hover: #F1F1F1;
+$uni-bg-color-mask: rgba(0, 0, 0, 0.4);
+
+/* 边框颜色 */
+$uni-border-color: #E0E0E0;
+
+/* 尺寸变量 */
+$uni-font-size-sm: 12px;
+$uni-font-size-base: 14px;
+$uni-font-size-lg: 16px;
+$uni-font-size-xl: 18px;
+$uni-font-size-xxl: 20px;
+
+/* 圆角 */
+$uni-border-radius-sm: 4px;
+$uni-border-radius-base: 8px;
+$uni-border-radius-lg: 12px;
+$uni-border-radius-xl: 16px;
+$uni-border-radius-circle: 50%;
+
+/* 水平间距 */
+$uni-spacing-row-sm: 5px;
+$uni-spacing-row-base: 10px;
+$uni-spacing-row-lg: 15px;
+
+/* 垂直间距 */
+$uni-spacing-col-sm: 5px;
+$uni-spacing-col-base: 10px;
+$uni-spacing-col-lg: 15px;
+
+/* 高度 */
+$uni-height-base: 44px;
+$uni-height-lg: 50px;
+$uni-height-sm: 36px;
+
+/* 导入设计变量 */
+@import './src/styles/variables.scss';

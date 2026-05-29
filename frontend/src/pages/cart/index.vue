@@ -1,0 +1,521 @@
+<template>
+  <view class="page-container">
+    <view class="cart-page">
+      <!-- 头部 -->
+      <view class="cart-header">
+        <text class="cart-title">购物车</text>
+        <text v-if="cartStore.getSelectedCount > 0" class="cart-edit" @click="toggleEditMode">
+          {{ editMode ? '完成' : '编辑' }}
+        </text>
+      </view>
+
+      <!-- 加载状态 -->
+      <view v-if="cartStore.isLoading" class="cart-loading">
+        <view class="loading-icon">⏳</view>
+        <text class="loading-text">加载中...</text>
+      </view>
+
+      <!-- 错误提示 -->
+      <view v-else-if="cartStore.error" class="cart-error">
+        <view class="error-icon">❌</view>
+        <text class="error-text">{{ cartStore.error }}</text>
+        <view class="error-action" @click="cartStore.fetchCart">
+          <text class="error-action-text">重试</text>
+        </view>
+      </view>
+
+      <!-- 购物车为空 -->
+      <view v-else-if="cartStore.getTotalQuantity === 0" class="cart-empty">
+        <view class="empty-icon">🛒</view>
+        <text class="empty-text">购物车是空的</text>
+        <view class="empty-action" @click="handleGoHome">
+          <text class="empty-action-text">去逛逛</text>
+        </view>
+      </view>
+
+      <!-- 购物车商品列表 -->
+      <view v-else class="cart-content">
+        <view class="cart-items">
+          <view
+            class="cart-item"
+            v-for="item in cartStore.getItems"
+            :key="item.id"
+          >
+            <view class="item-select" @click="cartStore.toggleSelect(item.id)">
+              <view
+                class="select-checkbox"
+                :class="{ 'selected': cartStore.selectedItems.includes(item.id) }"
+              >
+                <text v-if="cartStore.selectedItems.includes(item.id)">✓</text>
+              </view>
+            </view>
+
+            <image class="item-image" :src="item.image" mode="aspectFill" />
+
+            <view class="item-info">
+              <text class="item-name">{{ item.name }}</text>
+              <text v-if="item.specs" class="item-specs">
+                {{ Object.values(item.specs).join(' ') }}
+              </text>
+              <view class="item-bottom">
+                <text class="item-price">¥{{ item.price }}</text>
+
+                <view class="item-quantity">
+                  <text
+                    class="quantity-btn"
+                    :class="{ 'disabled': item.quantity <= 1 }"
+                    @click="handleDecrease(item.id)"
+                  >-</text>
+                  <text class="quantity-value">{{ item.quantity }}</text>
+                  <text class="quantity-btn" @click="handleIncrease(item.id)">+</text>
+                </view>
+              </view>
+            </view>
+
+            <view v-if="editMode" class="item-delete" @click="cartStore.removeItem(item.id)">
+              <text class="delete-icon">×</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 全选 -->
+        <view class="cart-select-all">
+          <view class="select-all-checkbox" @click="cartStore.toggleSelectAll()">
+            <view
+              class="select-checkbox"
+              :class="{ 'selected': cartStore.getIsAllSelected }"
+            >
+              <text v-if="cartStore.getIsAllSelected">✓</text>
+            </view>
+            <text class="select-all-text">全选</text>
+          </view>
+
+          <view v-if="!editMode" class="select-all-delete" @click="handleDeleteSelected">
+            <text class="delete-text">删除</text>
+          </view>
+        </view>
+      </view>
+
+      <!-- 底部结算栏 -->
+      <view v-if="cartStore.getTotalQuantity > 0" class="cart-footer">
+        <view class="footer-left">
+          <view class="total-price">
+            <text class="total-label">合计：</text>
+            <text class="total-value">¥{{ cartStore.getTotalPrice.toFixed(2) }}</text>
+          </view>
+          <text v-if="cartStore.getCoupon" class="coupon-text">
+            已使用优惠券：{{ cartStore.getCoupon.name }}
+          </text>
+        </view>
+
+        <view class="footer-right">
+          <view
+            class="settle-btn"
+            :class="{ 'disabled': cartStore.getSelectedCount === 0 }"
+            @click="handleSettle"
+          >
+            <text class="settle-text">
+              {{ editMode ? '删除' : `结算(${cartStore.getSelectedCount})` }}
+            </text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
+import { useCartStore } from '../../store/cart.store'
+
+const cartStore = useCartStore()
+const editMode = ref(false)
+
+onMounted(() => {
+  // 从后端获取购物车数据
+  cartStore.fetchCart()
+})
+
+onShow(() => {
+  // 页面显示时刷新购物车数据
+  cartStore.fetchCart()
+})
+
+const toggleEditMode = () => {
+  editMode.value = !editMode.value
+}
+
+const handleDecrease = (itemId: string) => {
+  const item = cartStore.getItems.find(i => i.id === itemId)
+  if (item && item.quantity > 1) {
+    cartStore.updateQuantity(itemId, item.quantity - 1)
+  }
+}
+
+const handleIncrease = (itemId: string) => {
+  const item = cartStore.getItems.find(i => i.id === itemId)
+  if (item) {
+    cartStore.updateQuantity(itemId, item.quantity + 1)
+  }
+}
+
+const handleDeleteSelected = () => {
+  cartStore.selectedItems.forEach(itemId => {
+    cartStore.removeItem(itemId)
+  })
+}
+
+const handleSettle = () => {
+  if (editMode.value) {
+    handleDeleteSelected()
+  } else if (cartStore.getSelectedCount > 0) {
+    console.log('去结算')
+    uni.navigateTo({
+      url: '/pages/order-confirm/index',
+    })
+  }
+}
+
+const handleGoHome = () => {
+  uni.switchTab({
+    url: '/pages/index/index',
+  })
+}
+</script>
+
+<style lang="scss" scoped>
+@import '../../styles/variables.scss';
+
+.cart-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.cart-header {
+  padding: $spacing-md;
+  background-color: $color-white;
+  border-bottom: 1px solid $color-border;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cart-title {
+  font-size: $font-size-xl;
+  font-weight: 500;
+  color: $color-text-primary;
+}
+
+.cart-edit {
+  font-size: $font-size-sm;
+  font-weight: 400;
+  color: $color-primary;
+}
+
+.cart-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl;
+
+  .empty-icon {
+    font-size: 80rpx;
+    margin-bottom: $spacing-md;
+  }
+
+  .empty-text {
+    font-size: $font-size-md;
+    font-weight: 400;
+    color: $color-text-secondary;
+    margin-bottom: $spacing-lg;
+  }
+
+  .empty-action {
+    background-color: $color-accent;
+    border-radius: $border-radius-lg;
+    padding: $spacing-sm $spacing-xl;
+
+    .empty-action-text {
+      color: $color-white;
+      font-weight: 500;
+    }
+  }
+}
+
+.cart-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl;
+
+  .loading-icon {
+    font-size: 80rpx;
+    margin-bottom: $spacing-md;
+    animation: rotate 1s linear infinite;
+  }
+
+  .loading-text {
+    font-size: $font-size-md;
+    font-weight: 400;
+    color: $color-text-secondary;
+  }
+}
+
+.cart-error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: $spacing-xl;
+
+  .error-icon {
+    font-size: 80rpx;
+    margin-bottom: $spacing-md;
+    color: $color-error;
+  }
+
+  .error-text {
+    font-size: $font-size-md;
+    font-weight: 400;
+    color: $color-text-secondary;
+    margin-bottom: $spacing-lg;
+    text-align: center;
+    max-width: 80%;
+  }
+
+  .error-action {
+    background-color: $color-primary;
+    border-radius: $border-radius-lg;
+    padding: $spacing-sm $spacing-xl;
+
+    .error-action-text {
+      color: $color-white;
+      font-weight: 500;
+    }
+  }
+}
+
+@keyframes rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.cart-content {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 220rpx; /* 为底部结算栏(120rpx) + Tabbar(100rpx)留空间 */
+}
+
+.cart-items {
+  .cart-item {
+    display: flex;
+    align-items: center;
+    padding: $spacing-md $spacing-md;
+    background-color: $color-white;
+    margin-bottom: $spacing-sm;
+    border-radius: $border-radius-lg;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  .item-select {
+    margin-right: $spacing-md;
+  }
+
+  .select-checkbox {
+    width: 40rpx;
+    height: 40rpx;
+    border: 2px solid $color-border;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &.selected {
+      border-color: $color-primary;
+      background-color: $color-primary;
+      color: $color-white;
+    }
+  }
+
+  .item-image {
+    width: 140rpx;
+    height: 140rpx;
+    border-radius: $border-radius-md;
+    margin-right: $spacing-md;
+    flex-shrink: 0;
+  }
+
+  .item-info {
+    flex: 1;
+
+    .item-name {
+      display: block;
+      font-size: $font-size-sm;
+      font-weight: 400;
+      color: $color-text-primary;
+      margin-bottom: $spacing-xs;
+      @include text-ellipsis(1);
+    }
+
+    .item-specs {
+      display: block;
+      font-size: $font-size-xs;
+      font-weight: 300;
+      color: $color-text-secondary;
+      margin-bottom: $spacing-md;
+    }
+
+    .item-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .item-price {
+      font-size: $font-size-md;
+      font-weight: 500;
+      color: $color-primary;
+    }
+
+    .item-quantity {
+      display: flex;
+      align-items: center;
+      border: 1px solid $color-border;
+      border-radius: $border-radius-round;
+      overflow: hidden;
+
+      .quantity-btn {
+        width: 60rpx;
+        height: 60rpx;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: $font-size-md;
+        color: $color-text-primary;
+
+        &.disabled {
+          color: $color-text-secondary;
+        }
+      }
+
+      .quantity-value {
+        width: 80rpx;
+        text-align: center;
+        font-size: $font-size-sm;
+        color: $color-text-primary;
+      }
+    }
+  }
+
+  .item-delete {
+    width: 80rpx;
+    height: 80rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: $spacing-md;
+
+    .delete-icon {
+      font-size: $font-size-xxl;
+      color: $color-error;
+    }
+  }
+}
+
+.cart-select-all {
+  padding: $spacing-md;
+  background-color: $color-white;
+  border-top: 1px solid $color-border;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+
+  .select-all-checkbox {
+    display: flex;
+    align-items: center;
+  }
+
+  .select-all-text {
+    margin-left: $spacing-sm;
+    font-size: $font-size-sm;
+    font-weight: 400;
+    color: $color-text-primary;
+  }
+
+  .select-all-delete {
+    .delete-text {
+      font-size: $font-size-sm;
+      font-weight: 400;
+      color: $color-text-secondary;
+    }
+  }
+}
+
+.cart-footer {
+  position: fixed;
+  bottom: 100rpx; /* Tabbar 高度，结算栏悬浮在 Tabbar 上方 */
+  left: 0;
+  right: 0;
+  background-color: $color-white;
+  border-top: 1px solid $color-border;
+  padding: $spacing-md;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+
+  .footer-left {
+    .total-price {
+      display: flex;
+      align-items: baseline;
+      margin-bottom: $spacing-xs;
+    }
+
+    .total-label {
+      font-size: $font-size-sm;
+      color: $color-text-secondary;
+    }
+
+    .total-value {
+      font-size: $font-size-xl;
+      font-weight: 500;
+      color: $color-primary;
+    }
+
+    .coupon-text {
+      font-size: $font-size-xs;
+      font-weight: 300;
+      color: $color-primary;
+    }
+  }
+
+  .footer-right {
+    .settle-btn {
+      background-color: $color-accent;
+      border-radius: $border-radius-lg;
+      padding: $spacing-sm $spacing-xl;
+
+      &.disabled {
+        background-color: $color-text-secondary;
+        opacity: 0.5;
+      }
+
+      .settle-text {
+        color: $color-white;
+        font-weight: 500;
+        font-size: $font-size-md;
+      }
+    }
+  }
+}
+</style>

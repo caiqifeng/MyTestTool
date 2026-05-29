@@ -1,0 +1,177 @@
+{
+  "pages": [
+    {
+      "path": "pages/index/index",
+      "style": {
+        "navigationBarTitleText": "面包店首页",
+        "navigationStyle": "custom",
+        "disableScroll": false
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "登录",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "default"
+      }
+    },
+    {
+      "path": "pages/product-detail/index",
+      "style": {
+        "navigationBarTitleText": "商品详情",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/cart/index",
+      "style": {
+        "navigationBarTitleText": "购物车",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black",
+        "navigationStyle": "default"
+      }
+    },
+    {
+      "path": "pages/order-confirm/index",
+      "style": {
+        "navigationBarTitleText": "订单确认",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/order-list/index",
+      "style": {
+        "navigationBarTitleText": "我的订单",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/order-detail/index",
+      "style": {
+        "navigationBarTitleText": "订单详情",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/address-list/index",
+      "style": {
+        "navigationBarTitleText": "收货地址",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/user-center/index",
+      "style": {
+        "navigationBarTitleText": "个人中心",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/address-edit/index",
+      "style": {
+        "navigationBarTitleText": "地址编辑",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/payment/index",
+      "style": {
+        "navigationBarTitleText": "支付订单",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/review/index",
+      "style": {
+        "navigationBarTitleText": "评价订单",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/category/index",
+      "style": {
+        "navigationBarTitleText": "商品分类",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/product-list/index",
+      "style": {
+        "navigationBarTitleText": "商品列表",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/coupon-list/index",
+      "style": {
+        "navigationBarTitleText": "优惠券管理",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    },
+    {
+      "path": "pages/search/index",
+      "style": {
+        "navigationBarTitleText": "搜索商品",
+        "navigationBarBackgroundColor": "#FFFBF5",
+        "navigationBarTextStyle": "black"
+      }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "black",
+    "navigationBarTitleText": "Break 面包店",
+    "navigationBarBackgroundColor": "#FFFBF5",
+    "backgroundColor": "#FFFBF5",
+    "navigationStyle": "custom",
+    "app-plus": {
+      "background": "#FFFBF5",
+      "titleNView": false
+    }
+  },
+  "tabBar": {
+    "color": "#B8A898",
+    "selectedColor": "#A67C52",
+    "backgroundColor": "#FFFBF5",
+    "borderStyle": "white",
+    "height": "56px",
+    "fontSize": "10px",
+    "iconWidth": "28px",
+    "spacing": "4px",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "首页",
+        "iconPath": "static/tabbar/home.png",
+        "selectedIconPath": "static/tabbar/home-active.png"
+      },
+      {
+        "pagePath": "pages/category/index",
+        "text": "分类",
+        "iconPath": "static/tabbar/category.png",
+        "selectedIconPath": "static/tabbar/category-active.png"
+      },
+      {
+        "pagePath": "pages/user-center/index",
+        "text": "我的",
+        "iconPath": "static/tabbar/user.png",
+        "selectedIconPath": "static/tabbar/user-active.png"
+      }
+    ]
+  },
+  "easycom": {
+    "autoscan": true,
+    "custom": {}
+  }
+}
