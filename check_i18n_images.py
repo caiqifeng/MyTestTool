@@ -1161,7 +1161,10 @@ def parse_dt(value: str) -> dt.datetime:
 
 
 def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
-    data = json.loads(Path(config_path).read_text(encoding="utf-8"))
+    raw = Path(config_path).read_text(encoding="utf-8")
+    # tolerate Windows backslash paths in JSON
+    raw = raw.replace("\\", "/")
+    data = json.loads(raw)
     if isinstance(data, list):
         pairs = data
     elif isinstance(data, dict) and "pairs" in data:
@@ -1171,6 +1174,8 @@ def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
     for p in pairs:
         if "i18n" not in p or "mainland" not in p:
             raise SystemExit(f"ERROR: 配置项缺少 i18n 或 mainland 字段: {p}")
+        p["i18n"] = p["i18n"].replace("\\", "/")
+        p["mainland"] = p["mainland"].replace("\\", "/")
     return pairs
 
 
