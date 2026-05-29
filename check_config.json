@@ -1,0 +1,17 @@
+[
+  {
+    "name": "ui",
+    "i18n": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client/i18n/zh_TW/ui/Image",
+    "mainland": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client/ui/Image"
+  },
+  {
+    "name": "data_texture",
+    "i18n": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client/i18n/zh_TW/data/source/other/特效/贴图/QT_其他",
+    "mainland": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client/data/source/other/特效/贴图/QT_其他"
+  },
+  {
+    "name": "data_map",
+    "i18n": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client/i18n/zh_TW/data/source/maps",
+    "mainland": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client/data/source/maps"
+  }
+]

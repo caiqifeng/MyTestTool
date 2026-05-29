@@ -1,0 +1,21 @@
+# Test output
+*.html
+*.xlsx
+
+# OCR cache & state
+.ocr_cache.json
+.check_i18n_images_state
+
+# Report assets & thumbnails
+*_assets/
+*_thumbs/
+
+# Temp files
+~$*
+
+# Python
+__pycache__/
+.pytest_cache/
+
+# Archive
+*.7z
