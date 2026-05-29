@@ -1226,7 +1226,7 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="检查国际版/陆版图片差异，并输出 Excel/HTML。")
-    parser.add_argument("--config", default=None, help="JSON 配置文件路径，定义多组检查目录对")
+    parser.add_argument("--config", default=None, help="JSON 配置文件路径（默认自动查找当前目录 check_config.json）")
     parser.add_argument("--i18n", default=None, help="国际版图片目录路径（与 --mainland 配对，或使用 --config）")
     parser.add_argument("--mainland", default=None, help="陆版图片目录路径（与 --i18n 配对，或使用 --config）")
     parser.add_argument("--output", default="ui_image_check_report.html", help="输出文件路径，支持 .xlsx / .html")
@@ -1288,8 +1288,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    # auto-detect config file
+    if not args.config and not args.i18n and not args.mainland:
+        default_config = Path("check_config.json")
+        if default_config.exists():
+            args.config = str(default_config.resolve())
+
     if not args.config and (not args.i18n or not args.mainland):
-        parser.error("需要同时指定 --i18n 和 --mainland，或使用 --config 指定配置文件")
+        parser.error("请指定 --i18n 和 --mainland，或 --config 配置文件，或在当前目录放置 check_config.json")
 
     check_started_at = dt.datetime.now(dt.timezone.utc)
     findings, counts = collect_findings(args)
