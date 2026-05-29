@@ -31,9 +31,9 @@ DEFAULT_THUMBNAIL_ISSUES = {
 }
 TEXT_REPORT_TITLE = "\u591a\u8bed\u8a00\u56fe\u7247\u68c0\u67e5\u6c47\u603b"
 TEXT_RUN_RESULT = "\u672c\u8f6e\u6267\u884c\u7ed3\u679c"
-TEXT_MISSING_ISSUE = "\u6587\u4ef6\u4e0d\u5b58\u5728\u95ee\u9898"
-TEXT_CHANGED_ISSUE = "\u65f6\u95f4\u4e0d\u5bf9\u95ee\u9898"
-TEXT_NEW_TEXT_ISSUE = "\u9646\u7248\u65b0\u589e\u542b\u6587\u5b57\u95ee\u9898"
+TEXT_MISSING_ISSUE = "\u7591\u4f3c\u5e9f\u9664\u6587\u4ef6"
+TEXT_CHANGED_ISSUE = "\u4fee\u6539\u65f6\u95f4\u5f02\u5e38"
+TEXT_NEW_TEXT_ISSUE = "\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247"
 TEXT_REPORT_DETAIL = "\u62a5\u544a\u8be6\u60c5"
 TEXT_OTHER_ISSUE = "\u5176\u4ed6\u95ee\u9898"
 TEXT_CATEGORY = "\u7c7b\u522b"
@@ -100,8 +100,10 @@ def compare_category(
     mainland_files: dict[str, ImageFile],
     last_check_at: dt.datetime | None,
     text_detector: Callable[[ImageFile], bool],
-) -> list[Finding]:
+) -> tuple[list[Finding], dict[str, int]]:
     findings: list[Finding] = []
+    normal_synced = 0
+    new_no_text = 0
 
     for rel, i18n_file in sorted(i18n_files.items()):
         mainland_file = mainland_files.get(rel)
@@ -132,6 +134,8 @@ def compare_category(
                     "陆版文件修改时间晚于国际版",
                 )
             )
+        else:
+            normal_synced += 1
 
     since = to_aware_utc(last_check_at) if last_check_at else None
     for rel, mainland_file in sorted(mainland_files.items()):
@@ -153,7 +157,9 @@ def compare_category(
                     mainland_created_at=mainland_file.created_at,
                 )
             )
-    return findings
+        else:
+            new_no_text += 1
+    return findings, {"normal_synced": normal_synced, "new_no_text": new_no_text}
 
 
 def apply_max_file_sample(
@@ -176,16 +182,35 @@ def scan_local(directory: str) -> dict[str, ImageFile]:
     if not base_path.exists():
         return result
 
+    scanned = 0
+    skipped = 0
     for file in base_path.rglob("*"):
-        if not file.is_file():
+        try:
+            if not file.is_file():
+                continue
+        except OSError as e:
+            skipped += 1
+            if skipped <= 10:
+                print(f"WARN: 跳过无法访问的文件: {file}: {e}", file=sys.stderr)
             continue
         rel = normalize_rel(file.relative_to(base_path).as_posix())
         if not is_image(rel):
             continue
-        stat = file.stat()
+        try:
+            stat = file.stat()
+        except OSError as e:
+            skipped += 1
+            if skipped <= 10:
+                print(f"WARN: 跳过无法获取状态的文件: {file}: {e}", file=sys.stderr)
+            continue
         modified_at = dt.datetime.fromtimestamp(stat.st_mtime, dt.timezone.utc)
         created_at = dt.datetime.fromtimestamp(stat.st_ctime, dt.timezone.utc)
         result[compare_key(rel)] = ImageFile(rel, str(file), modified_at, "", created_at)
+        scanned += 1
+        if scanned % 5000 == 0:
+            print(f"  已扫描 {scanned} 张图片...", file=sys.stderr)
+    if skipped > 10:
+        print(f"  共跳过 {skipped} 个无法访问的文件", file=sys.stderr)
     return result
 
 
@@ -523,7 +548,10 @@ def write_xlsx(
     thumbnail_issues: set[str] | None = None,
     no_thumbnail_resize: bool = False,
     max_image_px: int | None = None,
+    stats: dict[str, int] | None = None,
 ) -> None:
+    if stats is None:
+        stats = {}
     if thumbnail_issues is None:
         thumbnail_issues = DEFAULT_THUMBNAIL_ISSUES
     try:
@@ -534,6 +562,7 @@ def write_xlsx(
             thumbnail_issues,
             no_thumbnail_resize,
             max_image_px,
+            stats,
         )
         return
     except ImportError:
@@ -639,7 +668,10 @@ def write_xlsx_with_openpyxl(
     thumbnail_issues: set[str] | None = None,
     no_thumbnail_resize: bool = False,
     max_image_px: int | None = None,
+    stats: dict[str, int] | None = None,
 ) -> None:
+    if stats is None:
+        stats = {}
     if thumbnail_issues is None:
         thumbnail_issues = DEFAULT_THUMBNAIL_ISSUES
     if no_thumbnail_resize:
@@ -660,6 +692,45 @@ def write_xlsx_with_openpyxl(
     wb = Workbook()
     ws = wb.active
     ws.title = "检查结果"
+
+    # ---- summary rows ----
+    missing_count = sum(1 for f in findings if f.issue == "mainland_missing")
+    changed_count = sum(1 for f in findings if f.issue == "mainland_changed")
+    new_text_count = sum(1 for f in findings if f.issue == "mainland_new_with_text")
+    other_count = len(findings) - missing_count - changed_count - new_text_count
+    normal_synced = stats.get("normal_synced", 0)
+    new_no_text = stats.get("new_no_text", 0)
+
+    summary_header_font = Font(bold=True, size=13)
+    summary_rows = [
+        ["一、共检查图片", "", ""],
+        ["国际版图片", f"{stats.get('i18n_count', 0)} 张", ""],
+        ["陆版图片", f"{stats.get('mainland_count', 0)} 张", ""],
+        ["", "", ""],
+        ["二、正常图片", f"{normal_synced + new_no_text} 张", ""],
+        ["正常同步文件", f"{normal_synced} 张", "两边都有且修改时间正常"],
+        ["新增无文字图片", f"{new_no_text} 张", "陆版新增但无文字，无需翻译"],
+        ["", "", ""],
+        ["三、异常图片", f"{len(findings)} 张", ""],
+    ]
+    if missing_count:
+        summary_rows.append(["疑似废除文件", f"{missing_count} 张", "国际版有、陆版无（可能已废弃）"])
+    if changed_count:
+        summary_rows.append(["修改时间异常", f"{changed_count} 张", "陆版修改时间晚于国际版（需更新翻译）"])
+    if new_text_count:
+        summary_rows.append(["新增带文字图片", f"{new_text_count} 张", "陆版新增含文字图片（缺少国际版对应翻译）"])
+    if other_count:
+        summary_rows.append(["其他问题", f"{other_count} 张", ""])
+    summary_rows.append(["", "", ""])
+
+    for row_idx, row_data in enumerate(summary_rows, 1):
+        ws.append(row_data)
+        if row_idx == 1:
+            ws[row_idx][0].font = summary_header_font
+        elif row_data[0].startswith("二、") or row_data[0].startswith("三、"):
+            ws[row_idx][0].font = Font(bold=True)
+
+    # ---- data header ----
     headers = [
         "类别",
         "问题类型",
@@ -688,7 +759,8 @@ def write_xlsx_with_openpyxl(
     inserted_thumbnails = 0
     max_col_px = {"F": 0, "G": 0}
     try:
-        for row_index, finding in enumerate(findings, 2):
+        data_start = len(summary_rows) + 2  # summary + 1 header row
+        for row_index, finding in enumerate(findings, data_start):
             ws.append(
                 [
                     finding.category,
@@ -756,7 +828,7 @@ def write_xlsx_with_openpyxl(
                     widths[idx] = max(widths[idx], max_col_px[col_letter] / 7 + 2)
         for idx, width in enumerate(widths, 1):
             ws.column_dimensions[get_column_letter(idx)].width = width
-        ws.freeze_panes = "A2"
+        ws.freeze_panes = f"A{data_start}"
         ws.auto_filter.ref = ws.dimensions
         for row in ws.iter_rows():
             for cell in row:
@@ -836,6 +908,8 @@ def write_html_report(
     findings: Sequence[Finding],
     i18n_count: int = 0,
     mainland_count: int = 0,
+    normal_synced: int = 0,
+    new_no_text: int = 0,
 ) -> None:
     assets_dir = path.parent / f"{path.stem}_assets"
     if assets_dir.exists():
@@ -896,7 +970,11 @@ def write_html_report(
         )
 
     total_abnormal = len(findings)
-    summary_table = _build_summary_table(i18n_count, mainland_count, total_abnormal, missing, changed, new_with_text, others)
+    summary_table = _build_summary_table(
+        i18n_count, mainland_count, total_abnormal,
+        normal_synced, new_no_text,
+        missing, changed, new_with_text, others,
+    )
     doc = _html_template(summary_table, summary_cards, rows)
     path.write_text(doc, encoding="utf-8")
 
@@ -914,6 +992,8 @@ def _build_summary_table(
     i18n_count: int,
     mainland_count: int,
     total_abnormal: int,
+    normal_synced: int,
+    new_no_text: int,
     missing: list[Finding],
     changed: list[Finding],
     new_with_text: list[Finding],
@@ -931,13 +1011,25 @@ def _build_summary_table(
         f"<tbody>{tbody1}</tbody></table>"
     )
 
+    normal_rows: list[tuple[str, str, str]] = [
+        ("正常同步文件", f"{normal_synced} 张", "两边都有且修改时间正常"),
+        ("新增无文字图片", f"{new_no_text} 张", "陆版新增但无文字，无需翻译"),
+    ]
+    tbody_normal = "".join(
+        f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>" for r in normal_rows
+    )
+    table_normal = (
+        '<table class="summary-table"><thead><tr><th>正常类型</th><th>数量</th><th>说明</th></tr></thead>'
+        f"<tbody>{tbody_normal}</tbody></table>"
+    )
+
     abnormal_rows: list[tuple[str, str, str]] = []
     if missing:
-        abnormal_rows.append(("文件不存在问题", f"{len(missing)} 张", "国际版有、陆版无（可能已废弃）"))
+        abnormal_rows.append(("疑似废除文件", f"{len(missing)} 张", "国际版有、陆版无（可能已废弃）"))
     if changed:
-        abnormal_rows.append(("时间不对问题", f"{len(changed)} 张", "陆版修改时间晚于国际版（需更新翻译）"))
+        abnormal_rows.append(("修改时间异常", f"{len(changed)} 张", "陆版修改时间晚于国际版（需更新翻译）"))
     if new_with_text:
-        abnormal_rows.append(("新增含文字图片", f"{len(new_with_text)} 张", "陆版新增含文字图片（缺少国际版对应翻译）"))
+        abnormal_rows.append(("新增带文字图片", f"{len(new_with_text)} 张", "陆版新增含文字图片（缺少国际版对应翻译）"))
     for f in others:
         abnormal_rows.append((issue_title(f.issue), "—", f.detail))
 
@@ -953,7 +1045,9 @@ def _build_summary_table(
     <div class="overview">
     <p><strong>一、共检查图片</strong></p>
     {table1}
-    <p style="margin-top:18px;"><strong>二、异常图片：共 <span class="abnormal">{total_abnormal}</span> 张</strong></p>
+    <p style="margin-top:18px;"><strong>二、正常图片：共 <span class="normal-count">{normal_synced + new_no_text}</span> 张</strong></p>
+    {table_normal}
+    <p style="margin-top:18px;"><strong>三、异常图片：共 <span class="abnormal">{total_abnormal}</span> 张</strong></p>
     {table2}
     </div>"""
 
@@ -1179,6 +1273,33 @@ def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
     return pairs
 
 
+def _finding_to_dict(f: Finding) -> dict:
+    return {
+        "category": f.category,
+        "issue": f.issue,
+        "relative_path": f.relative_path,
+        "i18n_path": f.i18n_path,
+        "mainland_path": f.mainland_path,
+        "i18n_modified_at": f.i18n_modified_at.isoformat() if f.i18n_modified_at else None,
+        "mainland_modified_at": f.mainland_modified_at.isoformat() if f.mainland_modified_at else None,
+        "detail": f.detail,
+        "mainland_created_at": f.mainland_created_at.isoformat() if f.mainland_created_at else None,
+        "mainland_ocr_text": f.mainland_ocr_text,
+        "i18n_ocr_text": f.i18n_ocr_text,
+        "translation_status": f.translation_status,
+        "translation_note": f.translation_note,
+    }
+
+
+def _save_intermediate(path: Path, findings: list[Finding], i18n_count: int, mainland_count: int) -> None:
+    data = {
+        "i18n_count": i18n_count,
+        "mainland_count": mainland_count,
+        "findings": [_finding_to_dict(f) for f in findings],
+    }
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+
+
 def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str, int]]:
     last_check_at = args.since or load_last_check(Path(args.state_file))
     if args.assume_new_has_text:
@@ -1196,20 +1317,43 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
     all_findings: list[Finding] = []
     total_i18n = 0
     total_mainland = 0
+    total_normal_synced = 0
+    total_new_no_text = 0
 
-    for pair in pairs:
+    intermediate_path = Path(args.output).with_suffix(".intermediate.json")
+    pair_count = len(pairs)
+
+    for idx, pair in enumerate(pairs, 1):
+        name = pair.get("name", "") or pair["mainland"]
+        print(f"[{idx}/{pair_count}] 正在扫描: {name}", file=sys.stderr)
         is_remote = pair["i18n"].lower().startswith(("http://", "https://"))
         scanner = scan_svn if is_remote else scan_local
+        print(f"  扫描国际版目录: {pair['i18n']}", file=sys.stderr)
         i18n_files = scanner(pair["i18n"])
+        print(f"  扫描陆版目录: {pair['mainland']}", file=sys.stderr)
         mainland_files = scanner(pair["mainland"])
+        print(f"  国际版 {len(i18n_files)} 张, 陆版 {len(mainland_files)} 张", file=sys.stderr)
         total_i18n += len(i18n_files)
         total_mainland += len(mainland_files)
         i18n_files, mainland_files = apply_max_file_sample(
             i18n_files, mainland_files, args.max_files,
         )
-        all_findings.extend(
-            compare_category(pair.get("name", ""), i18n_files, mainland_files, last_check_at, detector)
+        pair_findings, pair_stats = compare_category(
+            pair.get("name", ""), i18n_files, mainland_files, last_check_at, detector
         )
+        all_findings.extend(pair_findings)
+        total_normal_synced += pair_stats["normal_synced"]
+        total_new_no_text += pair_stats["new_no_text"]
+        print(
+            f"  正常同步 {pair_stats['normal_synced']} 张, "
+            f"新增无文字 {pair_stats['new_no_text']} 张, "
+            f"发现问题 {len(pair_findings)} 项, "
+            f"累计 {len(all_findings)} 项",
+            file=sys.stderr,
+        )
+        # 每完成一个 pair 就保存中间结果，防止长时间运行后崩溃丢失数据
+        _save_intermediate(intermediate_path, all_findings, total_i18n, total_mainland)
+        print(f"  中间结果已保存到: {intermediate_path}", file=sys.stderr)
 
     if getattr(args, "enable_translation_check", False):
         api_key = os.environ.get("ANTHROPIC_API_KEY") or getattr(args, "anthropic_api_key", None)
@@ -1225,8 +1369,16 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
             )
         checker = make_translation_checker(api_key)
         all_findings = enrich_findings_with_translation(all_findings, checker)
+        _save_intermediate(intermediate_path, all_findings, total_i18n, total_mainland)
+        print(f"  翻译检查完成，中间结果已更新: {intermediate_path}", file=sys.stderr)
 
-    return all_findings, {"i18n_count": total_i18n, "mainland_count": total_mainland}
+    stats = {
+        "i18n_count": total_i18n,
+        "mainland_count": total_mainland,
+        "normal_synced": total_normal_synced,
+        "new_no_text": total_new_no_text,
+    }
+    return all_findings, stats
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -1319,6 +1471,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             findings,
             i18n_count=counts["i18n_count"],
             mainland_count=counts["mainland_count"],
+            normal_synced=counts["normal_synced"],
+            new_no_text=counts["new_no_text"],
         )
     else:
         write_xlsx(
@@ -1328,6 +1482,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             thumbnail_issues,
             no_thumbnail_resize=args.no_thumbnail_resize,
             max_image_px=args.max_image_px,
+            stats=counts,
         )
     if not args.no_save_state:
         save_last_check(Path(args.state_file), check_started_at)

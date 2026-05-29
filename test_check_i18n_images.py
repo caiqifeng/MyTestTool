@@ -29,7 +29,7 @@ def img(rel, when, full=None):
 
 class CheckI18nImagesTest(unittest.TestCase):
     def test_existing_i18n_reports_when_mainland_is_newer(self):
-        findings = compare_category(
+        findings, _stats = compare_category(
             "ui",
             {"a.dds": img("a.dds", "2026-01-01T00:00:00")},
             {"a.dds": img("a.dds", "2026-01-02T00:00:00")},
@@ -40,7 +40,7 @@ class CheckI18nImagesTest(unittest.TestCase):
         self.assertEqual([f.issue for f in findings], ["mainland_changed"])
 
     def test_existing_i18n_matches_paths_case_insensitively(self):
-        findings = compare_category(
+        findings, _stats = compare_category(
             "ui",
             {"active/nomalbp_1.tga": img("Active/NomalBP_1.tga", "2026-01-02T00:00:00")},
             {"active/nomalbp_1.tga": img("Active/NomalBP_1.Tga", "2026-01-01T00:00:00")},
@@ -51,7 +51,7 @@ class CheckI18nImagesTest(unittest.TestCase):
         self.assertEqual(findings, [])
 
     def test_existing_i18n_preserves_original_relative_path_in_findings(self):
-        findings = compare_category(
+        findings, _stats = compare_category(
             "ui",
             {"active/nomalbp_1.tga": img("Active/NomalBP_1.tga", "2026-01-01T00:00:00")},
             {"active/nomalbp_1.tga": img("Active/NomalBP_1.Tga", "2026-01-02T00:00:00")},
@@ -62,7 +62,7 @@ class CheckI18nImagesTest(unittest.TestCase):
         self.assertEqual(findings[0].relative_path, "Active/NomalBP_1.tga")
 
     def test_existing_i18n_ignores_when_i18n_is_same_or_newer(self):
-        findings = compare_category(
+        findings, _stats = compare_category(
             "ui",
             {"a.dds": img("a.dds", "2026-01-02T00:00:00")},
             {"a.dds": img("a.dds", "2026-01-02T00:00:00")},
@@ -73,7 +73,7 @@ class CheckI18nImagesTest(unittest.TestCase):
         self.assertEqual(findings, [])
 
     def test_existing_i18n_reports_when_mainland_missing(self):
-        findings = compare_category(
+        findings, _stats = compare_category(
             "ui",
             {"a.tga": img("a.tga", "2026-01-01T00:00:00")},
             {},
@@ -90,7 +90,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             "text.dds": img("text.dds", "2026-01-03T00:00:00"),
         }
 
-        findings = compare_category(
+        findings, _stats = compare_category(
             "ui",
             {},
             mainland,
@@ -328,12 +328,12 @@ class CheckI18nImagesTest(unittest.TestCase):
             content = out.read_text(encoding="utf-8")
             self.assertIn("多语言图片检查汇总", content)
             self.assertIn("报告详情", content)
-            self.assertIn("文件不存在问题", content)
+            self.assertIn("疑似废除文件", content)
             self.assertIn("summary-table", content)
             self.assertIn("sortTable", content)
             self.assertIn("filterTable", content)
             self.assertIn("陆版创建时间", content)
-            self.assertIn("时间不对问题", content)
+            self.assertIn("修改时间异常", content)
             self.assertIn("报告详情", content)
             self.assertIn("<table", content)
             self.assertIn("<img", content)
