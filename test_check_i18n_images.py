@@ -11,6 +11,7 @@ from check_i18n_images import (
     apply_max_file_sample,
     compare_category,
     enrich_findings_with_translation,
+    ocr_text_detector_factory,
     write_html_report,
     write_xlsx,
 )
@@ -100,7 +101,10 @@ class CheckI18nImagesTest(unittest.TestCase):
 
         self.assertEqual(
             [(f.issue, f.relative_path) for f in findings],
-            [("mainland_new_with_text", "text.dds")],
+            [
+                ("mainland_new_no_text", "plain.dds"),
+                ("mainland_new_with_text", "text.dds"),
+            ],
         )
 
     def test_max_file_sample_uses_shared_keys_for_both_sides(self):
@@ -161,6 +165,88 @@ class CheckI18nImagesTest(unittest.TestCase):
 
     def test_default_thumbnail_issues_uses_detail_column(self):
         self.assertEqual(DEFAULT_THUMBNAIL_ISSUES, {"__has_detail__"})
+
+    def test_ocr_cache_records_detected_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "NewTest/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+
+            with patch("check_i18n_images.run_ocr", return_value="文字内容"):
+                detector = ocr_text_detector_factory(cache_path)
+                self.assertTrue(detector(image))
+
+            data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
+            self.assertNotIn("has_test", data["NewTest/source.tga"])
+            self.assertEqual(data["NewTest/source.tga"]["test_str"], "文字内容")
+
+    def test_ocr_cache_refreshes_entries_without_detected_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "NewTest/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            md5 = __import__("hashlib").md5(b"fake image").hexdigest()
+            cache_path.write_text(
+                __import__("json").dumps(
+                    {"NewTest/source.tga": {"md5": md5, "has_text": False}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("check_i18n_images.run_ocr", return_value="文字内容"):
+                detector = ocr_text_detector_factory(cache_path)
+                self.assertTrue(detector(image))
+
+            data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
+            self.assertNotIn("has_test", data["NewTest/source.tga"])
+            self.assertEqual(data["NewTest/source.tga"]["test_str"], "文字内容")
+
+    def test_ocr_cache_removes_legacy_has_test_on_cache_hit(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "NewTest/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            md5 = __import__("hashlib").md5(b"fake image").hexdigest()
+            cache_path.write_text(
+                __import__("json").dumps(
+                    {
+                        "NewTest/source.tga": {
+                            "md5": md5,
+                            "has_text": True,
+                            "has_test": True,
+                            "test_str": "文字内容",
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            detector = ocr_text_detector_factory(cache_path)
+            self.assertTrue(detector(image))
+
+            data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
+            self.assertNotIn("has_test", data["NewTest/source.tga"])
+            self.assertEqual(data["NewTest/source.tga"]["test_str"], "文字内容")
 
     def test_write_xlsx_embeds_thumbnail_when_detail_is_present_by_default(self):
         try:
@@ -332,7 +418,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("summary-table", content)
             self.assertIn("sortTable", content)
             self.assertIn("filterTable", content)
-            self.assertIn("陆版创建时间", content)
+            self.assertNotIn("陆版创建时间", content)
             self.assertIn("修改时间异常", content)
             self.assertIn("报告详情", content)
             self.assertIn("<table", content)
@@ -340,6 +426,74 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("data-full-src=", content)
             self.assertIn("openPreview", content)
             self.assertIn("report_assets/", content)
+
+    def test_write_html_report_includes_new_no_text_review_rows_and_ocr_text(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+
+        with tempfile.TemporaryDirectory() as td:
+            img_path = Path(td) / "source.tga"
+            Image.new("RGB", (16, 16), (255, 0, 0)).save(img_path)
+            out = Path(td) / "report.html"
+            write_html_report(
+                out,
+                [
+                    Finding(
+                        "ui",
+                        "mainland_new_with_text",
+                        "NewTest/text.tga",
+                        "",
+                        str(img_path),
+                        None,
+                        dt.datetime(2026, 1, 2, tzinfo=UTC),
+                        "text detail",
+                        mainland_ocr_text="大剑网三",
+                    ),
+                    Finding(
+                        "ui",
+                        "mainland_new_no_text",
+                        "NewTest/plain.tga",
+                        "",
+                        str(img_path),
+                        None,
+                        dt.datetime(2026, 1, 2, tzinfo=UTC),
+                        "review detail",
+                    ),
+                ],
+                new_no_text=1,
+            )
+
+            content = out.read_text(encoding="utf-8")
+            cn = lambda value: value.encode("ascii").decode("unicode_escape")
+            self.assertIn("NewTest/plain.tga", content)
+            self.assertIn(cn(r"\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"), content)
+            self.assertIn(cn(r"\u8bc6\u522b\u6587\u5b57"), content)
+            self.assertIn(cn(r"\u5927\u5251\u7f51\u4e09"), content)
+            self.assertIn("report-shell", content)
+            self.assertIn(cn(r"\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171"), content)
+            self.assertIn(cn(r"\u4e09\u3001\u5f02\u5e38\u56fe\u7247\uff1a\u5171"), content)
+            self.assertNotIn("metric-grid", content)
+            self.assertNotIn('class="summary-card', content)
+            header_row_start = content.index(cn(r"\u7c7b\u522b") + "<span")
+            header_row_end = content.index("</tr>", header_row_start)
+            header_row = content[header_row_start:header_row_end]
+            expected_order = [
+                cn(r"\u7c7b\u522b"),
+                cn(r"\u95ee\u9898\u7c7b\u578b"),
+                cn(r"\u76f8\u5bf9\u8def\u5f84"),
+                cn(r"\u9646\u7248\u56fe\u7247"),
+                cn(r"\u56fd\u9645\u7248\u56fe\u7247"),
+                cn(r"\u9646\u7248\u4fee\u6539\u65f6\u95f4"),
+                cn(r"\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4"),
+                cn(r"\u8bf4\u660e"),
+                cn(r"\u8bc6\u522b\u6587\u5b57"),
+            ]
+            positions = [header_row.index(label) for label in expected_order]
+            self.assertEqual(positions, sorted(positions))
+            self.assertNotIn(cn(r"\u9646\u7248\u521b\u5efa\u65f6\u95f4"), header_row)
+            self.assertIn("white-space:nowrap", content)
 
 
 if __name__ == "__main__":

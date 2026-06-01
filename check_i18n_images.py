@@ -34,6 +34,7 @@ TEXT_RUN_RESULT = "\u672c\u8f6e\u6267\u884c\u7ed3\u679c"
 TEXT_MISSING_ISSUE = "\u7591\u4f3c\u5e9f\u9664\u6587\u4ef6"
 TEXT_CHANGED_ISSUE = "\u4fee\u6539\u65f6\u95f4\u5f02\u5e38"
 TEXT_NEW_TEXT_ISSUE = "\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247"
+TEXT_NEW_NO_TEXT_ISSUE = "\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"
 TEXT_REPORT_DETAIL = "\u62a5\u544a\u8be6\u60c5"
 TEXT_OTHER_ISSUE = "\u5176\u4ed6\u95ee\u9898"
 TEXT_CATEGORY = "\u7c7b\u522b"
@@ -144,6 +145,10 @@ def compare_category(
         if since is not None and to_aware_utc(mainland_file.modified_at) <= since:
             continue
         if text_detector(mainland_file):
+            ocr_text_getter = getattr(text_detector, "ocr_text_for", None)
+            mainland_ocr_text = (
+                ocr_text_getter(mainland_file) if callable(ocr_text_getter) else None
+            )
             findings.append(
                 Finding(
                     category,
@@ -155,10 +160,24 @@ def compare_category(
                     mainland_file.modified_at,
                     "陆版新增图片且检测到文字",
                     mainland_created_at=mainland_file.created_at,
+                    mainland_ocr_text=mainland_ocr_text,
                 )
             )
         else:
             new_no_text += 1
+            findings.append(
+                Finding(
+                    category,
+                    "mainland_new_no_text",
+                    mainland_file.relative_path,
+                    "",
+                    mainland_file.full_path,
+                    None,
+                    mainland_file.modified_at,
+                    "陆版新增图片，OCR 未检测到文字，建议人工复核",
+                    mainland_created_at=mainland_file.created_at,
+                )
+            )
     return findings, {"normal_synced": normal_synced, "new_no_text": new_no_text}
 
 
@@ -275,12 +294,90 @@ def _tesseract_exe() -> str:
 
 def _tesseract_env() -> dict[str, str]:
     env = os.environ.copy()
-    # ensure TESSDATA_PREFIX points to a writable location with chi_sim/chi_tra
     if "TESSDATA_PREFIX" not in env:
-        user_tessdata = str(Path.home() / "tessdata")
-        if os.path.isdir(user_tessdata):
-            env["TESSDATA_PREFIX"] = str(Path.home())
+        exe_path = Path(_tesseract_exe())
+        install_tessdata = exe_path.parent / "tessdata"
+        user_tessdata = Path.home() / "tessdata"
+        candidates = [user_tessdata, install_tessdata]
+        selected = next(
+            (
+                path
+                for path in candidates
+                if (path / "chi_sim.traineddata").is_file()
+                or (path / "chi_tra.traineddata").is_file()
+            ),
+            None,
+        )
+        if selected is None:
+            selected = next((path for path in candidates if path.is_dir()), None)
+        if selected is not None:
+            env["TESSDATA_PREFIX"] = str(selected)
     return env
+
+
+def _available_tesseract_langs() -> set[str]:
+    try:
+        proc = subprocess.run(
+            [_tesseract_exe(), "--list-langs"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            check=False,
+            env=_tesseract_env(),
+        )
+    except FileNotFoundError:
+        return set()
+    lines = proc.stdout.decode("utf-8", errors="ignore").splitlines()
+    return {line.strip() for line in lines if line.strip() and not line.startswith("List of")}
+
+
+def _ocr_languages() -> str:
+    available = _available_tesseract_langs()
+    preferred = [lang for lang in ("chi_sim", "chi_tra", "eng") if lang in available]
+    return "+".join(preferred or ["eng"])
+
+
+def _prepare_ocr_sources(source: str) -> tuple[list[str], list[str]]:
+    suffix = PurePosixPath(source).suffix.lower()
+    if suffix not in {".tga", ".dds"}:
+        return [source], []
+    try:
+        from PIL import Image, ImageEnhance, ImageOps
+    except ImportError:
+        return [source], []
+
+    sources = [source]
+    temps: list[str] = []
+
+    def add_temp(img) -> None:
+        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+        tmp.close()
+        img.save(tmp.name)
+        sources.append(tmp.name)
+        temps.append(tmp.name)
+
+    try:
+        with Image.open(source) as img:
+            rgb = img.convert("RGB")
+            mask = rgb.convert("L").point(lambda v: 255 if v > 20 else 0)
+            bbox = mask.getbbox()
+            cropped = rgb.crop(bbox) if bbox else rgb
+            add_temp(cropped.convert("RGBA"))
+            up3 = cropped.resize((cropped.width * 3, cropped.height * 3))
+            add_temp(up3.convert("RGBA"))
+
+            gray = ImageOps.grayscale(up3)
+            gray = ImageEnhance.Contrast(gray).enhance(2.5)
+            add_temp(gray.point(lambda v: 0 if v > 35 else 255))
+    except Exception:
+        return sources, temps
+    return sources, temps
+
+
+def _ocr_text_score(text: str) -> int:
+    chinese = len(re.findall(r"[一-鿿]", text))
+    ascii_words = len(re.findall(r"[A-Za-z0-9]", text))
+    noise = len(re.findall(r"[�Î˝ˋ′`\\/_{}\[\]<>]", text))
+    return chinese * 10 + ascii_words - noise * 2
 
 
 def _is_tesseract_available() -> bool:
@@ -301,6 +398,7 @@ def run_ocr(image: ImageFile) -> str | None:
     """Run tesseract OCR on an image; return extracted text or None on failure."""
     source = image.full_path
     local_temp: str | None = None
+    converted_temps: list[str] = []
     try:
         if source.lower().startswith(("http://", "https://")):
             suffix = PurePosixPath(source).suffix
@@ -308,15 +406,25 @@ def run_ocr(image: ImageFile) -> str | None:
                 fp.write(run_svn(["cat", source]))
                 local_temp = fp.name
                 source = fp.name
-        proc = subprocess.run(
-            [_tesseract_exe(), source, "stdout", "-l", "chi_sim+chi_tra+eng"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            env=_tesseract_env(),
-        )
-        text = proc.stdout.decode("utf-8", errors="ignore").strip()
-        return text if text else None
+        sources, converted_temps = _prepare_ocr_sources(source)
+        best_text = ""
+        lang = _ocr_languages()
+        for candidate in sources:
+            psm_values = ["3"]
+            if candidate != source:
+                psm_values.extend(["6", "11"])
+            for psm in psm_values:
+                proc = subprocess.run(
+                    [_tesseract_exe(), candidate, "stdout", "-l", lang, "--psm", psm],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                    env=_tesseract_env(),
+                )
+                text = proc.stdout.decode("utf-8", errors="ignore").strip()
+                if text and _ocr_text_score(text) > _ocr_text_score(best_text):
+                    best_text = text
+        return best_text if best_text else None
     except Exception as exc:
         print(f"WARN: OCR 失败: {image.full_path}: {exc}", file=sys.stderr)
         return None
@@ -324,6 +432,11 @@ def run_ocr(image: ImageFile) -> str | None:
         if local_temp:
             try:
                 os.unlink(local_temp)
+            except OSError:
+                pass
+        for converted_temp in converted_temps:
+            try:
+                os.unlink(converted_temp)
             except OSError:
                 pass
 
@@ -386,16 +499,37 @@ def ocr_text_detector_factory(
         file_md5 = _file_md5(image.full_path)
         if file_key in cache:
             entry = cache[file_key]
-            if isinstance(entry, dict) and entry.get("md5") == file_md5:
+            if (
+                isinstance(entry, dict)
+                and entry.get("md5") == file_md5
+                and "test_str" in entry
+            ):
+                if "has_test" in entry:
+                    entry.pop("has_test", None)
+                    if cache_path is not None:
+                        save_ocr_cache(cache_path, cache)
                 return bool(entry.get("has_text", False))
 
         text = run_ocr(image)
         has_text = bool(re.search(r"[\w一-鿿]", text or ""))
-        cache[file_key] = {"md5": file_md5, "has_text": has_text}
+        cache[file_key] = {
+            "md5": file_md5,
+            "has_text": has_text,
+            "test_str": text or "",
+        }
         if cache_path is not None:
             save_ocr_cache(cache_path, cache)
         return has_text
 
+    def ocr_text_for(image: ImageFile) -> str | None:
+        entry = cache.get(image.relative_path)
+        if isinstance(entry, dict):
+            text = entry.get("test_str")
+            if isinstance(text, str) and text:
+                return text
+        return None
+
+    setattr(detect, "ocr_text_for", ocr_text_for)
     return detect
 
 
@@ -857,6 +991,7 @@ def issue_title(issue: str) -> str:
         "mainland_missing": TEXT_MISSING_ISSUE,
         "mainland_changed": TEXT_CHANGED_ISSUE,
         "mainland_new_with_text": TEXT_NEW_TEXT_ISSUE,
+        "mainland_new_no_text": TEXT_NEW_NO_TEXT_ISSUE,
     }.get(issue, issue)
 
 
@@ -917,67 +1052,78 @@ def write_html_report(
     missing = [f for f in findings if f.issue == "mainland_missing"]
     changed = [f for f in findings if f.issue == "mainland_changed"]
     new_with_text = [f for f in findings if f.issue == "mainland_new_with_text"]
-    others = [f for f in findings if f.issue not in {"mainland_missing", "mainland_changed", "mainland_new_with_text"}]
+    new_without_text = [f for f in findings if f.issue == "mainland_new_no_text"]
+    others = [
+        f for f in findings
+        if f.issue not in {
+            "mainland_missing",
+            "mainland_changed",
+            "mainland_new_with_text",
+            "mainland_new_no_text",
+        }
+    ]
 
     issue_type_labels = {
-        "mainland_missing": "国际版有、陆版无（可能已废弃）",
-        "mainland_changed": "陆版修改时间晚于国际版（需更新翻译）",
-        "mainland_new_with_text": "陆版新增含文字图片（缺少国际版对应翻译）",
+        "mainland_missing": "\u56fd\u9645\u7248\u5b58\u5728\u4f46\u9646\u7248\u7f3a\u5931\uff0c\u7591\u4f3c\u5e9f\u5f03\u6216\u8def\u5f84\u4e0d\u4e00\u81f4",
+        "mainland_changed": "\u9646\u7248\u4fee\u6539\u65f6\u95f4\u665a\u4e8e\u56fd\u9645\u7248\uff0c\u9700\u8981\u786e\u8ba4\u56fd\u9645\u7248\u662f\u5426\u540c\u6b65",
+        "mainland_new_with_text": "\u9646\u7248\u65b0\u589e\u4e14 OCR \u8bc6\u522b\u5230\u6587\u5b57\uff0c\u9700\u8981\u8865\u5145\u56fd\u9645\u7248\u7ffb\u8bd1",
+        "mainland_new_no_text": "\u9646\u7248\u65b0\u589e\u4f46 OCR \u672a\u8bc6\u522b\u6587\u5b57\uff0c\u8fdb\u5165\u8be6\u60c5\u4f9b\u4eba\u5de5\u590d\u6838",
     }
 
     def issue_summary_card(issue_key: str, items: list[Finding], index: int) -> str:
         label = issue_type_labels.get(issue_key, issue_key)
         return (
-            f"<section><h3>{index}、{issue_title(issue_key)}：{len(items)} {TEXT_ITEM}</h3>"
-            f"<p>{label}</p>"
-            f"<ul>{_summary_items(items)}</ul></section>"
+            f'<section class="summary-card {html.escape(issue_key)}">'
+            f'<h3>{index}. {html.escape(issue_title(issue_key))}: {len(items)} {TEXT_ITEM}</h3>'
+            f'<p>{html.escape(label)}</p>'
+            f'<ul>{_summary_items(items)}</ul></section>'
         )
 
     summary_cards: list[str] = []
     card_index = 0
-    if missing:
-        card_index += 1
-        summary_cards.append(issue_summary_card("mainland_missing", missing, card_index))
-    if changed:
-        card_index += 1
-        summary_cards.append(issue_summary_card("mainland_changed", changed, card_index))
-    if new_with_text:
-        card_index += 1
-        summary_cards.append(issue_summary_card("mainland_new_with_text", new_with_text, card_index))
+    for issue_key, items in (
+        ("mainland_missing", missing),
+        ("mainland_changed", changed),
+        ("mainland_new_with_text", new_with_text),
+        ("mainland_new_no_text", new_without_text),
+    ):
+        if items:
+            card_index += 1
+            summary_cards.append(issue_summary_card(issue_key, items, card_index))
     if others:
         card_index += 1
         summary_cards.append(
-            f"<section><h3>{card_index}、{TEXT_OTHER_ISSUE}：{len(others)} {TEXT_ITEM}</h3>"
-            f"<ul>{_summary_items(others)}</ul></section>"
+            f'<section class="summary-card other"><h3>{card_index}. {TEXT_OTHER_ISSUE}: {len(others)} {TEXT_ITEM}</h3>'
+            f'<ul>{_summary_items(others)}</ul></section>'
         )
 
     rows = []
     for index, finding in enumerate(findings, 1):
         i18n_asset = make_html_image_asset(finding.i18n_path, assets_dir, index, "i18n")
         mainland_asset = make_html_image_asset(finding.mainland_path, assets_dir, index, "mainland")
+        issue_class = html.escape(finding.issue.replace("_", "-"))
         rows.append(
-            "<tr>"
-            f"<td>{html.escape(finding.category)}</td>"
-            f"<td>{html.escape(issue_title(finding.issue))}</td>"
-            f"<td class=\"path\">{html.escape(finding.relative_path)}</td>"
-            f"<td>{html_img(i18n_asset, TEXT_I18N + ' ' + finding.relative_path)}</td>"
-            f"<td>{html_img(mainland_asset, TEXT_MAINLAND + ' ' + finding.relative_path)}</td>"
-            f"<td>{html.escape(format_dt(finding.i18n_modified_at))}</td>"
-            f"<td>{html.escape(format_dt(finding.mainland_modified_at))}</td>"
-            f"<td>{html.escape(format_dt(finding.mainland_created_at))}</td>"
-            f"<td>{html.escape(finding.detail)}</td>"
-            "</tr>"
+            f'<tr class="{issue_class}">'
+            f'<td>{html.escape(finding.category)}</td>'
+            f'<td><span class="issue-badge {issue_class}">{html.escape(issue_title(finding.issue))}</span></td>'
+            f'<td class="path">{html.escape(finding.relative_path)}</td>'
+            f'<td>{html_img(mainland_asset, TEXT_MAINLAND + " " + finding.relative_path)}</td>'
+            f'<td>{html_img(i18n_asset, TEXT_I18N + " " + finding.relative_path)}</td>'
+            f'<td>{html.escape(format_dt(finding.mainland_modified_at))}</td>'
+            f'<td>{html.escape(format_dt(finding.i18n_modified_at))}</td>'
+            f'<td>{html.escape(finding.detail)}</td>'
+            f'<td class="ocr-text">{html.escape(finding.mainland_ocr_text or "")}</td>'
+            '</tr>'
         )
 
-    total_abnormal = len(findings)
+    total_abnormal = len(findings) - len(new_without_text)
     summary_table = _build_summary_table(
         i18n_count, mainland_count, total_abnormal,
         normal_synced, new_no_text,
-        missing, changed, new_with_text, others,
+        missing, changed, new_with_text, others, new_without_text,
     )
     doc = _html_template(summary_table, summary_cards, rows)
     path.write_text(doc, encoding="utf-8")
-
 
 def _summary_items(items: Sequence[Finding]) -> str:
     if not items:
@@ -998,190 +1144,185 @@ def _build_summary_table(
     changed: list[Finding],
     new_with_text: list[Finding],
     others: list[Finding],
+    new_without_text: list[Finding] | None = None,
 ) -> str:
-    rows = [
-        ("国际版图片", f"{i18n_count} 张"),
-        ("陆版图片", f"{mainland_count} 张"),
-    ]
-    tbody1 = "".join(
-        f"<tr><td>{r[0]}</td><td>{r[1]}</td></tr>" for r in rows
+    new_without_text = new_without_text or []
+    checked_rows = "".join(
+        f"<tr><td>{label}</td><td>{count} 张</td></tr>"
+        for label, count in [
+            ("\u56fd\u9645\u7248\u56fe\u7247", i18n_count),
+            ("\u9646\u7248\u56fe\u7247", mainland_count),
+        ]
     )
-    table1 = (
-        '<table class="summary-table"><thead><tr><th>指标</th><th>数量</th></tr></thead>'
-        f"<tbody>{tbody1}</tbody></table>"
+    normal_rows = "".join(
+        f"<tr><td>{label}</td><td>{count} 张</td><td>{note}</td></tr>"
+        for label, count, note in [
+            ("\u6b63\u5e38\u540c\u6b65\u6587\u4ef6", normal_synced, "\u4e24\u8fb9\u90fd\u6709\u4e14\u4fee\u6539\u65f6\u95f4\u6b63\u5e38"),
+            ("\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247", len(new_without_text), "\u9646\u7248\u65b0\u589e\u65e0\u6587\u5b57\uff0c\u8be6\u60c5\u4e2d\u4f9b\u4eba\u5de5\u590d\u6838"),
+        ]
     )
-
-    normal_rows: list[tuple[str, str, str]] = [
-        ("正常同步文件", f"{normal_synced} 张", "两边都有且修改时间正常"),
-        ("新增无文字图片", f"{new_no_text} 张", "陆版新增但无文字，无需翻译"),
-    ]
-    tbody_normal = "".join(
-        f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>" for r in normal_rows
+    abnormal_rows = "".join(
+        f"<tr><td>{label}</td><td>{count} 张</td><td>{note}</td></tr>"
+        for label, count, note in [
+            ("\u7591\u4f3c\u5e9f\u5f03\u6587\u4ef6", len(missing), "\u56fd\u9645\u7248\u6709\u3001\u9646\u7248\u65e0\uff08\u53ef\u80fd\u5df2\u5e9f\u5f03\uff09"),
+            ("\u4fee\u6539\u65f6\u95f4\u5f02\u5e38", len(changed), "\u9646\u7248\u4fee\u6539\u65f6\u95f4\u665a\u4e8e\u56fd\u9645\u7248\uff08\u9700\u66f4\u65b0\u7ffb\u8bd1\uff09"),
+            ("\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247", len(new_with_text), "\u9646\u7248\u65b0\u589e\u542b\u6587\u5b57\u56fe\u7247\uff08\u7f3a\u5c11\u56fd\u9645\u7248\u5bf9\u5e94\u7ffb\u8bd1\uff09"),
+        ]
     )
-    table_normal = (
-        '<table class="summary-table"><thead><tr><th>正常类型</th><th>数量</th><th>说明</th></tr></thead>'
-        f"<tbody>{tbody_normal}</tbody></table>"
-    )
-
-    abnormal_rows: list[tuple[str, str, str]] = []
-    if missing:
-        abnormal_rows.append(("疑似废除文件", f"{len(missing)} 张", "国际版有、陆版无（可能已废弃）"))
-    if changed:
-        abnormal_rows.append(("修改时间异常", f"{len(changed)} 张", "陆版修改时间晚于国际版（需更新翻译）"))
-    if new_with_text:
-        abnormal_rows.append(("新增带文字图片", f"{len(new_with_text)} 张", "陆版新增含文字图片（缺少国际版对应翻译）"))
-    for f in others:
-        abnormal_rows.append((issue_title(f.issue), "—", f.detail))
-
-    tbody2 = "".join(
-        f"<tr><td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td></tr>" for r in abnormal_rows
-    )
-    table2 = (
-        '<table class="summary-table"><thead><tr><th>问题类型</th><th>数量</th><th>说明</th></tr></thead>'
-        f"<tbody>{tbody2}</tbody></table>"
-    )
-
+    if others:
+        abnormal_rows += "".join(
+            f"<tr><td>{html.escape(issue_title(f.issue))}</td><td>1 张</td><td>{html.escape(f.detail)}</td></tr>"
+            for f in others
+        )
     return f"""
-    <div class="overview">
-    <p><strong>一、共检查图片</strong></p>
-    {table1}
-    <p style="margin-top:18px;"><strong>二、正常图片：共 <span class="normal-count">{normal_synced + new_no_text}</span> 张</strong></p>
-    {table_normal}
-    <p style="margin-top:18px;"><strong>三、异常图片：共 <span class="abnormal">{total_abnormal}</span> 张</strong></p>
-    {table2}
-    </div>"""
+    <section class="report-shell">
+      <div class="hero-panel">
+        <div>
+          <p class="eyebrow">Image Localization Audit</p>
+          <h1>{TEXT_REPORT_TITLE}</h1>
+          <p class="subtitle">\u81ea\u52a8\u68c0\u67e5\u56fd\u9645\u7248\u4e0e\u9646\u7248\u56fe\u7247\u5dee\u5f02\uff0c\u8f93\u51fa\u5f02\u5e38\u9879\u3001\u590d\u6838\u9879\u3001\u7f29\u7565\u56fe\u548c OCR \u8bc6\u522b\u6587\u672c\u3002</p>
+        </div>
+        <div class="run-result"><span>{TEXT_RUN_RESULT}</span><strong>{total_abnormal}</strong><small>\u5f02\u5e38\u9879</small></div>
+      </div>
+      <div class="issue-breakdown">
+        <p><strong>\u4e00\u3001\u5171\u68c0\u67e5\u56fe\u7247</strong></p>
+        <table class="summary-table"><thead><tr><th>\u6307\u6807</th><th>\u6570\u91cf</th></tr></thead><tbody>{checked_rows}</tbody></table>
+        <p class="summary-heading"><strong>\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171 {normal_synced + len(new_without_text)} \u5f20</strong></p>
+        <table class="summary-table"><thead><tr><th>\u6b63\u5e38\u7c7b\u578b</th><th>\u6570\u91cf</th><th>\u8bf4\u660e</th></tr></thead><tbody>{normal_rows}</tbody></table>
+        <p class="summary-heading"><strong>\u4e09\u3001\u5f02\u5e38\u56fe\u7247\uff1a\u5171 <span class="abnormal-count">{total_abnormal}</span> \u5f20</strong></p>
+        <table class="summary-table"><thead><tr><th>\u95ee\u9898\u7c7b\u578b</th><th>\u6570\u91cf</th><th>\u8bf4\u660e</th></tr></thead><tbody>{abnormal_rows}</tbody></table>
+      </div>
+    </section>
+    """
 
 
-def _html_template(summary_table: str, summary_cards: str, rows: str) -> str:
+def _html_template(summary_table: str, summary_cards: list[str], rows: list[str]) -> str:
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <title>{TEXT_REPORT_TITLE}</title>
 <style>
-body {{ margin: 0; font-family: "Microsoft YaHei", Arial, sans-serif; color: #1f2933; background: #f7f8fa; }}
-main {{ max-width: 1560px; margin: 0 auto; padding: 28px; }}
-h1 {{ margin: 0 0 20px; font-size: 28px; }}
-h2 {{ margin: 28px 0 12px; font-size: 20px; }}
-.overview {{ background: #fff; border: 1px solid #d9dee7; border-radius: 6px; padding: 16px 20px; margin-bottom: 20px; }}
-.overview p {{ margin: 6px 0; font-size: 15px; line-height: 1.8; }}
-.overview .abnormal {{ font-weight: bold; color: #d93025; }}
-.summary-table {{ width: 100%; border-collapse: collapse; margin: 8px 0; }}
-.summary-table th, .summary-table td {{ border: 1px solid #d9dee7; padding: 8px 12px; font-size: 14px; text-align: left; }}
-.summary-table th {{ background: #eef2f7; font-weight: bold; }}
-.summary {{ display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; }}
-.summary section {{ background: #fff; border: 1px solid #d9dee7; border-radius: 6px; padding: 16px; }}
-.summary h3 {{ margin: 0 0 6px; font-size: 16px; }}
-.summary p {{ margin: 0 0 8px; color: #5f6368; font-size: 13px; }}
-.summary ul {{ margin: 0; padding-left: 20px; max-height: 260px; overflow: auto; font-size: 13px; }}
-.filter-bar {{ display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }}
-.filter-bar input {{ padding: 4px 8px; border: 1px solid #c8d0dc; border-radius: 3px; font-size: 12px; width: 100%; box-sizing: border-box; }}
-.table-wrap {{ overflow: auto; background: #fff; border: 1px solid #d9dee7; border-radius: 6px; }}
-table {{ width: 100%; border-collapse: collapse; table-layout: fixed; }}
-th, td {{ border-bottom: 1px solid #e5e9f0; padding: 10px; vertical-align: top; font-size: 13px; }}
-th {{ position: sticky; top: 0; background: #eef2f7; text-align: left; z-index: 1; cursor: pointer; user-select: none; white-space: nowrap; }}
-th:hover {{ background: #d9dee7; }}
-th .sort-icon {{ margin-left: 4px; font-size: 11px; color: #999; }}
-th.sorted-asc .sort-icon::after {{ content: " ▲"; color: #1a73e8; }}
-th.sorted-desc .sort-icon::after {{ content: " ▼"; color: #1a73e8; }}
-.path {{ word-break: break-all; }}
-.thumb-button {{ width: 180px; height: 120px; padding: 0; border: 1px solid #c8d0dc; background: #f9fafb; cursor: zoom-in; display: inline-flex; align-items: center; justify-content: center; }}
-.thumb-button img {{ max-width: 178px; max-height: 118px; object-fit: contain; }}
-.overlay {{ position: fixed; inset: 0; background: rgba(15, 23, 42, .82); display: none; align-items: center; justify-content: center; padding: 32px; z-index: 20; }}
-.overlay.open {{ display: flex; }}
-.preview {{ max-width: 96vw; max-height: 92vh; background: #fff; border-radius: 6px; padding: 12px; }}
-.preview img {{ max-width: 92vw; max-height: 82vh; object-fit: contain; display: block; }}
-.preview-title {{ margin: 0 0 8px; font-size: 14px; color: #334155; word-break: break-all; }}
-.no-results {{ text-align: center; padding: 40px; color: #999; font-size: 15px; }}
+:root {{ --bg:#f4f6f8; --panel:#ffffff; --text:#1f2937; --muted:#64748b; --line:#d8dee8; --header:#102033; --danger:#b42318; --warning:#b76e00; --review:#475569; }}
+* {{ box-sizing:border-box; }}
+body {{ margin:0; font-family:"Microsoft YaHei", "Segoe UI", Arial, sans-serif; color:var(--text); background:var(--bg); }}
+main {{ max-width:1680px; margin:0 auto; padding:28px; }}
+.report-shell {{ display:grid; gap:18px; }}
+.hero-panel {{ display:flex; justify-content:space-between; gap:24px; align-items:stretch; background:linear-gradient(135deg,#102033,#243b55); color:white; border-radius:8px; padding:26px 30px; box-shadow:0 14px 30px rgba(15,23,42,.14); }}
+.hero-panel h1 {{ margin:4px 0 8px; font-size:30px; letter-spacing:0; }}
+.eyebrow {{ margin:0; color:#c6d3e1; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }}
+.subtitle {{ margin:0; color:#d9e3ef; font-size:14px; }}
+.run-result {{ min-width:160px; border:1px solid rgba(255,255,255,.24); border-radius:6px; padding:16px; text-align:center; background:rgba(255,255,255,.08); }}
+.run-result span,.run-result small {{ display:block; color:#d9e3ef; }}
+.run-result strong {{ display:block; font-size:42px; line-height:1.1; }}
+.metric-card,.issue-breakdown,.detail-panel {{ background:var(--panel); border:1px solid var(--line); border-radius:8px; }}
+.metric-card {{ padding:14px 16px; }}
+.metric-card span {{ display:block; color:var(--muted); font-size:13px; }}
+.metric-card strong {{ display:block; margin-top:4px; font-size:28px; }}
+.metric-card small {{ display:block; margin-top:6px; color:var(--muted); line-height:1.4; }}
+.issue-breakdown {{ padding:16px 18px; }}
+.issue-breakdown p {{ margin:6px 0; font-size:15px; line-height:1.8; }}
+.summary-heading {{ margin-top:18px !important; }}
+.abnormal-count {{ color:#d93025; font-weight:700; }}
+h2 {{ margin:0 0 12px; font-size:18px; }}
+.summary-table {{ width:100%; border-collapse:collapse; }}
+.summary-table th,.summary-table td {{ border-bottom:1px solid #e7ebf1; padding:10px 12px; text-align:left; font-size:13px; }}
+.summary-table th {{ background:#f0f4f8; color:#334155; font-weight:600; }}
+.detail-panel {{ overflow:hidden; }}
+.detail-toolbar {{ padding:16px 18px; border-bottom:1px solid var(--line); }}
+.detail-toolbar p {{ margin:0; color:var(--muted); font-size:13px; }}
+.table-wrap {{ overflow:auto; max-height:calc(100vh - 160px); }}
+table {{ width:100%; border-collapse:collapse; table-layout:fixed; }}
+th,td {{ border-bottom:1px solid #e7ebf1; padding:10px; vertical-align:top; font-size:13px; }}
+th {{ position:sticky; top:0; background:#eef3f8; color:#334155; z-index:2; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }}
+.filter-row th {{ top:39px; background:#f8fafc; cursor:default; }}
+.filter-row input {{ width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:12px; }}
+.path {{ word-break:break-all; }}
+.ocr-text {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+.issue-badge {{ display:inline-flex; align-items:center; border-radius:999px; padding:3px 8px; font-size:12px; font-weight:600; white-space:nowrap; }}
+.issue-badge.mainland-missing,.issue-badge.mainland-new-with-text {{ color:#7a271a; background:#fee4e2; }}
+.issue-badge.mainland-changed {{ color:#7a4a00; background:#ffefd0; }}
+.issue-badge.mainland-new-no-text {{ color:#334155; background:#e2e8f0; }}
+.thumb-button {{ width:168px; height:110px; padding:0; border:1px solid #cbd5e1; border-radius:5px; background:#f8fafc; cursor:zoom-in; display:inline-flex; align-items:center; justify-content:center; }}
+.thumb-button img {{ max-width:166px; max-height:108px; object-fit:contain; }}
+.overlay {{ position:fixed; inset:0; background:rgba(15,23,42,.82); display:none; align-items:center; justify-content:center; padding:32px; z-index:20; }}
+.overlay.open {{ display:flex; }}
+.preview {{ max-width:96vw; max-height:92vh; background:#fff; border-radius:8px; padding:12px; }}
+.preview img {{ max-width:92vw; max-height:82vh; object-fit:contain; display:block; }}
+.preview-title {{ margin:0 0 8px; font-size:14px; color:#334155; word-break:break-all; }}
+.no-results {{ text-align:center; padding:40px; color:#94a3b8; font-size:15px; }}
 </style>
 </head>
 <body>
 <main>
-<h1>{TEXT_REPORT_TITLE}</h1>
 {summary_table}
-<h2>{TEXT_REPORT_DETAIL}</h2>
-<div class="table-wrap">
-<table id="detailTable">
-<thead>
-<tr>
-<th onclick="sortTable(0)" class="sorted-asc">类别<span class="sort-icon"></span></th>
-<th onclick="sortTable(1)">问题类型<span class="sort-icon"></span></th>
-<th onclick="sortTable(2)">相对路径<span class="sort-icon"></span></th>
-<th>国际版图片</th>
-<th>陆版图片</th>
-<th onclick="sortTable(5)">国际版修改时间<span class="sort-icon"></span></th>
-<th onclick="sortTable(6)">陆版修改时间<span class="sort-icon"></span></th>
-<th onclick="sortTable(7)">陆版创建时间<span class="sort-icon"></span></th>
-<th onclick="sortTable(8)">说明<span class="sort-icon"></span></th>
-</tr>
-<tr class="filter-row">
-<th><input type="text" oninput="filterTable()" placeholder="筛选..."></th>
-<th><input type="text" oninput="filterTable()" placeholder="筛选..."></th>
-<th><input type="text" oninput="filterTable()" placeholder="筛选..."></th>
-<th></th>
-<th></th>
-<th><input type="text" oninput="filterTable()" placeholder="筛选..."></th>
-<th><input type="text" oninput="filterTable()" placeholder="筛选..."></th>
-<th><input type="text" oninput="filterTable()" placeholder="筛选..."></th>
-<th><input type="text" oninput="filterTable()" placeholder="筛选..."></th>
-</tr>
-</thead>
-<tbody>
-{''.join(rows)}
-</tbody>
-</table>
-<div class="no-results" id="noResults" style="display:none">没有匹配的结果</div>
-</div>
+<section class="detail-panel">
+  <div class="detail-toolbar"><h2>{TEXT_REPORT_DETAIL}</h2><p>\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247\u4e5f\u4f1a\u5217\u5165\u8be6\u60c5\uff0c\u65b9\u4fbf\u4eba\u5de5\u590d\u6838 OCR \u6f0f\u8bc6\u522b\u6216\u9690\u85cf\u6587\u5b57\u3002</p></div>
+  <div class="table-wrap">
+    <table id="detailTable">
+      <thead>
+        <tr>
+          <th onclick="sortTable(0)">\u7c7b\u522b<span class="sort-icon"></span></th>
+          <th onclick="sortTable(1)">\u95ee\u9898\u7c7b\u578b<span class="sort-icon"></span></th>
+          <th onclick="sortTable(2)">\u76f8\u5bf9\u8def\u5f84<span class="sort-icon"></span></th>
+          <th>\u9646\u7248\u56fe\u7247</th>
+          <th>\u56fd\u9645\u7248\u56fe\u7247</th>
+          <th onclick="sortTable(5)">\u9646\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
+          <th onclick="sortTable(6)">\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
+          <th onclick="sortTable(7)">\u8bf4\u660e<span class="sort-icon"></span></th>
+          <th onclick="sortTable(8)">\u8bc6\u522b\u6587\u5b57<span class="sort-icon"></span></th>
+        </tr>
+        <tr class="filter-row">
+          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th></th><th></th>
+          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+        </tr>
+      </thead>
+      <tbody>{''.join(rows)}</tbody>
+    </table>
+    <div class="no-results" id="noResults" style="display:none">\u6ca1\u6709\u5339\u914d\u7684\u7ed3\u679c</div>
+  </div>
+</section>
 </main>
 <div id="overlay" class="overlay" onclick="closePreview()"><div class="preview" onclick="event.stopPropagation()"><p id="previewTitle" class="preview-title"></p><img id="previewImage" alt=""></div></div>
 <script>
-let sortCol = 0;
-let sortAsc = false;
-
+let sortCol = -1;
+let sortAsc = true;
 function sortTable(col) {{
   const table = document.getElementById('detailTable');
   const tbody = table.querySelector('tbody');
   const rows = Array.from(tbody.querySelectorAll('tr'));
-  const ths = table.querySelectorAll('thead tr:first-child th');
-  ths.forEach((th, i) => {{ th.classList.remove('sorted-asc', 'sorted-desc'); if (i === col) th.classList.add(sortCol === col && sortAsc ? 'sorted-asc' : (sortCol === col ? 'sorted-desc' : 'sorted-asc')); }});
-  if (sortCol === col) {{ sortAsc = !sortAsc; }} else {{ sortCol = col; sortAsc = true; }}
-  rows.sort((a, b) => {{
+  if (sortCol === col) sortAsc = !sortAsc; else {{ sortCol = col; sortAsc = true; }}
+  rows.sort((a,b) => {{
     let va = (a.cells[col]?.textContent || '').trim().toLowerCase();
     let vb = (b.cells[col]?.textContent || '').trim().toLowerCase();
-    let na = parseFloat(va), nb = parseFloat(vb);
-    if (!isNaN(na) && !isNaN(nb)) {{ va = na; vb = nb; }}
     if (va < vb) return sortAsc ? -1 : 1;
     if (va > vb) return sortAsc ? 1 : -1;
     return 0;
   }});
   rows.forEach(r => tbody.appendChild(r));
-  updateFilterState();
+  filterTable();
 }}
-
 function filterTable() {{
   const table = document.getElementById('detailTable');
-  const tbody = table.querySelector('tbody');
-  const rows = Array.from(tbody.querySelectorAll('tr'));
-  const inputs = table.querySelectorAll('.filter-row input');
-  const filters = Array.from(inputs).map(inp => inp.value.trim().toLowerCase());
+  const rows = Array.from(table.querySelectorAll('tbody tr'));
+  const filters = Array.from(table.querySelectorAll('.filter-row input')).map(i => i.value.trim().toLowerCase());
   let visibleCount = 0;
   rows.forEach(row => {{
     let show = true;
     for (let i = 0; i < filters.length; i++) {{
-      if (filters[i] && !(row.cells[i]?.textContent || '').toLowerCase().includes(filters[i])) {{
-        show = false; break;
-      }}
+      if (filters[i] && !(row.cells[i]?.textContent || '').toLowerCase().includes(filters[i])) {{ show = false; break; }}
     }}
     row.style.display = show ? '' : 'none';
     if (show) visibleCount++;
   }});
   document.getElementById('noResults').style.display = visibleCount === 0 ? '' : 'none';
 }}
-
-function updateFilterState() {{
-  filterTable();
-}}
-
 function openPreview(button) {{
   const overlay = document.getElementById('overlay');
   document.getElementById('previewImage').src = button.dataset.fullSrc;
@@ -1192,9 +1333,7 @@ function closePreview() {{
   document.getElementById('overlay').classList.remove('open');
   document.getElementById('previewImage').src = '';
 }}
-document.addEventListener('keydown', function(event) {{
-  if (event.key === 'Escape') closePreview();
-}});
+document.addEventListener('keydown', event => {{ if (event.key === 'Escape') closePreview(); }});
 </script>
 </body>
 </html>
