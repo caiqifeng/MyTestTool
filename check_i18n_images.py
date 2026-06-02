@@ -140,11 +140,15 @@ def compare_category(
             normal_synced += 1
 
     since = to_aware_utc(last_check_at) if last_check_at else None
-    for rel, mainland_file in sorted(mainland_files.items()):
-        if rel in i18n_files:
-            continue
-        if since is not None and to_aware_utc(mainland_file.modified_at) <= since:
-            continue
+    new_mainland_files = [
+        (rel, mainland_file)
+        for rel, mainland_file in sorted(mainland_files.items())
+        if rel not in i18n_files
+        and (since is None or to_aware_utc(mainland_file.modified_at) > since)
+    ]
+    new_total = len(new_mainland_files)
+    for progress_index, (_rel, mainland_file) in enumerate(new_mainland_files, 1):
+        print(f"当前分析进度：{progress_index}/{new_total}", file=sys.stderr)
         if text_detector(mainland_file):
             ocr_text_getter = getattr(text_detector, "ocr_text_for", None)
             mainland_ocr_text = (
@@ -1009,7 +1013,7 @@ def make_html_image_asset(source: str, assets_dir: Path, index: int, side: str) 
     if local is None:
         return file_uri(source)
     assets_dir.mkdir(parents=True, exist_ok=True)
-    out = assets_dir / f"img_{index}_{side}.png"
+    out = assets_dir / f"img_{index}_{side}{local.suffix.lower()}.png"
     try:
         from PIL import Image as PILImage
 
@@ -1021,9 +1025,16 @@ def make_html_image_asset(source: str, assets_dir: Path, index: int, side: str) 
         return f"{assets_dir.name}/{out.name}"
     except Exception:
         try:
-            copy_target = assets_dir / f"img_{index}_{side}{local.suffix.lower()}"
-            shutil.copy2(local, copy_target)
-            return f"{assets_dir.name}/{copy_target.name}"
+            from PIL import Image as PILImage
+            from PIL import ImageDraw
+
+            img = PILImage.new("RGB", (360, 120), (248, 250, 252))
+            draw = ImageDraw.Draw(img)
+            draw.rectangle((0, 0, 359, 119), outline=(203, 213, 225))
+            draw.text((16, 36), "Preview unavailable", fill=(51, 65, 85))
+            draw.text((16, 64), local.name[:42], fill=(100, 116, 139))
+            img.save(out, format="PNG")
+            return f"{assets_dir.name}/{out.name}"
         except Exception:
             return file_uri(source)
 

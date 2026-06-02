@@ -1,4 +1,5 @@
 import datetime as dt
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -108,6 +109,25 @@ class CheckI18nImagesTest(unittest.TestCase):
                 ("mainland_new_with_text", "text.dds"),
             ],
         )
+
+    def test_new_mainland_ocr_progress_is_printed(self):
+        mainland = {
+            "plain.dds": img("plain.dds", "2026-01-03T00:00:00"),
+            "text.dds": img("text.dds", "2026-01-03T00:00:00"),
+        }
+
+        stderr = io.StringIO()
+        with patch("sys.stderr", stderr):
+            compare_category(
+                "ui",
+                {},
+                mainland,
+                dt.datetime(2026, 1, 2, tzinfo=UTC),
+                lambda f: f.relative_path == "text.dds",
+            )
+
+        self.assertIn("当前分析进度：1/2", stderr.getvalue())
+        self.assertIn("当前分析进度：2/2", stderr.getvalue())
 
     def test_max_file_sample_uses_shared_keys_for_both_sides(self):
         i18n = {
@@ -482,7 +502,11 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertGreaterEqual(len(asset_files), 2)
             for asset in asset_files:
                 self.assertGreater(asset.stat().st_size, 0)
+                self.assertEqual(asset.suffix.lower(), ".png")
                 self.assertIn(f'report_assets/{asset.name}', content)
+            self.assertIn("report_assets/img_1_i18n.tga.png", content)
+            self.assertNotIn('src="report_assets/img_1_i18n.tga"', content)
+            self.assertNotIn('src="report_assets/img_1_i18n.dds"', content)
             self.assertNotIn("data:image/png;base64,", content)
             self.assertNotIn(str(img_path), content)
             self.assertNotIn(img_path.resolve().as_uri(), content)
