@@ -1,7 +1,14 @@
-[
-  {
-    "name": "ui",
-    "i18n": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client/i18n/zh_TW/ui/",
-    "mainland": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client/ui/"
-  }
-]
+{
+  "root": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client",
+  "whitelist": [
+    "ui/Image/ExteriorPic",
+    "ui/Image/UItimate/OperationCenter/NewChargeGiftMonthly"
+  ],
+  "pairs": [
+    {
+      "name": "ui",
+      "i18n": "i18n/zh_TW/ui",
+      "mainland": "ui"
+    }
+  ]
+}

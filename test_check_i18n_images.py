@@ -8,6 +8,8 @@ from check_i18n_images import (
     DEFAULT_THUMBNAIL_ISSUES,
     Finding,
     ImageFile,
+    _filter_whitelisted_files,
+    _load_config_pairs,
     apply_max_file_sample,
     compare_category,
     enrich_findings_with_translation,
@@ -122,6 +124,56 @@ class CheckI18nImagesTest(unittest.TestCase):
 
         self.assertEqual(list(sampled_i18n), ["a.tga"])
         self.assertEqual(list(sampled_mainland), ["a.tga", "aa_extra.tga"])
+
+    def test_config_root_expands_relative_pairs_and_whitelist(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = Path(td) / "check_config.json"
+            config.write_text(
+                """
+{
+  "root": "f:/project/client",
+  "whitelist": [
+    "ui\\\\Image\\\\ExteriorPic",
+    "ui/Image/UItimate/OperationCenter/NewChargeGiftMonthly"
+  ],
+  "pairs": [
+    {
+      "name": "ui",
+      "i18n": "i18n/zh_TW/ui",
+      "mainland": "ui"
+    }
+  ]
+}
+""",
+                encoding="utf-8",
+            )
+
+            pairs = _load_config_pairs(str(config))
+
+        self.assertEqual(pairs[0]["i18n"], "f:/project/client/i18n/zh_TW/ui")
+        self.assertEqual(pairs[0]["mainland"], "f:/project/client/ui")
+        self.assertEqual(
+            pairs[0]["whitelist"],
+            [
+                "ui/Image/ExteriorPic",
+                "ui/Image/UItimate/OperationCenter/NewChargeGiftMonthly",
+            ],
+        )
+
+    def test_filter_whitelisted_files_uses_pair_relative_prefix(self):
+        pair = {
+            "i18n_relative": "i18n/zh_TW/ui",
+            "mainland_relative": "ui",
+            "whitelist": ["ui/Image/ExteriorPic"],
+        }
+        files = {
+            "image/exteriorpic/a.tga": img("Image/ExteriorPic/a.tga", "2026-01-01T00:00:00"),
+            "image/keep/b.tga": img("Image/Keep/b.tga", "2026-01-01T00:00:00"),
+        }
+
+        filtered = _filter_whitelisted_files(files, pair)
+
+        self.assertEqual(list(filtered), ["image/keep/b.tga"])
 
     def test_write_xlsx_creates_excel_package(self):
         with tempfile.TemporaryDirectory() as td:
@@ -425,7 +477,15 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("<img", content)
             self.assertIn("data-full-src=", content)
             self.assertIn("openPreview", content)
-            self.assertIn("report_assets/", content)
+            assets_dir = out.parent / "report_assets"
+            asset_files = sorted(assets_dir.glob("*.png"))
+            self.assertGreaterEqual(len(asset_files), 2)
+            for asset in asset_files:
+                self.assertGreater(asset.stat().st_size, 0)
+                self.assertIn(f'report_assets/{asset.name}', content)
+            self.assertNotIn("data:image/png;base64,", content)
+            self.assertNotIn(str(img_path), content)
+            self.assertNotIn(img_path.resolve().as_uri(), content)
 
     def test_write_html_report_includes_new_no_text_review_rows_and_ocr_text(self):
         try:
@@ -469,17 +529,30 @@ class CheckI18nImagesTest(unittest.TestCase):
             cn = lambda value: value.encode("ascii").decode("unicode_escape")
             self.assertIn("NewTest/plain.tga", content)
             self.assertIn(cn(r"\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"), content)
-            self.assertIn(cn(r"\u8bc6\u522b\u6587\u5b57"), content)
+            self.assertIn(cn(r"\u8bc6\u522b\u6587\u5b57\uff1a"), content)
             self.assertIn(cn(r"\u5927\u5251\u7f51\u4e09"), content)
             self.assertIn("report-shell", content)
+            self.assertIn("exportFilteredRows", content)
+            self.assertIn(cn(r"\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c"), content)
+            self.assertIn("buildExportImageCell", content)
+            self.assertIn("imageSrcToDataUri", content)
+            self.assertIn("FileReader", content)
+            self.assertIn("data:image", content)
+            self.assertIn("application/vnd.ms-excel", content)
+            self.assertIn("ui_image_check_filtered.xls", content)
+            self.assertIn('<select data-filter="category" onchange="filterTable()">', content)
+            self.assertIn('<select data-filter="issue" onchange="filterTable()">', content)
+            self.assertIn('<option>ui</option>', content)
+            self.assertIn("<colgroup>", content)
             self.assertIn(cn(r"\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171"), content)
             self.assertIn(cn(r"\u4e09\u3001\u5f02\u5e38\u56fe\u7247\uff1a\u5171"), content)
             self.assertNotIn("metric-grid", content)
             self.assertNotIn('class="summary-card', content)
-            header_row_start = content.index(cn(r"\u7c7b\u522b") + "<span")
+            header_row_start = content.index(cn(r"\u5e8f\u53f7") + "<span")
             header_row_end = content.index("</tr>", header_row_start)
             header_row = content[header_row_start:header_row_end]
             expected_order = [
+                cn(r"\u5e8f\u53f7"),
                 cn(r"\u7c7b\u522b"),
                 cn(r"\u95ee\u9898\u7c7b\u578b"),
                 cn(r"\u76f8\u5bf9\u8def\u5f84"),
@@ -488,12 +561,20 @@ class CheckI18nImagesTest(unittest.TestCase):
                 cn(r"\u9646\u7248\u4fee\u6539\u65f6\u95f4"),
                 cn(r"\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4"),
                 cn(r"\u8bf4\u660e"),
-                cn(r"\u8bc6\u522b\u6587\u5b57"),
             ]
             positions = [header_row.index(label) for label in expected_order]
             self.assertEqual(positions, sorted(positions))
+            self.assertNotIn(f"<th onclick=\"sortTable(9)\">{cn(r'\u8bc6\u522b\u6587\u5b57')}", header_row)
             self.assertNotIn(cn(r"\u9646\u7248\u521b\u5efa\u65f6\u95f4"), header_row)
-            self.assertIn("white-space:nowrap", content)
+            self.assertIn(f'class="mainland-new-with-text" title="{cn(r"\u8bc6\u522b\u6587\u5b57\uff1a\u5927\u5251\u7f51\u4e09")}" data-ocr="{cn(r"\u5927\u5251\u7f51\u4e09")}"', content)
+            self.assertIn('class="mainland-new-no-text"><td class="row-index"', content)
+            self.assertIn('tr.mainland-new-with-text[title] { cursor:help; }', content)
+            self.assertNotIn('tr.mainland-new-no-text[title] { cursor:help; }', content)
+            self.assertIn("min-width:1280px", content)
+            self.assertIn("border-collapse:separate", content)
+            self.assertIn("border-spacing:0", content)
+            self.assertIn(".filter-row th { top:40px", content)
+            self.assertIn("height:40px", content)
 
 
 if __name__ == "__main__":

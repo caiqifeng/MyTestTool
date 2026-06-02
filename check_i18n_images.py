@@ -49,6 +49,7 @@ TEXT_I18N = "\u56fd\u9645\u7248"
 TEXT_MAINLAND = "\u9646\u7248"
 TEXT_NONE = "\u65e0"
 TEXT_ITEM = "\u9879"
+TEXT_OCR_TEXT = "\u8bc6\u522b\u6587\u5b57"
 
 @dataclass(frozen=True)
 class ImageFile:
@@ -1015,7 +1016,8 @@ def make_html_image_asset(source: str, assets_dir: Path, index: int, side: str) 
         with PILImage.open(local) as img:
             if img.mode not in ("RGB", "RGBA"):
                 img = img.convert("RGBA")
-            img.save(out)
+            img.thumbnail((720, 720))
+            img.save(out, format="PNG")
         return f"{assets_dir.name}/{out.name}"
     except Exception:
         try:
@@ -1102,8 +1104,17 @@ def write_html_report(
         i18n_asset = make_html_image_asset(finding.i18n_path, assets_dir, index, "i18n")
         mainland_asset = make_html_image_asset(finding.mainland_path, assets_dir, index, "mainland")
         issue_class = html.escape(finding.issue.replace("_", "-"))
+        ocr_text = finding.mainland_ocr_text or ""
+        ocr_attrs = ""
+        if finding.issue == "mainland_new_with_text" and ocr_text:
+            row_title = f"{TEXT_OCR_TEXT}\uff1a{ocr_text}"
+            ocr_attrs = (
+                f' title="{html.escape(row_title, quote=True)}"'
+                f' data-ocr="{html.escape(ocr_text, quote=True)}"'
+            )
         rows.append(
-            f'<tr class="{issue_class}">'
+            f'<tr class="{issue_class}"{ocr_attrs}>'
+            f'<td class="row-index">{index}</td>'
             f'<td>{html.escape(finding.category)}</td>'
             f'<td><span class="issue-badge {issue_class}">{html.escape(issue_title(finding.issue))}</span></td>'
             f'<td class="path">{html.escape(finding.relative_path)}</td>'
@@ -1112,7 +1123,6 @@ def write_html_report(
             f'<td>{html.escape(format_dt(finding.mainland_modified_at))}</td>'
             f'<td>{html.escape(format_dt(finding.i18n_modified_at))}</td>'
             f'<td>{html.escape(finding.detail)}</td>'
-            f'<td class="ocr-text">{html.escape(finding.mainland_ocr_text or "")}</td>'
             '</tr>'
         )
 
@@ -1122,7 +1132,11 @@ def write_html_report(
         normal_synced, new_no_text,
         missing, changed, new_with_text, others, new_without_text,
     )
-    doc = _html_template(summary_table, summary_cards, rows)
+    category_options = "".join(
+        f"<option>{html.escape(category)}</option>"
+        for category in sorted({f.category for f in findings if f.category})
+    )
+    doc = _html_template(summary_table, summary_cards, rows, category_options)
     path.write_text(doc, encoding="utf-8")
 
 def _summary_items(items: Sequence[Finding]) -> str:
@@ -1196,7 +1210,12 @@ def _build_summary_table(
     """
 
 
-def _html_template(summary_table: str, summary_cards: list[str], rows: list[str]) -> str:
+def _html_template(
+    summary_table: str,
+    summary_cards: list[str],
+    rows: list[str],
+    category_options: str = "",
+) -> str:
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1229,16 +1248,19 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .summary-table th,.summary-table td {{ border-bottom:1px solid #e7ebf1; padding:10px 12px; text-align:left; font-size:13px; }}
 .summary-table th {{ background:#f0f4f8; color:#334155; font-weight:600; }}
 .detail-panel {{ overflow:hidden; }}
-.detail-toolbar {{ padding:16px 18px; border-bottom:1px solid var(--line); }}
+.detail-toolbar {{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line); }}
 .detail-toolbar p {{ margin:0; color:var(--muted); font-size:13px; }}
+.export-button {{ flex:0 0 auto; border:1px solid #2563eb; background:#2563eb; color:white; border-radius:5px; padding:8px 14px; font-size:13px; cursor:pointer; }}
+.export-button:hover {{ background:#1d4ed8; }}
 .table-wrap {{ overflow:auto; max-height:calc(100vh - 160px); }}
-table {{ width:100%; border-collapse:collapse; table-layout:fixed; }}
+table {{ width:100%; min-width:1280px; border-collapse:separate; border-spacing:0; table-layout:fixed; }}
 th,td {{ border-bottom:1px solid #e7ebf1; padding:10px; vertical-align:top; font-size:13px; }}
-th {{ position:sticky; top:0; background:#eef3f8; color:#334155; z-index:2; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }}
-.filter-row th {{ top:39px; background:#f8fafc; cursor:default; }}
-.filter-row input {{ width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:12px; }}
+th {{ position:sticky; top:0; height:40px; background:#eef3f8; color:#334155; z-index:3; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }}
+.filter-row th {{ top:40px; background:#f8fafc; cursor:default; z-index:2; }}
+.filter-row input,.filter-row select {{ width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:12px; background:white; }}
+.row-index {{ text-align:center; color:#475569; }}
 .path {{ word-break:break-all; }}
-.ocr-text {{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }}
+tr.mainland-new-with-text[title] {{ cursor:help; }}
 .issue-badge {{ display:inline-flex; align-items:center; border-radius:999px; padding:3px 8px; font-size:12px; font-weight:600; white-space:nowrap; }}
 .issue-badge.mainland-missing,.issue-badge.mainland-new-with-text {{ color:#7a271a; background:#fee4e2; }}
 .issue-badge.mainland-changed {{ color:#7a4a00; background:#ffefd0; }}
@@ -1257,27 +1279,38 @@ th {{ position:sticky; top:0; background:#eef3f8; color:#334155; z-index:2; text
 <main>
 {summary_table}
 <section class="detail-panel">
-  <div class="detail-toolbar"><h2>{TEXT_REPORT_DETAIL}</h2><p>\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247\u4e5f\u4f1a\u5217\u5165\u8be6\u60c5\uff0c\u65b9\u4fbf\u4eba\u5de5\u590d\u6838 OCR \u6f0f\u8bc6\u522b\u6216\u9690\u85cf\u6587\u5b57\u3002</p></div>
+  <div class="detail-toolbar"><div><h2>{TEXT_REPORT_DETAIL}</h2><p>\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247\u4e5f\u4f1a\u5217\u5165\u8be6\u60c5\uff0c\u9f20\u6807\u653e\u5230\u5bf9\u5e94\u884c\u53ef\u67e5\u770b OCR \u8bc6\u522b\u5168\u6587\u3002</p></div><button class="export-button" type="button" onclick="exportFilteredRows()">\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c</button></div>
   <div class="table-wrap">
     <table id="detailTable">
+      <colgroup>
+        <col style="width:56px">
+        <col style="width:90px">
+        <col style="width:150px">
+        <col style="width:260px">
+        <col style="width:180px">
+        <col style="width:180px">
+        <col style="width:170px">
+        <col style="width:170px">
+        <col style="width:220px">
+      </colgroup>
       <thead>
         <tr>
-          <th onclick="sortTable(0)">\u7c7b\u522b<span class="sort-icon"></span></th>
-          <th onclick="sortTable(1)">\u95ee\u9898\u7c7b\u578b<span class="sort-icon"></span></th>
-          <th onclick="sortTable(2)">\u76f8\u5bf9\u8def\u5f84<span class="sort-icon"></span></th>
+          <th onclick="sortTable(0)">\u5e8f\u53f7<span class="sort-icon"></span></th>
+          <th onclick="sortTable(1)">\u7c7b\u522b<span class="sort-icon"></span></th>
+          <th onclick="sortTable(2)">\u95ee\u9898\u7c7b\u578b<span class="sort-icon"></span></th>
+          <th onclick="sortTable(3)">\u76f8\u5bf9\u8def\u5f84<span class="sort-icon"></span></th>
           <th>\u9646\u7248\u56fe\u7247</th>
           <th>\u56fd\u9645\u7248\u56fe\u7247</th>
-          <th onclick="sortTable(5)">\u9646\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
-          <th onclick="sortTable(6)">\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
-          <th onclick="sortTable(7)">\u8bf4\u660e<span class="sort-icon"></span></th>
-          <th onclick="sortTable(8)">\u8bc6\u522b\u6587\u5b57<span class="sort-icon"></span></th>
+          <th onclick="sortTable(6)">\u9646\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
+          <th onclick="sortTable(7)">\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
+          <th onclick="sortTable(8)">\u8bf4\u660e<span class="sort-icon"></span></th>
         </tr>
         <tr class="filter-row">
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
-          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><select data-filter="category" onchange="filterTable()"><option value="">\u5168\u90e8</option>{category_options}</select></th>
+          <th><select data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_NEW_NO_TEXT_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th></th><th></th>
-          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
@@ -1311,17 +1344,80 @@ function sortTable(col) {{
 function filterTable() {{
   const table = document.getElementById('detailTable');
   const rows = Array.from(table.querySelectorAll('tbody tr'));
-  const filters = Array.from(table.querySelectorAll('.filter-row input')).map(i => i.value.trim().toLowerCase());
+  const filters = Array.from(table.querySelectorAll('.filter-row input,.filter-row select')).map(i => i.value.trim().toLowerCase());
   let visibleCount = 0;
   rows.forEach(row => {{
     let show = true;
     for (let i = 0; i < filters.length; i++) {{
-      if (filters[i] && !(row.cells[i]?.textContent || '').toLowerCase().includes(filters[i])) {{ show = false; break; }}
+      const cellText = (row.cells[i]?.textContent || '').trim().toLowerCase();
+      const isSelect = table.querySelectorAll('.filter-row input,.filter-row select')[i]?.tagName === 'SELECT';
+      if (filters[i] && (isSelect ? cellText !== filters[i] : !cellText.includes(filters[i]))) {{ show = false; break; }}
     }}
     row.style.display = show ? '' : 'none';
     if (show) visibleCount++;
   }});
   document.getElementById('noResults').style.display = visibleCount === 0 ? '' : 'none';
+}}
+function htmlEscape(value) {{
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}}
+async function imageSrcToDataUri(src) {{
+  if (!src || src.startsWith('data:image')) return src || '';
+  try {{
+    const response = await fetch(src);
+    if (!response.ok) return src;
+    const blob = await response.blob();
+    return await new Promise(resolve => {{
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result || src);
+      reader.onerror = () => resolve(src);
+      reader.readAsDataURL(blob);
+    }});
+  }} catch (error) {{
+    return src;
+  }}
+}}
+async function buildExportImageCell(cell) {{
+  const img = cell.querySelector('img');
+  if (!img) return '';
+  const src = img.getAttribute('src') || '';
+  const alt = img.getAttribute('alt') || '';
+  const dataSrc = await imageSrcToDataUri(src);
+  return `<img src="${{htmlEscape(dataSrc)}}" alt="${{htmlEscape(alt)}}" style="max-width:120px;max-height:80px;">`;
+}}
+async function exportFilteredRows() {{
+  const table = document.getElementById('detailTable');
+  const headers = Array.from(table.querySelectorAll('thead tr:first-child th')).map(th => th.childNodes[0].textContent.trim());
+  headers.push('{TEXT_OCR_TEXT}');
+  const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
+  const headerHtml = headers.map(header => `<th>${{htmlEscape(header)}}</th>`).join('');
+  const rowHtml = await Promise.all(rows.map(async row => {{
+    const cellHtml = await Promise.all(Array.from(row.cells).map(async (cell, index) => {{
+      if (index === 4 || index === 5) return `<td>${{await buildExportImageCell(cell)}}</td>`;
+      return `<td>${{htmlEscape(cell.textContent.trim())}}</td>`;
+    }}));
+    cellHtml.push(`<td>${{htmlEscape(row.dataset.ocr || '')}}</td>`);
+    return `<tr>${{cellHtml.join('')}}</tr>`;
+  }}));
+  const bodyHtml = rowHtml.join('');
+  const doc = `<!doctype html><html><head><meta charset="utf-8"><style>
+    table {{ border-collapse:collapse; }}
+    th,td {{ border:1px solid #999; padding:6px; vertical-align:top; mso-number-format:"\\@"; }}
+    img {{ display:block; }}
+  </style></head><body><table><thead><tr>${{headerHtml}}</tr></thead><tbody>${{bodyHtml}}</tbody></table></body></html>`;
+  const blob = new Blob(['\ufeff' + doc], {{ type: 'application/vnd.ms-excel;charset=utf-8;' }});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'ui_image_check_filtered.xls';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }}
 function openPreview(button) {{
   const overlay = document.getElementById('overlay');
@@ -1393,22 +1489,66 @@ def parse_dt(value: str) -> dt.datetime:
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+def _join_config_path(root: str, path: str) -> str:
+    path = path.replace("\\", "/").rstrip("/")
+    if not root or path.lower().startswith(("http://", "https://")):
+        return path
+    if re.match(r"^[A-Za-z]:/", path) or path.startswith("/"):
+        return path
+    return f"{root.rstrip('/')}/{path}"
+
+
+def _filter_whitelisted_files(
+    files: dict[str, ImageFile],
+    pair: dict[str, object],
+) -> dict[str, ImageFile]:
+    whitelist = [normalize_rel(str(item)) for item in pair.get("whitelist", [])]
+    if not whitelist:
+        return files
+
+    relative_roots = [
+        normalize_rel(str(pair.get("mainland_relative", ""))),
+        normalize_rel(str(pair.get("i18n_relative", ""))),
+    ]
+    ignored_prefixes: list[str] = []
+    for item in whitelist:
+        for root in relative_roots:
+            if root and compare_key(item).startswith(compare_key(root) + "/"):
+                ignored_prefixes.append(compare_key(item[len(root):].lstrip("/")))
+                break
+        else:
+            ignored_prefixes.append(compare_key(item))
+
+    return {
+        key: value
+        for key, value in files.items()
+        if not any(key == prefix or key.startswith(prefix + "/") for prefix in ignored_prefixes)
+    }
+
+
 def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
     raw = Path(config_path).read_text(encoding="utf-8")
     # tolerate Windows backslash paths in JSON
     raw = raw.replace("\\", "/")
     data = json.loads(raw)
+    root = ""
     if isinstance(data, list):
         pairs = data
+        whitelist = []
     elif isinstance(data, dict) and "pairs" in data:
+        root = str(data.get("root", "")).replace("\\", "/").rstrip("/")
+        whitelist = [normalize_rel(str(item)) for item in data.get("whitelist", [])]
         pairs = data["pairs"]
     else:
         raise SystemExit(f"ERROR: 配置文件格式错误，需要 [{{\"name\":..., \"i18n\":..., \"mainland\":...}}, ...]")
     for p in pairs:
         if "i18n" not in p or "mainland" not in p:
             raise SystemExit(f"ERROR: 配置项缺少 i18n 或 mainland 字段: {p}")
-        p["i18n"] = p["i18n"].replace("\\", "/")
-        p["mainland"] = p["mainland"].replace("\\", "/")
+        p["i18n_relative"] = p["i18n"].replace("\\", "/").strip("/")
+        p["mainland_relative"] = p["mainland"].replace("\\", "/").strip("/")
+        p["i18n"] = _join_config_path(root, p["i18n_relative"])
+        p["mainland"] = _join_config_path(root, p["mainland_relative"])
+        p["whitelist"] = [normalize_rel(str(item)) for item in p.get("whitelist", whitelist)]
     return pairs
 
 
@@ -1471,6 +1611,8 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
         i18n_files = scanner(pair["i18n"])
         print(f"  扫描陆版目录: {pair['mainland']}", file=sys.stderr)
         mainland_files = scanner(pair["mainland"])
+        i18n_files = _filter_whitelisted_files(i18n_files, pair)
+        mainland_files = _filter_whitelisted_files(mainland_files, pair)
         print(f"  国际版 {len(i18n_files)} 张, 陆版 {len(mainland_files)} 张", file=sys.stderr)
         total_i18n += len(i18n_files)
         total_mainland += len(mainland_files)
