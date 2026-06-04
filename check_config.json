@@ -2,7 +2,8 @@
   "root": "f:/caiqifeng/MyTestProject/JW3_LocalCheck/client",
   "whitelist": [
     "ui/Image/ExteriorPic",
-    "ui/Image/UItimate/OperationCenter/NewChargeGiftMonthly"
+    "ui/Image/UItimate/OperationCenter/NewChargeGiftMonthly",
+    "data/source/maps/*minimap*/^[0-9_-]+$.*"
   ],
   "pairs": [
     {
