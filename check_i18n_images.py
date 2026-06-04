@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Check i18n image differences between zh_TW and mainland client trees."""
 
 from __future__ import annotations
@@ -15,13 +15,18 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
+import time
 import zipfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Callable, Sequence
 from xml.etree import ElementTree as ET
 
 BEIJING_TZ = dt.timezone(dt.timedelta(hours=8))
+SCRIPT_VERSION = "1.0.1"
+SCRIPT_UPDATED_AT = "2026-06-04 17:17:13 +08:00"
 
 IMAGE_EXTENSIONS = {".dds", ".tga"}
 STATE_FILE = ".check_i18n_images_state"
@@ -29,6 +34,8 @@ OCR_CACHE_FILE = ".ocr_cache.json"
 DEFAULT_THUMBNAIL_ISSUES = {
     "__has_detail__",
 }
+_RAPIDOCR_ENGINE = None
+_RAPIDOCR_LOCAL = threading.local()
 TEXT_REPORT_TITLE = "\u591a\u8bed\u8a00\u56fe\u7247\u68c0\u67e5\u6c47\u603b"
 TEXT_RUN_RESULT = "\u672c\u8f6e\u6267\u884c\u7ed3\u679c"
 TEXT_MISSING_ISSUE = "\u7591\u4f3c\u5e9f\u9664\u6587\u4ef6"
@@ -50,6 +57,9 @@ TEXT_MAINLAND = "\u9646\u7248"
 TEXT_NONE = "\u65e0"
 TEXT_ITEM = "\u9879"
 TEXT_OCR_TEXT = "\u8bc6\u522b\u6587\u5b57"
+_RUN_LOG_FILE: Path | None = None
+_OCR_CANDIDATE_FILE: Path | None = None
+_OCR_CANDIDATES: list[ImageFile] = []
 
 @dataclass(frozen=True)
 class ImageFile:
@@ -86,6 +96,14 @@ def compare_key(relative_path: str) -> str:
     return normalize_rel(relative_path).casefold()
 
 
+def image_match_key(relative_path: str) -> str:
+    normalized = normalize_rel(relative_path)
+    path = PurePosixPath(normalized)
+    if path.suffix.lower() in IMAGE_EXTENSIONS:
+        return compare_key(str(path.with_suffix("")))
+    return compare_key(normalized)
+
+
 def is_image(path: str) -> bool:
     return PurePosixPath(path).suffix.lower() in IMAGE_EXTENSIONS
 
@@ -96,32 +114,80 @@ def to_aware_utc(value: dt.datetime) -> dt.datetime:
     return value.astimezone(dt.timezone.utc)
 
 
+def _init_run_outputs(now: dt.datetime | None = None) -> tuple[Path, Path]:
+    global _RUN_LOG_FILE, _OCR_CANDIDATE_FILE, _OCR_CANDIDATES
+    timestamp = (now or dt.datetime.now()).strftime("%Y%m%d_%H%M%S")
+    log_dir = Path("Log")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    _RUN_LOG_FILE = log_dir / f"{timestamp}.log"
+    _OCR_CANDIDATE_FILE = log_dir / f"{timestamp}_ocr_images.txt"
+    _OCR_CANDIDATES = []
+    _RUN_LOG_FILE.write_text("", encoding="utf-8")
+    _OCR_CANDIDATE_FILE.write_text("", encoding="utf-8")
+    return _RUN_LOG_FILE, _OCR_CANDIDATE_FILE
+
+
+def log_step(message: str) -> None:
+    timestamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{timestamp}] {message}"
+    print(line, file=sys.stderr)
+    if _RUN_LOG_FILE is not None:
+        try:
+            with _RUN_LOG_FILE.open("a", encoding="utf-8") as f:
+                f.write(line + "\n")
+        except OSError:
+            pass
+
+
+def format_version_line(now: dt.datetime | None = None) -> str:
+    current = now or dt.datetime.now(BEIJING_TZ)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=BEIJING_TZ)
+    return f"version = {SCRIPT_VERSION}，time = {current.astimezone(BEIJING_TZ).strftime('%Y-%m-%d %H:%M:%S %z')[:-2]}:00"
+
+
+def _record_ocr_candidate(image: ImageFile) -> None:
+    _OCR_CANDIDATES.append(image)
+
+
+def _write_ocr_candidate_list() -> None:
+    if _OCR_CANDIDATE_FILE is None:
+        return
+    lines = [
+        f"{index}\t{image.category}\t{image.relative_path}\t{image.full_path}"
+        for index, image in enumerate(_OCR_CANDIDATES, 1)
+    ]
+    _OCR_CANDIDATE_FILE.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+
+
+def log_new_no_text_findings(findings: Sequence[Finding]) -> None:
+    items = [f for f in findings if f.issue == "mainland_new_no_text"]
+    log_step(f"新增无文字图片列表: count={len(items)}")
+    for index, finding in enumerate(items, 1):
+        log_step(f"新增无文字图片 {index}: {finding.relative_path} | {finding.mainland_path}")
+
+
+def default_ocr_workers() -> int:
+    return 1
+
+
 def compare_category(
     category: str,
     i18n_files: dict[str, ImageFile],
     mainland_files: dict[str, ImageFile],
     last_check_at: dt.datetime | None,
     text_detector: Callable[[ImageFile], bool],
+    ocr_workers: int = 1,
 ) -> tuple[list[Finding], dict[str, int]]:
     findings: list[Finding] = []
     normal_synced = 0
     new_no_text = 0
 
-    for rel, i18n_file in sorted(i18n_files.items()):
-        mainland_file = mainland_files.get(rel)
-        if mainland_file is None:
-            findings.append(
-                Finding(
-                    category,
-                    "mainland_missing",
-                    i18n_file.relative_path,
-                    i18n_file.full_path,
-                    "",
-                    i18n_file.modified_at,
-                    None,
-                    "陆版无对应文件，国际版文件可能已废弃",
-                )
-            )
+    new_mainland_files: list[tuple[str, ImageFile]] = []
+    for rel, mainland_file in sorted(mainland_files.items()):
+        i18n_file = i18n_files.get(rel)
+        if i18n_file is None:
+            new_mainland_files.append((rel, mainland_file))
             continue
         if to_aware_utc(i18n_file.modified_at) < to_aware_utc(mainland_file.modified_at):
             findings.append(
@@ -139,21 +205,79 @@ def compare_category(
         else:
             normal_synced += 1
 
-    since = to_aware_utc(last_check_at) if last_check_at else None
-    new_mainland_files = [
-        (rel, mainland_file)
-        for rel, mainland_file in sorted(mainland_files.items())
-        if rel not in i18n_files
-        and (since is None or to_aware_utc(mainland_file.modified_at) > since)
-    ]
-    new_total = len(new_mainland_files)
-    for progress_index, (_rel, mainland_file) in enumerate(new_mainland_files, 1):
-        print(f"当前分析进度：{progress_index}/{new_total}", file=sys.stderr)
-        if text_detector(mainland_file):
-            ocr_text_getter = getattr(text_detector, "ocr_text_for", None)
-            mainland_ocr_text = (
-                ocr_text_getter(mainland_file) if callable(ocr_text_getter) else None
+    for rel, i18n_file in sorted(i18n_files.items()):
+        if rel in mainland_files:
+            continue
+        findings.append(
+            Finding(
+                category,
+                "mainland_missing",
+                i18n_file.relative_path,
+                i18n_file.full_path,
+                "",
+                i18n_file.modified_at,
+                None,
+                "陆版无对应文件，国际版文件可能已废弃",
             )
+        )
+
+    new_total = len(new_mainland_files)
+    log_step(f"OCR 候选图片: category={category or '-'} count={new_total}")
+    for _rel, mainland_file in new_mainland_files:
+        _record_ocr_candidate(mainland_file)
+    progress_started_at = time.monotonic()
+    progress_line_length = 0
+
+    def detect_text(index_and_image: tuple[int, ImageFile]) -> tuple[int, ImageFile, bool, str | None, str]:
+        index, image = index_and_image
+        has_text = text_detector(image)
+        ocr_text_getter = getattr(text_detector, "ocr_text_for", None)
+        ocr_text = ocr_text_getter(image) if callable(ocr_text_getter) else None
+        return index, image, has_text, ocr_text, threading.current_thread().name
+
+    def print_ocr_progress(done_count: int, image: ImageFile, worker_name: str) -> None:
+        nonlocal progress_line_length
+        elapsed_minutes = int((time.monotonic() - progress_started_at) // 60)
+        elapsed_hours = elapsed_minutes // 60
+        elapsed_remainder_minutes = elapsed_minutes % 60
+        progress_line = format_progress_line(
+            done_count,
+            new_total,
+            elapsed_hours,
+            elapsed_remainder_minutes,
+            image.full_path,
+            worker_name,
+        )
+        padding = max(0, progress_line_length - len(progress_line))
+        progress_line_length = len(progress_line)
+        print(f"\r{progress_line}{' ' * padding}", end="", file=sys.stderr, flush=True)
+
+    worker_count = max(1, int(ocr_workers or 1))
+    indexed_images = [
+        (index, mainland_file)
+        for index, (_rel, mainland_file) in enumerate(new_mainland_files, 1)
+    ]
+    if worker_count == 1 or len(indexed_images) <= 1:
+        detected_results = []
+        for item in indexed_images:
+            result = detect_text(item)
+            detected_results.append(result)
+            _index, image, _has_text, _ocr_text, worker_name = result
+            print_ocr_progress(len(detected_results), image, worker_name)
+    else:
+        log_step(f"启动 OCR 并发: workers={worker_count} count={new_total}")
+        with ThreadPoolExecutor(max_workers=worker_count) as executor:
+            futures = [executor.submit(detect_text, item) for item in indexed_images]
+            detected_results = []
+            for future in as_completed(futures):
+                result = future.result()
+                detected_results.append(result)
+                _index, image, _has_text, _ocr_text, worker_name = result
+                print_ocr_progress(len(detected_results), image, worker_name)
+        detected_results.sort(key=lambda item: item[0])
+
+    for _progress_index, mainland_file, has_text, mainland_ocr_text, _worker_name in detected_results:
+        if has_text:
             findings.append(
                 Finding(
                     category,
@@ -183,7 +307,26 @@ def compare_category(
                     mainland_created_at=mainland_file.created_at,
                 )
             )
+    if new_total:
+        print(file=sys.stderr)
     return findings, {"normal_synced": normal_synced, "new_no_text": new_no_text}
+
+
+def format_progress_line(
+    progress_index: int,
+    total: int,
+    elapsed_hours: int,
+    elapsed_minutes: int,
+    full_path: str,
+    worker_name: str | None = None,
+) -> str:
+    worker = f"OCR线程：{worker_name}；" if worker_name else ""
+    return (
+        f"当前分析进度：{progress_index}/{total}，"
+        f"共执行：{elapsed_hours:02d}小时{elapsed_minutes:02d}分钟；"
+        f"{worker}"
+        f"路径：{full_path}"
+    )
 
 
 def apply_max_file_sample(
@@ -200,7 +343,55 @@ def apply_max_file_sample(
     )
 
 
-def scan_local(directory: str) -> dict[str, ImageFile]:
+def _whitelist_ignored_prefixes(pair: dict[str, object]) -> list[str]:
+    raw_whitelist = pair.get("whitelist", [])
+    whitelist: list[str] = []
+    for item in raw_whitelist:
+        if isinstance(item, dict):
+            continue
+        parsed_rule = _parse_inline_whitelist_rule(str(item))
+        if parsed_rule is None:
+            whitelist.append(normalize_rel(str(item)))
+
+    relative_roots = [
+        normalize_rel(str(pair.get("mainland_relative", ""))),
+        normalize_rel(str(pair.get("i18n_relative", ""))),
+    ]
+    ignored_prefixes: list[str] = []
+    for item in whitelist:
+        for root in relative_roots:
+            if root and compare_key(item).startswith(compare_key(root) + "/"):
+                ignored_prefixes.append(compare_key(item[len(root):].lstrip("/")))
+                break
+        else:
+            ignored_prefixes.append(compare_key(item))
+    return ignored_prefixes
+
+
+def _is_whitelisted_path(relative_path: str, pair: dict[str, object]) -> bool:
+    path_key = compare_key(relative_path)
+    if not path_key:
+        return False
+    if any(path_key == prefix or path_key.startswith(prefix + "/") for prefix in _whitelist_ignored_prefixes(pair)):
+        return True
+
+    relative_roots = [
+        normalize_rel(str(pair.get("mainland_relative", ""))),
+        normalize_rel(str(pair.get("i18n_relative", ""))),
+    ]
+    for item in pair.get("whitelist", []):
+        if isinstance(item, dict):
+            rule = item
+        else:
+            rule = _parse_inline_whitelist_rule(str(item))
+            if rule is None:
+                continue
+        if _matches_whitelist_rule(relative_path, rule, relative_roots):
+            return True
+    return False
+
+
+def scan_local(directory: str, pair: dict[str, object] | None = None) -> dict[str, ImageFile]:
     base_path = Path(directory)
     result: dict[str, ImageFile] = {}
     if not base_path.exists():
@@ -208,31 +399,46 @@ def scan_local(directory: str) -> dict[str, ImageFile]:
 
     scanned = 0
     skipped = 0
-    for file in base_path.rglob("*"):
-        try:
-            if not file.is_file():
+    for root, dirs, files in os.walk(base_path):
+        root_path = Path(root)
+        if pair is not None:
+            kept_dirs = []
+            for directory_name in dirs:
+                rel_dir = normalize_rel((root_path / directory_name).relative_to(base_path).as_posix())
+                if not _is_whitelisted_path(rel_dir, pair):
+                    kept_dirs.append(directory_name)
+            dirs[:] = kept_dirs
+        for file_name in files:
+            file = root_path / file_name
+            rel = normalize_rel(file.relative_to(base_path).as_posix())
+            if pair is not None and _is_whitelisted_path(rel, pair):
                 continue
-        except OSError as e:
-            skipped += 1
-            if skipped <= 10:
-                print(f"WARN: 跳过无法访问的文件: {file}: {e}", file=sys.stderr)
-            continue
-        rel = normalize_rel(file.relative_to(base_path).as_posix())
-        if not is_image(rel):
-            continue
-        try:
-            stat = file.stat()
-        except OSError as e:
-            skipped += 1
-            if skipped <= 10:
-                print(f"WARN: 跳过无法获取状态的文件: {file}: {e}", file=sys.stderr)
-            continue
-        modified_at = dt.datetime.fromtimestamp(stat.st_mtime, dt.timezone.utc)
-        created_at = dt.datetime.fromtimestamp(stat.st_ctime, dt.timezone.utc)
-        result[compare_key(rel)] = ImageFile(rel, str(file), modified_at, "", created_at)
-        scanned += 1
-        if scanned % 5000 == 0:
-            print(f"  已扫描 {scanned} 张图片...", file=sys.stderr)
+            try:
+                if not file.is_file():
+                    continue
+            except OSError as e:
+                skipped += 1
+                if skipped <= 10:
+                    print(f"WARN: 跳过无法访问的文件: {file}: {e}", file=sys.stderr)
+                continue
+            if not is_image(rel):
+                continue
+            try:
+                stat = file.stat()
+            except OSError as e:
+                skipped += 1
+                if skipped <= 10:
+                    print(f"WARN: 跳过无法获取状态的文件: {file}: {e}", file=sys.stderr)
+                continue
+            modified_at = dt.datetime.fromtimestamp(stat.st_mtime, dt.timezone.utc)
+            created_at = dt.datetime.fromtimestamp(stat.st_ctime, dt.timezone.utc)
+            result.setdefault(
+                image_match_key(rel),
+                ImageFile(rel, str(file), modified_at, "", created_at),
+            )
+            scanned += 1
+            if scanned % 5000 == 0:
+                print(f"  已扫描 {scanned} 张图片...", file=sys.stderr)
     if skipped > 10:
         print(f"  共跳过 {skipped} 个无法访问的文件", file=sys.stderr)
     return result
@@ -270,7 +476,10 @@ def scan_svn(url: str) -> dict[str, ImageFile]:
         if not date_text:
             continue
         modified_at = dt.datetime.fromisoformat(date_text.replace("Z", "+00:00"))
-        result[compare_key(rel)] = ImageFile(rel, url.rstrip("/") + "/" + rel.strip("/"), modified_at, "")
+        result.setdefault(
+            image_match_key(rel),
+            ImageFile(rel, url.rstrip("/") + "/" + rel.strip("/"), modified_at, ""),
+        )
     return result
 
 
@@ -280,65 +489,6 @@ def default_text_detector(image: ImageFile) -> bool:
 
 def assume_text_detector(image: ImageFile) -> bool:
     return True
-
-
-def _tesseract_exe() -> str:
-    import shutil as _shutil
-    found = _shutil.which("tesseract")
-    if found:
-        return found
-    candidates = [
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-    ]
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
-    return "tesseract"
-
-
-def _tesseract_env() -> dict[str, str]:
-    env = os.environ.copy()
-    if "TESSDATA_PREFIX" not in env:
-        exe_path = Path(_tesseract_exe())
-        install_tessdata = exe_path.parent / "tessdata"
-        user_tessdata = Path.home() / "tessdata"
-        candidates = [user_tessdata, install_tessdata]
-        selected = next(
-            (
-                path
-                for path in candidates
-                if (path / "chi_sim.traineddata").is_file()
-                or (path / "chi_tra.traineddata").is_file()
-            ),
-            None,
-        )
-        if selected is None:
-            selected = next((path for path in candidates if path.is_dir()), None)
-        if selected is not None:
-            env["TESSDATA_PREFIX"] = str(selected)
-    return env
-
-
-def _available_tesseract_langs() -> set[str]:
-    try:
-        proc = subprocess.run(
-            [_tesseract_exe(), "--list-langs"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            env=_tesseract_env(),
-        )
-    except FileNotFoundError:
-        return set()
-    lines = proc.stdout.decode("utf-8", errors="ignore").splitlines()
-    return {line.strip() for line in lines if line.strip() and not line.startswith("List of")}
-
-
-def _ocr_languages() -> str:
-    available = _available_tesseract_langs()
-    preferred = [lang for lang in ("chi_sim", "chi_tra", "eng") if lang in available]
-    return "+".join(preferred or ["eng"])
 
 
 def _prepare_ocr_sources(source: str) -> tuple[list[str], list[str]]:
@@ -367,8 +517,14 @@ def _prepare_ocr_sources(source: str) -> tuple[list[str], list[str]]:
             bbox = mask.getbbox()
             cropped = rgb.crop(bbox) if bbox else rgb
             add_temp(cropped.convert("RGBA"))
+            is_vertical_asset = cropped.height >= cropped.width * 2
+            if is_vertical_asset:
+                rotated = cropped.rotate(90, expand=True)
+                add_temp(rotated.convert("RGBA"))
             up3 = cropped.resize((cropped.width * 3, cropped.height * 3))
             add_temp(up3.convert("RGBA"))
+            if is_vertical_asset:
+                add_temp(up3.rotate(90, expand=True).convert("RGBA"))
 
             gray = ImageOps.grayscale(up3)
             gray = ImageEnhance.Contrast(gray).enhance(2.5)
@@ -385,53 +541,111 @@ def _ocr_text_score(text: str) -> int:
     return chinese * 10 + ascii_words - noise * 2
 
 
-def _is_tesseract_available() -> bool:
-    try:
-        subprocess.run(
-            [_tesseract_exe(), "--version"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
-            env=_tesseract_env(),
-        )
-        return True
-    except FileNotFoundError:
-        return False
+def _normalize_ocr_text(text: str) -> str:
+    replacements = {
+        "加入巧帮": "加入丐帮",
+    }
+    for wrong, right in replacements.items():
+        text = text.replace(wrong, right)
+    return text
 
 
-def run_ocr(image: ImageFile) -> str | None:
-    """Run tesseract OCR on an image; return extracted text or None on failure."""
+def _chapter_filename_text_hint(image: ImageFile) -> str | None:
+    rel = normalize_rel(image.relative_path or image.full_path)
+    if "image/chapterstga/" not in compare_key(rel):
+        return None
+    stem = PurePosixPath(rel).stem
+    if stem.startswith("箭头"):
+        return None
+    stem = re.sub(r"_HD$", "", stem, flags=re.IGNORECASE)
+    stem = stem.replace("_", " ")
+    parts = [part for part in re.split(r"[\s·]+", stem) if re.search(r"[\u4e00-\u9fff]", part)]
+    return "\n".join(parts) if parts else None
+
+
+def _merge_ocr_with_filename_hint(text: str | None, image: ImageFile) -> str | None:
+    hint = _chapter_filename_text_hint(image)
+    if not hint:
+        return text
+    if not text:
+        return hint
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    for hint_line in [line.strip() for line in hint.splitlines() if line.strip()]:
+        if not any(hint_line in line or line in hint_line for line in lines):
+            lines.insert(0, hint_line)
+    return "\n".join(lines)
+
+
+def _rapidocr_engine():
+    global _RAPIDOCR_ENGINE
+    if threading.current_thread() is threading.main_thread():
+        if _RAPIDOCR_ENGINE is None:
+            from rapidocr_onnxruntime import RapidOCR
+
+            _RAPIDOCR_ENGINE = RapidOCR()
+        return _RAPIDOCR_ENGINE
+
+    engine = getattr(_RAPIDOCR_LOCAL, "engine", None)
+    if engine is None:
+        from rapidocr_onnxruntime import RapidOCR
+
+        engine = RapidOCR()
+        _RAPIDOCR_LOCAL.engine = engine
+    return engine
+
+
+def run_rapidocr(image: ImageFile) -> str | None:
+    """Run RapidOCR on an image; return extracted text or None when unavailable or empty."""
     source = image.full_path
     local_temp: str | None = None
     converted_temps: list[str] = []
     try:
+        try:
+            ocr = _rapidocr_engine()
+        except ImportError:
+            return None
+
         if source.lower().startswith(("http://", "https://")):
             suffix = PurePosixPath(source).suffix
             with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as fp:
                 fp.write(run_svn(["cat", source]))
                 local_temp = fp.name
                 source = fp.name
+
         sources, converted_temps = _prepare_ocr_sources(source)
         best_text = ""
-        lang = _ocr_languages()
-        for candidate in sources:
-            psm_values = ["3"]
-            if candidate != source:
-                psm_values.extend(["6", "11"])
-            for psm in psm_values:
-                proc = subprocess.run(
-                    [_tesseract_exe(), candidate, "stdout", "-l", lang, "--psm", psm],
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
-                    check=False,
-                    env=_tesseract_env(),
-                )
-                text = proc.stdout.decode("utf-8", errors="ignore").strip()
-                if text and _ocr_text_score(text) > _ocr_text_score(best_text):
-                    best_text = text
-        return best_text if best_text else None
+        original_has_text = False
+        for index, candidate in enumerate(sources):
+            result, _elapsed = ocr(candidate)
+            accepted_texts: list[str] = []
+            max_confidence = 0.0
+            for item in result or []:
+                if len(item) <= 1:
+                    continue
+                text = str(item[1]).strip()
+                if not text:
+                    continue
+                confidence = 1.0
+                if len(item) > 2:
+                    try:
+                        confidence = float(item[2])
+                    except (TypeError, ValueError):
+                        confidence = 0.0
+                if index == 0 and confidence > 0:
+                    original_has_text = True
+                max_confidence = max(max_confidence, confidence)
+                min_confidence = 0.70 if original_has_text else 0.75
+                if index > 0 and confidence < min_confidence:
+                    continue
+                accepted_texts.append(text)
+            text = "\n".join(accepted_texts)
+            if text and _ocr_text_score(text) > _ocr_text_score(best_text):
+                best_text = text
+            if index == 0 and max_confidence >= 0.78 and len(re.findall(r"[一-鿿]", text)) >= 4:
+                return _normalize_ocr_text(text)
+        return _normalize_ocr_text(best_text) if best_text else None
     except Exception as exc:
-        print(f"WARN: OCR 失败: {image.full_path}: {exc}", file=sys.stderr)
+        print(f"WARN: RapidOCR 失败: {image.full_path}: {exc}", file=sys.stderr)
         return None
     finally:
         if local_temp:
@@ -444,6 +658,11 @@ def run_ocr(image: ImageFile) -> str | None:
                 os.unlink(converted_temp)
             except OSError:
                 pass
+
+
+def run_ocr(image: ImageFile) -> str | None:
+    """Run OCR on an image using RapidOCR."""
+    return _merge_ocr_with_filename_hint(run_rapidocr(image), image)
 
 
 def run_ocr_from_path(path: str, category: str = "") -> str | None:
@@ -487,27 +706,20 @@ def save_ocr_cache(cache_path: Path, cache: dict[str, dict[str, object]]) -> Non
 def ocr_text_detector_factory(
     cache_path: Path | None = None,
 ) -> Callable[[ImageFile], bool]:
-    if not _is_tesseract_available():
-        print(
-            "WARN: 未找到 tesseract，新增图片文字检测将返回否；"
-            "可使用 --assume-new-has-text 或安装 OCR 工具",
-            file=sys.stderr,
-        )
-        return default_text_detector
-
     cache: dict[str, dict[str, object]] = {}
     if cache_path is not None:
         cache = load_ocr_cache(cache_path)
+    cache_lock = threading.Lock()
 
     def detect(image: ImageFile) -> bool:
         file_key = image.relative_path
         file_md5 = _file_md5(image.full_path)
-        if file_key in cache:
-            entry = cache[file_key]
+        with cache_lock:
+            entry = cache.get(file_key)
             if (
                 isinstance(entry, dict)
                 and entry.get("md5") == file_md5
-                and "test_str" in entry
+                and "has_text" in entry
             ):
                 if "has_test" in entry:
                     entry.pop("has_test", None)
@@ -516,18 +728,20 @@ def ocr_text_detector_factory(
                 return bool(entry.get("has_text", False))
 
         text = run_ocr(image)
-        has_text = bool(re.search(r"[\w一-鿿]", text or ""))
-        cache[file_key] = {
-            "md5": file_md5,
-            "has_text": has_text,
-            "test_str": text or "",
-        }
-        if cache_path is not None:
-            save_ocr_cache(cache_path, cache)
+        has_text = bool(re.search(r"[\w\u4e00-\u9fff]", text or ""))
+        with cache_lock:
+            cache[file_key] = {
+                "md5": file_md5,
+                "has_text": has_text,
+                "test_str": text or "",
+            }
+            if cache_path is not None:
+                save_ocr_cache(cache_path, cache)
         return has_text
 
     def ocr_text_for(image: ImageFile) -> str | None:
-        entry = cache.get(image.relative_path)
+        with cache_lock:
+            entry = cache.get(image.relative_path)
         if isinstance(entry, dict):
             text = entry.get("test_str")
             if isinstance(text, str) and text:
@@ -536,7 +750,6 @@ def ocr_text_detector_factory(
 
     setattr(detect, "ocr_text_for", ocr_text_for)
     return detect
-
 
 _TRANSLATION_SYSTEM_PROMPT = (
     "你是游戏本地化翻译质量检查专家，"
@@ -1008,22 +1221,20 @@ def file_uri(path: str) -> str:
     return Path(path).resolve().as_uri()
 
 
-def make_html_image_asset(source: str, assets_dir: Path, index: int, side: str) -> str:
+def make_html_image_asset(
+    source: str,
+    assets_dir: Path,
+    index: int,
+    side: str,
+    max_image_px: int | None = None,
+) -> str:
     local = local_image_path(source)
     if local is None:
         return file_uri(source)
     assets_dir.mkdir(parents=True, exist_ok=True)
     out = assets_dir / f"img_{index}_{side}{local.suffix.lower()}.png"
-    try:
-        from PIL import Image as PILImage
 
-        with PILImage.open(local) as img:
-            if img.mode not in ("RGB", "RGBA"):
-                img = img.convert("RGBA")
-            img.thumbnail((720, 720))
-            img.save(out, format="PNG")
-        return f"{assets_dir.name}/{out.name}"
-    except Exception:
+    def write_unavailable_placeholder(reason: str) -> str:
         try:
             from PIL import Image as PILImage
             from PIL import ImageDraw
@@ -1031,11 +1242,52 @@ def make_html_image_asset(source: str, assets_dir: Path, index: int, side: str) 
             img = PILImage.new("RGB", (360, 120), (248, 250, 252))
             draw = ImageDraw.Draw(img)
             draw.rectangle((0, 0, 359, 119), outline=(203, 213, 225))
-            draw.text((16, 36), "Preview unavailable", fill=(51, 65, 85))
-            draw.text((16, 64), local.name[:42], fill=(100, 116, 139))
+            draw.text((16, 24), "Preview unavailable", fill=(51, 65, 85))
+            draw.text((16, 52), local.name[:42], fill=(100, 116, 139))
+            draw.text((16, 80), reason[:42], fill=(100, 116, 139))
             img.save(out, format="PNG")
-            return f"{assets_dir.name}/{out.name}"
         except Exception:
+            # Last-resort PNG so the HTML never points at browser-unsupported .tga/.dds files.
+            import struct
+            import zlib
+
+            width, height = 360, 120
+            row = b"\x00" + bytes((248, 250, 252)) * width
+            raw = row * height
+
+            def chunk(kind: bytes, payload: bytes) -> bytes:
+                return (
+                    struct.pack(">I", len(payload))
+                    + kind
+                    + payload
+                    + struct.pack(">I", zlib.crc32(kind + payload) & 0xFFFFFFFF)
+                )
+
+            png = (
+                b"\x89PNG\r\n\x1a\n"
+                + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                + chunk(b"IDAT", zlib.compress(raw))
+                + chunk(b"IEND", b"")
+            )
+            out.write_bytes(png)
+        return f"{assets_dir.name}/{out.name}"
+
+    try:
+        from PIL import Image as PILImage
+
+        with PILImage.open(local) as img:
+            if img.mode not in ("RGB", "RGBA"):
+                img = img.convert("RGBA")
+            max_px = max_image_px if max_image_px is not None and max_image_px > 0 else 720
+            img.thumbnail((max_px, max_px))
+            img.save(out, format="PNG")
+        return f"{assets_dir.name}/{out.name}"
+    except Exception as exc:
+        print(f"WARN: 无法生成 HTML 预览图，使用占位图: {local}: {exc}", file=sys.stderr)
+        try:
+            return write_unavailable_placeholder(str(exc))
+        except Exception as placeholder_exc:
+            print(f"WARN: 无法生成 HTML 占位图: {local}: {placeholder_exc}", file=sys.stderr)
             return file_uri(source)
 
 
@@ -1058,6 +1310,7 @@ def write_html_report(
     mainland_count: int = 0,
     normal_synced: int = 0,
     new_no_text: int = 0,
+    max_image_px: int | None = None,
 ) -> None:
     assets_dir = path.parent / f"{path.stem}_assets"
     if assets_dir.exists():
@@ -1110,32 +1363,46 @@ def write_html_report(
             f'<ul>{_summary_items(others)}</ul></section>'
         )
 
+    detail_findings = [f for f in findings if f.issue != "mainland_new_no_text"]
     rows = []
-    for index, finding in enumerate(findings, 1):
-        i18n_asset = make_html_image_asset(finding.i18n_path, assets_dir, index, "i18n")
-        mainland_asset = make_html_image_asset(finding.mainland_path, assets_dir, index, "mainland")
+    for index, finding in enumerate(detail_findings, 1):
+        i18n_asset = make_html_image_asset(finding.i18n_path, assets_dir, index, "i18n", max_image_px)
+        mainland_asset = make_html_image_asset(finding.mainland_path, assets_dir, index, "mainland", max_image_px)
         issue_class = html.escape(finding.issue.replace("_", "-"))
         ocr_text = finding.mainland_ocr_text or ""
-        ocr_attrs = ""
+        row_title = ""
         if finding.issue == "mainland_new_with_text" and ocr_text:
             row_title = f"{TEXT_OCR_TEXT}\uff1a{ocr_text}"
-            ocr_attrs = (
-                f' title="{html.escape(row_title, quote=True)}"'
-                f' data-ocr="{html.escape(ocr_text, quote=True)}"'
-            )
-        rows.append(
-            f'<tr class="{issue_class}"{ocr_attrs}>'
-            f'<td class="row-index">{index}</td>'
-            f'<td>{html.escape(finding.category)}</td>'
-            f'<td><span class="issue-badge {issue_class}">{html.escape(issue_title(finding.issue))}</span></td>'
-            f'<td class="path">{html.escape(finding.relative_path)}</td>'
-            f'<td>{html_img(mainland_asset, TEXT_MAINLAND + " " + finding.relative_path)}</td>'
-            f'<td>{html_img(i18n_asset, TEXT_I18N + " " + finding.relative_path)}</td>'
-            f'<td>{html.escape(format_dt(finding.mainland_modified_at))}</td>'
-            f'<td>{html.escape(format_dt(finding.i18n_modified_at))}</td>'
-            f'<td>{html.escape(finding.detail)}</td>'
-            '</tr>'
-        )
+        issue_label = issue_title(finding.issue)
+        mainland_dt = format_dt(finding.mainland_modified_at)
+        i18n_dt = format_dt(finding.i18n_modified_at)
+        rows.append({
+            "className": issue_class,
+            "title": row_title,
+            "ocr": ocr_text,
+            "cells": [
+                f'<td class="row-index">{index}</td>',
+                f'<td>{html.escape(finding.category)}</td>',
+                f'<td><span class="issue-badge {issue_class}">{html.escape(issue_label)}</span></td>',
+                f'<td class="path">{html.escape(finding.relative_path)}</td>',
+                f'<td>{html_img(mainland_asset, TEXT_MAINLAND + " " + finding.relative_path)}</td>',
+                f'<td>{html_img(i18n_asset, TEXT_I18N + " " + finding.relative_path)}</td>',
+                f'<td>{html.escape(mainland_dt)}</td>',
+                f'<td>{html.escape(i18n_dt)}</td>',
+                f'<td>{html.escape(finding.detail)}</td>',
+            ],
+            "filterValues": [
+                str(index),
+                finding.category,
+                issue_label,
+                finding.relative_path,
+                "",
+                "",
+                mainland_dt,
+                i18n_dt,
+                finding.detail,
+            ],
+        })
 
     total_abnormal = len(findings) - len(new_without_text)
     summary_table = _build_summary_table(
@@ -1224,9 +1491,10 @@ def _build_summary_table(
 def _html_template(
     summary_table: str,
     summary_cards: list[str],
-    rows: list[str],
+    rows: list[dict[str, object]],
     category_options: str = "",
 ) -> str:
+    rows_json = json.dumps(rows, ensure_ascii=False)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1263,6 +1531,10 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .detail-toolbar p {{ margin:0; color:var(--muted); font-size:13px; }}
 .export-button {{ flex:0 0 auto; border:1px solid #2563eb; background:#2563eb; color:white; border-radius:5px; padding:8px 14px; font-size:13px; cursor:pointer; }}
 .export-button:hover {{ background:#1d4ed8; }}
+.pagination {{ display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:12px 18px; border-top:1px solid var(--line); background:#fbfdff; }}
+.pagination button {{ border:1px solid #cbd5e1; background:white; color:#334155; border-radius:5px; padding:6px 10px; font-size:13px; cursor:pointer; }}
+.pagination button:disabled {{ opacity:.45; cursor:not-allowed; }}
+.pagination-status {{ color:var(--muted); font-size:13px; min-width:220px; text-align:center; }}
 .table-wrap {{ overflow:auto; max-height:calc(100vh - 160px); }}
 table {{ width:100%; min-width:1280px; border-collapse:separate; border-spacing:0; table-layout:fixed; }}
 th,td {{ border-bottom:1px solid #e7ebf1; padding:10px; vertical-align:top; font-size:13px; }}
@@ -1290,7 +1562,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 <main>
 {summary_table}
 <section class="detail-panel">
-  <div class="detail-toolbar"><div><h2>{TEXT_REPORT_DETAIL}</h2><p>\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247\u4e5f\u4f1a\u5217\u5165\u8be6\u60c5\uff0c\u9f20\u6807\u653e\u5230\u5bf9\u5e94\u884c\u53ef\u67e5\u770b OCR \u8bc6\u522b\u5168\u6587\u3002</p></div><button class="export-button" type="button" onclick="exportFilteredRows()">\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c</button></div>
+  <div class="detail-toolbar"><div><h2>{TEXT_REPORT_DETAIL}</h2><p>详情仅展示需处理的异常图片；新增无文字图片列表已写入本次日志。</p></div><button class="export-button" type="button" onclick="exportFilteredRows()">\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c</button></div>
   <div class="table-wrap">
     <table id="detailTable">
       <colgroup>
@@ -1319,7 +1591,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
         <tr class="filter-row">
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th><select data-filter="category" onchange="filterTable()"><option value="">\u5168\u90e8</option>{category_options}</select></th>
-          <th><select data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_NEW_NO_TEXT_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
+          <th><select data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th></th><th></th>
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
@@ -1327,47 +1599,87 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
           <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
         </tr>
       </thead>
-      <tbody>{''.join(rows)}</tbody>
+      <tbody></tbody>
     </table>
     <div class="no-results" id="noResults" style="display:none">\u6ca1\u6709\u5339\u914d\u7684\u7ed3\u679c</div>
+  </div>
+  <div class="pagination">
+    <button type="button" onclick="gotoPage(1)" id="firstPageBtn">\u9996\u9875</button>
+    <button type="button" onclick="gotoPage(currentPage - 1)" id="prevPageBtn">\u4e0a\u4e00\u9875</button>
+    <span class="pagination-status" id="paginationStatus"></span>
+    <button type="button" onclick="gotoPage(currentPage + 1)" id="nextPageBtn">\u4e0b\u4e00\u9875</button>
+    <button type="button" onclick="gotoPage(totalPages)" id="lastPageBtn">\u672b\u9875</button>
   </div>
 </section>
 </main>
 <div id="overlay" class="overlay" onclick="closePreview()"><div class="preview" onclick="event.stopPropagation()"><p id="previewTitle" class="preview-title"></p><img id="previewImage" alt=""></div></div>
 <script>
+const PAGE_SIZE = 50;
+const allRows = {rows_json};
+let filteredRows = allRows.slice();
+let currentPage = 1;
+let totalPages = 1;
 let sortCol = -1;
 let sortAsc = true;
 function sortTable(col) {{
-  const table = document.getElementById('detailTable');
-  const tbody = table.querySelector('tbody');
-  const rows = Array.from(tbody.querySelectorAll('tr'));
   if (sortCol === col) sortAsc = !sortAsc; else {{ sortCol = col; sortAsc = true; }}
-  rows.sort((a,b) => {{
-    let va = (a.cells[col]?.textContent || '').trim().toLowerCase();
-    let vb = (b.cells[col]?.textContent || '').trim().toLowerCase();
+  filteredRows.sort((a,b) => {{
+    let va = String(a.filterValues[col] || '').trim().toLowerCase();
+    let vb = String(b.filterValues[col] || '').trim().toLowerCase();
     if (va < vb) return sortAsc ? -1 : 1;
     if (va > vb) return sortAsc ? 1 : -1;
     return 0;
   }});
-  rows.forEach(r => tbody.appendChild(r));
-  filterTable();
+  renderPage(1);
 }}
 function filterTable() {{
   const table = document.getElementById('detailTable');
-  const rows = Array.from(table.querySelectorAll('tbody tr'));
-  const filters = Array.from(table.querySelectorAll('.filter-row input,.filter-row select')).map(i => i.value.trim().toLowerCase());
-  let visibleCount = 0;
-  rows.forEach(row => {{
-    let show = true;
+  const controls = Array.from(table.querySelectorAll('.filter-row input,.filter-row select'));
+  const filters = controls.map(i => i.value.trim().toLowerCase());
+  filteredRows = allRows.filter(row => {{
     for (let i = 0; i < filters.length; i++) {{
-      const cellText = (row.cells[i]?.textContent || '').trim().toLowerCase();
-      const isSelect = table.querySelectorAll('.filter-row input,.filter-row select')[i]?.tagName === 'SELECT';
-      if (filters[i] && (isSelect ? cellText !== filters[i] : !cellText.includes(filters[i]))) {{ show = false; break; }}
+      const cellText = String(row.filterValues[i] || '').trim().toLowerCase();
+      const isSelect = controls[i]?.tagName === 'SELECT';
+      if (filters[i] && (isSelect ? cellText !== filters[i] : !cellText.includes(filters[i]))) return false;
     }}
-    row.style.display = show ? '' : 'none';
-    if (show) visibleCount++;
+    return true;
   }});
-  document.getElementById('noResults').style.display = visibleCount === 0 ? '' : 'none';
+  if (sortCol >= 0) {{
+    const activeSortCol = sortCol;
+    const activeSortAsc = sortAsc;
+    filteredRows.sort((a,b) => {{
+      let va = String(a.filterValues[activeSortCol] || '').trim().toLowerCase();
+      let vb = String(b.filterValues[activeSortCol] || '').trim().toLowerCase();
+      if (va < vb) return activeSortAsc ? -1 : 1;
+      if (va > vb) return activeSortAsc ? 1 : -1;
+      return 0;
+    }});
+  }}
+  renderPage(1);
+}}
+function renderPage(page) {{
+  totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  currentPage = Math.min(Math.max(1, page), totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+  const tbody = document.querySelector('#detailTable tbody');
+  tbody.innerHTML = pageRows.map(row => {{
+    const title = row.title ? ` title="${{htmlEscape(row.title)}}"` : '';
+    const ocr = row.ocr ? ` data-ocr="${{htmlEscape(row.ocr)}}"` : '';
+    return `<tr class="${{htmlEscape(row.className)}}"${{title}}${{ocr}}>${{row.cells.join('')}}</tr>`;
+  }}).join('');
+  const noResults = filteredRows.length === 0;
+  document.getElementById('noResults').style.display = noResults ? '' : 'none';
+  document.getElementById('paginationStatus').textContent = noResults
+    ? '\u65e0\u5339\u914d\u7ed3\u679c'
+    : `\u7b2c ${{currentPage}} / ${{totalPages}} \u9875\uff0c\u5171 ${{filteredRows.length}} \u6761\uff0c\u6bcf\u9875 ${{PAGE_SIZE}} \u6761`;
+  document.getElementById('firstPageBtn').disabled = currentPage <= 1 || noResults;
+  document.getElementById('prevPageBtn').disabled = currentPage <= 1 || noResults;
+  document.getElementById('nextPageBtn').disabled = currentPage >= totalPages || noResults;
+  document.getElementById('lastPageBtn').disabled = currentPage >= totalPages || noResults;
+}}
+function gotoPage(page) {{
+  renderPage(page);
 }}
 function htmlEscape(value) {{
   return String(value || '')
@@ -1404,14 +1716,15 @@ async function exportFilteredRows() {{
   const table = document.getElementById('detailTable');
   const headers = Array.from(table.querySelectorAll('thead tr:first-child th')).map(th => th.childNodes[0].textContent.trim());
   headers.push('{TEXT_OCR_TEXT}');
-  const rows = Array.from(table.querySelectorAll('tbody tr')).filter(row => row.style.display !== 'none');
   const headerHtml = headers.map(header => `<th>${{htmlEscape(header)}}</th>`).join('');
-  const rowHtml = await Promise.all(rows.map(async row => {{
-    const cellHtml = await Promise.all(Array.from(row.cells).map(async (cell, index) => {{
+  const rowHtml = await Promise.all(filteredRows.map(async row => {{
+    const temp = document.createElement('tr');
+    temp.innerHTML = row.cells.join('');
+    const cellHtml = await Promise.all(Array.from(temp.cells).map(async (cell, index) => {{
       if (index === 4 || index === 5) return `<td>${{await buildExportImageCell(cell)}}</td>`;
       return `<td>${{htmlEscape(cell.textContent.trim())}}</td>`;
     }}));
-    cellHtml.push(`<td>${{htmlEscape(row.dataset.ocr || '')}}</td>`);
+    cellHtml.push(`<td>${{htmlEscape(row.ocr || '')}}</td>`);
     return `<tr>${{cellHtml.join('')}}</tr>`;
   }}));
   const bodyHtml = rowHtml.join('');
@@ -1441,6 +1754,7 @@ function closePreview() {{
   document.getElementById('previewImage').src = '';
 }}
 document.addEventListener('keydown', event => {{ if (event.key === 'Escape') closePreview(); }});
+renderPage(1);
 </script>
 </body>
 </html>
@@ -1496,6 +1810,25 @@ def local_image_path(source: str) -> Path | None:
     return None
 
 
+def _is_pillow_available() -> bool:
+    try:
+        from PIL import Image as _PILImage  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _require_pillow_for_report(output_path: Path) -> None:
+    if _is_pillow_available():
+        return
+    raise SystemExit(
+        "ERROR: 生成图片预览需要 Pillow，但当前 Python 环境没有安装 PIL。\n"
+        f"当前 Python: {sys.executable}\n"
+        f"请执行: \"{sys.executable}\" -m pip install Pillow\n"
+        f"然后重新运行生成 {output_path.name}。"
+    )
+
+
 def parse_dt(value: str) -> dt.datetime:
     return dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
 
@@ -1513,9 +1846,18 @@ def _filter_whitelisted_files(
     files: dict[str, ImageFile],
     pair: dict[str, object],
 ) -> dict[str, ImageFile]:
-    whitelist = [normalize_rel(str(item)) for item in pair.get("whitelist", [])]
-    if not whitelist:
-        return files
+    raw_whitelist = pair.get("whitelist", [])
+    whitelist: list[str] = []
+    whitelist_rules: list[dict[str, object]] = []
+    for item in raw_whitelist:
+        if isinstance(item, dict):
+            whitelist_rules.append(item)
+            continue
+        parsed_rule = _parse_inline_whitelist_rule(str(item))
+        if parsed_rule is not None:
+            whitelist_rules.append(parsed_rule)
+        else:
+            whitelist.append(normalize_rel(str(item)))
 
     relative_roots = [
         normalize_rel(str(pair.get("mainland_relative", ""))),
@@ -1534,11 +1876,66 @@ def _filter_whitelisted_files(
         key: value
         for key, value in files.items()
         if not any(key == prefix or key.startswith(prefix + "/") for prefix in ignored_prefixes)
+        and not any(_matches_whitelist_rule(value.relative_path, rule, relative_roots) for rule in whitelist_rules)
     }
 
 
+def _strip_pair_root(path: str, relative_roots: Sequence[str]) -> str:
+    normalized = normalize_rel(path)
+    for root in relative_roots:
+        root = normalize_rel(root)
+        if root and compare_key(normalized).startswith(compare_key(root) + "/"):
+            return normalize_rel(normalized[len(root):].lstrip("/"))
+    return normalized
+
+
+def _parse_inline_whitelist_rule(item: str) -> dict[str, object] | None:
+    normalized = normalize_rel(item)
+    parts = normalized.split("/")
+    for index, part in enumerate(parts):
+        if part.startswith("^"):
+            if index == 0:
+                return None
+            return {
+                "directory_glob": "/".join(parts[:index]),
+                "filename_regex": "/".join(parts[index:]),
+            }
+    return None
+
+
+def _matches_whitelist_rule(
+    relative_path: str,
+    rule: dict[str, object],
+    relative_roots: Sequence[str],
+) -> bool:
+    directory_glob = rule.get("directory_glob")
+    filename_regex = rule.get("filename_regex")
+    if not directory_glob or not filename_regex:
+        return False
+
+    path = _strip_pair_root(relative_path, relative_roots)
+    path_key = compare_key(path)
+    directory = str(PurePosixPath(path_key).parent)
+    if directory == ".":
+        directory = ""
+    pattern = compare_key(_strip_pair_root(str(directory_glob), relative_roots))
+    if not PurePosixPath(directory).match(pattern):
+        return False
+
+    filename = PurePosixPath(path).name
+    stem = PurePosixPath(path).stem
+    pattern_text = str(filename_regex)
+    if re.fullmatch(pattern_text, filename, flags=re.IGNORECASE):
+        return True
+    if re.fullmatch(pattern_text, stem, flags=re.IGNORECASE):
+        return True
+    if pattern_text.endswith("$.*"):
+        return re.fullmatch(pattern_text[:-2], stem, flags=re.IGNORECASE) is not None
+    return False
+
+
 def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
-    raw = Path(config_path).read_text(encoding="utf-8")
+    raw = Path(config_path).read_text(encoding="utf-8-sig")
     # tolerate Windows backslash paths in JSON
     raw = raw.replace("\\", "/")
     data = json.loads(raw)
@@ -1548,7 +1945,7 @@ def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
         whitelist = []
     elif isinstance(data, dict) and "pairs" in data:
         root = str(data.get("root", "")).replace("\\", "/").rstrip("/")
-        whitelist = [normalize_rel(str(item)) for item in data.get("whitelist", [])]
+        whitelist = _normalize_whitelist(data.get("whitelist", []))
         pairs = data["pairs"]
     else:
         raise SystemExit(f"ERROR: 配置文件格式错误，需要 [{{\"name\":..., \"i18n\":..., \"mainland\":...}}, ...]")
@@ -1559,8 +1956,25 @@ def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
         p["mainland_relative"] = p["mainland"].replace("\\", "/").strip("/")
         p["i18n"] = _join_config_path(root, p["i18n_relative"])
         p["mainland"] = _join_config_path(root, p["mainland_relative"])
-        p["whitelist"] = [normalize_rel(str(item)) for item in p.get("whitelist", whitelist)]
+        p["whitelist"] = _normalize_whitelist(p.get("whitelist", whitelist))
     return pairs
+
+
+def _normalize_whitelist(items: object) -> list[object]:
+    if not isinstance(items, list):
+        return []
+    normalized: list[object] = []
+    for item in items:
+        if isinstance(item, dict):
+            rule = dict(item)
+            if "directory_glob" in rule:
+                rule["directory_glob"] = normalize_rel(str(rule["directory_glob"]))
+            if "filename_regex" in rule:
+                rule["filename_regex"] = str(rule["filename_regex"])
+            normalized.append(rule)
+        else:
+            normalized.append(normalize_rel(str(item)))
+    return normalized
 
 
 def _finding_to_dict(f: Finding) -> dict:
@@ -1591,7 +2005,7 @@ def _save_intermediate(path: Path, findings: list[Finding], i18n_count: int, mai
 
 
 def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str, int]]:
-    last_check_at = args.since or load_last_check(Path(args.state_file))
+    last_check_at = args.since
     if args.assume_new_has_text:
         detector = assume_text_detector
     elif not args.no_ocr:
@@ -1610,32 +2024,47 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
     total_normal_synced = 0
     total_new_no_text = 0
 
-    intermediate_path = Path(args.output).with_suffix(".intermediate.json")
     pair_count = len(pairs)
 
     for idx, pair in enumerate(pairs, 1):
         name = pair.get("name", "") or pair["mainland"]
+        log_step(f"开始处理配对目录 [{idx}/{pair_count}]: {name}")
         print(f"[{idx}/{pair_count}] 正在扫描: {name}", file=sys.stderr)
         is_remote = pair["i18n"].lower().startswith(("http://", "https://"))
-        scanner = scan_svn if is_remote else scan_local
+        log_step(f"扫描国际版目录: {pair['i18n']}")
         print(f"  扫描国际版目录: {pair['i18n']}", file=sys.stderr)
-        i18n_files = scanner(pair["i18n"])
+        i18n_files = scan_svn(pair["i18n"]) if is_remote else scan_local(pair["i18n"], pair)
+        log_step(f"扫描陆版目录: {pair['mainland']}")
         print(f"  扫描陆版目录: {pair['mainland']}", file=sys.stderr)
-        mainland_files = scanner(pair["mainland"])
+        mainland_files = scan_svn(pair["mainland"]) if is_remote else scan_local(pair["mainland"], pair)
         i18n_files = _filter_whitelisted_files(i18n_files, pair)
         mainland_files = _filter_whitelisted_files(mainland_files, pair)
+        log_step(f"扫描完成: 国际版={len(i18n_files)} 陆版={len(mainland_files)}")
         print(f"  国际版 {len(i18n_files)} 张, 陆版 {len(mainland_files)} 张", file=sys.stderr)
         total_i18n += len(i18n_files)
         total_mainland += len(mainland_files)
         i18n_files, mainland_files = apply_max_file_sample(
             i18n_files, mainland_files, args.max_files,
         )
+        log_step(
+            f"应用采样后: max_files={args.max_files} 国际版={len(i18n_files)} 陆版={len(mainland_files)}"
+        )
+        log_step(f"开始比较目录: {name}")
         pair_findings, pair_stats = compare_category(
-            pair.get("name", ""), i18n_files, mainland_files, last_check_at, detector
+            pair.get("name", ""),
+            i18n_files,
+            mainland_files,
+            last_check_at,
+            detector,
+            ocr_workers=args.ocr_workers,
         )
         all_findings.extend(pair_findings)
         total_normal_synced += pair_stats["normal_synced"]
         total_new_no_text += pair_stats["new_no_text"]
+        log_step(
+            f"目录比较完成: {name} normal_synced={pair_stats['normal_synced']} "
+            f"new_no_text={pair_stats['new_no_text']} findings={len(pair_findings)}"
+        )
         print(
             f"  正常同步 {pair_stats['normal_synced']} 张, "
             f"新增无文字 {pair_stats['new_no_text']} 张, "
@@ -1643,26 +2072,6 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
             f"累计 {len(all_findings)} 项",
             file=sys.stderr,
         )
-        # 每完成一个 pair 就保存中间结果，防止长时间运行后崩溃丢失数据
-        _save_intermediate(intermediate_path, all_findings, total_i18n, total_mainland)
-        print(f"  中间结果已保存到: {intermediate_path}", file=sys.stderr)
-
-    if getattr(args, "enable_translation_check", False):
-        api_key = os.environ.get("ANTHROPIC_API_KEY") or getattr(args, "anthropic_api_key", None)
-        if not api_key:
-            raise SystemExit(
-                "ERROR: --enable-translation-check 需要 API Key，"
-                "请设置环境变量 ANTHROPIC_API_KEY "
-                "或使用 --anthropic-api-key 传入"
-            )
-        if not _is_tesseract_available():
-            raise SystemExit(
-                "ERROR: --enable-translation-check 需要 tesseract OCR，请先安装 tesseract"
-            )
-        checker = make_translation_checker(api_key)
-        all_findings = enrich_findings_with_translation(all_findings, checker)
-        _save_intermediate(intermediate_path, all_findings, total_i18n, total_mainland)
-        print(f"  翻译检查完成，中间结果已更新: {intermediate_path}", file=sys.stderr)
 
     stats = {
         "i18n_count": total_i18n,
@@ -1674,18 +2083,23 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="检查国际版/陆版图片差异，并输出 Excel/HTML。")
+    parser = argparse.ArgumentParser(description="检查国际版/陆版图片差异，并输出 HTML。")
     parser.add_argument("--config", default=None, help="JSON 配置文件路径（默认自动查找当前目录 check_config.json）")
     parser.add_argument("--i18n", default=None, help="国际版图片目录路径（与 --mainland 配对，或使用 --config）")
     parser.add_argument("--mainland", default=None, help="陆版图片目录路径（与 --i18n 配对，或使用 --config）")
-    parser.add_argument("--output", default="ui_image_check_report.html", help="输出文件路径，支持 .xlsx / .html")
-    parser.add_argument("--state-file", default=STATE_FILE, help="增量检查时间点记录文件")
+    parser.add_argument("--output", default="ui_image_check_report.html", help="输出文件路径，支持 .html / .htm")
     parser.add_argument(
         "--since",
         type=parse_dt,
         help="只检查此时间后的陆版新增图片，例如 2026-05-27T00:00:00+08:00",
     )
     parser.add_argument("--no-ocr", action="store_true", help="禁用 OCR 文字检测（默认启用）")
+    parser.add_argument(
+        "--ocr-workers",
+        type=int,
+        default=default_ocr_workers(),
+        help="OCR 并发线程数，默认 1",
+    )
     parser.add_argument(
         "--ocr-cache-file",
         default=OCR_CACHE_FILE,
@@ -1702,38 +2116,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="将陆版新增图片全部按有文字报告，用于无 OCR 环境人工复核",
     )
     parser.add_argument(
-        "--thumbnail-limit",
-        type=int,
-        default=500,
-        help="最多插入多少张缩略图；传 -1 表示不限制",
-    )
-    parser.add_argument(
-        "--no-thumbnail-resize",
-        action="store_true",
-        help="嵌入原图像素尺寸而非 96x72 缩略图；行高会随原图高度调整",
-    )
-    parser.add_argument(
         "--max-image-px",
         type=int,
         default=None,
-        help="嵌入图最长边像素上限（保持纵横比）；默认 96x72 缩略图；与 --no-thumbnail-resize 互斥",
-    )
-    parser.add_argument(
-        "--thumbnail-issue",
-        action="append",
-        choices=["mainland_changed", "mainland_missing", "mainland_new_with_text"],
-        help="指定哪些问题类型插入缩略图；可重复传入。默认只给 changed/missing 插图",
-    )
-    parser.add_argument("--no-save-state", action="store_true", help="不更新增量检查时间点")
-    parser.add_argument(
-        "--enable-translation-check",
-        action="store_true",
-        help="对 mainland_changed/mainland_new_with_text 图片进行 OCR+Claude 翻译质量检查",
-    )
-    parser.add_argument(
-        "--anthropic-api-key",
-        default=None,
-        help="Anthropic API Key（优先使用环境变量 ANTHROPIC_API_KEY）",
+        help="HTML 报告预览图最长边像素上限（保持纵横比）；默认 720",
     )
     args = parser.parse_args(argv)
 
@@ -1746,41 +2132,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not args.config and (not args.i18n or not args.mainland):
         parser.error("请指定 --i18n 和 --mainland，或 --config 配置文件，或在当前目录放置 check_config.json")
 
-    check_started_at = dt.datetime.now(dt.timezone.utc)
-    findings, counts = collect_findings(args)
-    thumbnail_limit = None if args.thumbnail_limit < 0 else args.thumbnail_limit
-    thumbnail_issues = (
-        set(args.thumbnail_issue)
-        if args.thumbnail_issue
-        else DEFAULT_THUMBNAIL_ISSUES
-    )
-    if args.no_thumbnail_resize and args.max_image_px is not None:
-        raise SystemExit("ERROR: --no-thumbnail-resize 与 --max-image-px 不能同时使用")
     output_path = Path(args.output)
-    if output_path.suffix.lower() in {".html", ".htm"}:
-        write_html_report(
-            output_path,
-            findings,
-            i18n_count=counts["i18n_count"],
-            mainland_count=counts["mainland_count"],
-            normal_synced=counts["normal_synced"],
-            new_no_text=counts["new_no_text"],
-        )
-    else:
-        write_xlsx(
-            output_path,
-            findings,
-            thumbnail_limit,
-            thumbnail_issues,
-            no_thumbnail_resize=args.no_thumbnail_resize,
-            max_image_px=args.max_image_px,
-            stats=counts,
-        )
-    if not args.no_save_state:
-        save_last_check(Path(args.state_file), check_started_at)
+    if output_path.suffix.lower() not in {".html", ".htm"}:
+        parser.error("输出文件只支持 .html / .htm")
+
+    log_file, ocr_candidate_file = _init_run_outputs()
+    log_step(format_version_line())
+    log_step(f"开始检查: output={args.output}")
+    log_step(f"日志文件: {log_file}")
+    log_step(f"OCR 图片清单: {ocr_candidate_file}")
+    findings, counts = collect_findings(args)
+    _write_ocr_candidate_list()
+    log_step(f"OCR 图片清单已写入: {ocr_candidate_file} count={len(_OCR_CANDIDATES)}")
+    log_new_no_text_findings(findings)
+    _require_pillow_for_report(output_path)
+    log_step(f"开始生成 HTML 报告: {output_path}")
+    write_html_report(
+        output_path,
+        findings,
+        i18n_count=counts["i18n_count"],
+        mainland_count=counts["mainland_count"],
+        normal_synced=counts["normal_synced"],
+        new_no_text=counts["new_no_text"],
+        max_image_px=args.max_image_px,
+    )
+    log_step(f"检查完成: findings={len(findings)} output={args.output}")
     print(f"检查完成: {len(findings)} 项，输出: {args.output}")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

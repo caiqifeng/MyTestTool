@@ -1,6 +1,8 @@
 import datetime as dt
 import io
+import os
 import tempfile
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -14,12 +16,17 @@ from check_i18n_images import (
     apply_max_file_sample,
     compare_category,
     enrich_findings_with_translation,
+    format_progress_line,
     ocr_text_detector_factory,
+    main,
+    scan_local,
     write_html_report,
     write_xlsx,
+    _require_pillow_for_report,
 )
 
 UTC = dt.timezone.utc
+cn = lambda value: value.encode("ascii").decode("unicode_escape")
 
 
 def img(rel, when, full=None):
@@ -54,6 +61,25 @@ class CheckI18nImagesTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
+    def test_existing_i18n_matches_same_stem_with_different_image_extension(self):
+        calls = []
+
+        def detector(image):
+            calls.append(image.relative_path)
+            return True
+
+        findings, stats = compare_category(
+            "ui",
+            {"active/nomalbp_1": img("Active/NomalBP_1.tga", "2026-01-02T00:00:00")},
+            {"active/nomalbp_1": img("Active/NomalBP_1.dds", "2026-01-01T00:00:00")},
+            None,
+            detector,
+        )
+
+        self.assertEqual(findings, [])
+        self.assertEqual(stats["normal_synced"], 1)
+        self.assertEqual(calls, [])
+
     def test_existing_i18n_preserves_original_relative_path_in_findings(self):
         findings, _stats = compare_category(
             "ui",
@@ -76,6 +102,25 @@ class CheckI18nImagesTest(unittest.TestCase):
 
         self.assertEqual(findings, [])
 
+    def test_existing_mainland_file_does_not_run_ocr(self):
+        calls = []
+
+        def detector(image):
+            calls.append(image.relative_path)
+            return True
+
+        findings, stats = compare_category(
+            "ui",
+            {"a.dds": img("a.dds", "2026-01-02T00:00:00")},
+            {"a.dds": img("a.dds", "2026-01-01T00:00:00")},
+            None,
+            detector,
+        )
+
+        self.assertEqual(findings, [])
+        self.assertEqual(stats["normal_synced"], 1)
+        self.assertEqual(calls, [])
+
     def test_existing_i18n_reports_when_mainland_missing(self):
         findings, _stats = compare_category(
             "ui",
@@ -87,7 +132,7 @@ class CheckI18nImagesTest(unittest.TestCase):
 
         self.assertEqual(findings[0].issue, "mainland_missing")
 
-    def test_new_mainland_reports_only_after_last_check_and_with_text(self):
+    def test_new_mainland_reports_all_mainland_only_images_and_classifies_text(self):
         mainland = {
             "old.dds": img("old.dds", "2026-01-01T00:00:00"),
             "plain.dds": img("plain.dds", "2026-01-03T00:00:00"),
@@ -105,15 +150,29 @@ class CheckI18nImagesTest(unittest.TestCase):
         self.assertEqual(
             [(f.issue, f.relative_path) for f in findings],
             [
+                ("mainland_new_no_text", "old.dds"),
                 ("mainland_new_no_text", "plain.dds"),
                 ("mainland_new_with_text", "text.dds"),
             ],
         )
 
+    def test_new_mainland_ignores_last_check_time_for_mainland_only_images(self):
+        old_candidate = img("SampleOnly/text.tga", "2026-01-01T00:00:00")
+
+        findings, _stats = compare_category(
+            "ui",
+            {},
+            {"SampleOnly/text.tga": old_candidate},
+            dt.datetime(2026, 1, 2, tzinfo=UTC),
+            lambda _: True,
+        )
+
+        self.assertEqual([(f.issue, f.relative_path) for f in findings], [("mainland_new_with_text", "SampleOnly/text.tga")])
+
     def test_new_mainland_ocr_progress_is_printed(self):
         mainland = {
-            "plain.dds": img("plain.dds", "2026-01-03T00:00:00"),
-            "text.dds": img("text.dds", "2026-01-03T00:00:00"),
+            "plain.dds": img("plain.dds", "2026-01-03T00:00:00", full="/tmp/plain.dds"),
+            "text.dds": img("text.dds", "2026-01-03T00:00:00", full="/tmp/text.dds"),
         }
 
         stderr = io.StringIO()
@@ -126,8 +185,91 @@ class CheckI18nImagesTest(unittest.TestCase):
                 lambda f: f.relative_path == "text.dds",
             )
 
-        self.assertIn("当前分析进度：1/2", stderr.getvalue())
-        self.assertIn("当前分析进度：2/2", stderr.getvalue())
+        output = stderr.getvalue()
+        self.assertIn("1/2", output)
+        self.assertIn("2/2", output)
+        self.assertIn("/tmp/plain.dds", output)
+        self.assertIn("/tmp/text.dds", output)
+        self.assertTrue(output.endswith("\n"))
+
+    def test_new_mainland_ocr_can_run_with_multiple_workers(self):
+        mainland = {
+            f"{i}.dds": img(f"{i}.dds", "2026-01-03T00:00:00")
+            for i in range(4)
+        }
+        calls = []
+
+        def detector(image):
+            time.sleep(0.05)
+            calls.append(image.relative_path)
+            return image.relative_path in {"1.dds", "3.dds"}
+
+        started = time.monotonic()
+        findings, stats = compare_category(
+            "ui",
+            {},
+            mainland,
+            None,
+            detector,
+            ocr_workers=4,
+        )
+        elapsed = time.monotonic() - started
+
+        self.assertLess(elapsed, 1.0)
+        self.assertEqual(set(calls), {"0.dds", "1.dds", "2.dds", "3.dds"})
+        self.assertEqual(stats["new_no_text"], 2)
+        self.assertEqual(
+            [(f.issue, f.relative_path) for f in findings],
+            [
+                ("mainland_new_no_text", "0.dds"),
+                ("mainland_new_with_text", "1.dds"),
+                ("mainland_new_no_text", "2.dds"),
+                ("mainland_new_with_text", "3.dds"),
+            ],
+        )
+
+    def test_parallel_ocr_progress_includes_worker_thread_name(self):
+        mainland = {
+            f"{i}.dds": img(f"{i}.dds", "2026-01-03T00:00:00")
+            for i in range(2)
+        }
+
+        def detector(_image):
+            time.sleep(0.01)
+            return False
+
+        stderr = io.StringIO()
+        with patch("sys.stderr", stderr):
+            compare_category(
+                "ui",
+                {},
+                mainland,
+                None,
+                detector,
+                ocr_workers=2,
+            )
+
+        self.assertIn("OCR线程", stderr.getvalue())
+
+    def test_scan_local_keys_images_by_directory_and_stem(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            image = root / "Image" / "Active" / "NomalBP_1.dds"
+            image.parent.mkdir(parents=True)
+            image.write_bytes(b"image")
+
+            files = scan_local(str(root))
+
+        self.assertIn("image/active/nomalbp_1", files)
+        self.assertNotIn("image/active/nomalbp_1.dds", files)
+
+    def test_format_progress_line_includes_current_full_path(self):
+        line = format_progress_line(3, 10, 1, 5, r"E:\trunk\client\ui\a.tga")
+
+        self.assertIn("3/10", line)
+        self.assertIn("01", line)
+        self.assertIn("05", line)
+        self.assertIn(r"E:\trunk\client\ui\a.tga", line)
 
     def test_max_file_sample_uses_shared_keys_for_both_sides(self):
         i18n = {
@@ -154,7 +296,8 @@ class CheckI18nImagesTest(unittest.TestCase):
   "root": "f:/project/client",
   "whitelist": [
     "ui\\\\Image\\\\ExteriorPic",
-    "ui/Image/UItimate/OperationCenter/NewChargeGiftMonthly"
+    "ui/Image/UItimate/OperationCenter/NewChargeGiftMonthly",
+    "data/source/maps/*minimap*/^[0-9_-]+$.*"
   ],
   "pairs": [
     {
@@ -177,6 +320,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             [
                 "ui/Image/ExteriorPic",
                 "ui/Image/UItimate/OperationCenter/NewChargeGiftMonthly",
+                "data/source/maps/*minimap*/^[0-9_-]+$.*",
             ],
         )
 
@@ -194,6 +338,317 @@ class CheckI18nImagesTest(unittest.TestCase):
         filtered = _filter_whitelisted_files(files, pair)
 
         self.assertEqual(list(filtered), ["image/keep/b.tga"])
+
+    def test_filter_whitelisted_files_supports_minimap_filename_rule(self):
+        pair = {
+            "i18n_relative": "i18n/zh_TW/data/source",
+            "mainland_relative": "data/source",
+            "whitelist": ["data/source/maps/*minimap*/^[0-9_-]+$.*"],
+        }
+        files = {
+            "maps/worldminimap/001_002.tga": img("maps/worldminimap/001_002.tga", "2026-01-01T00:00:00"),
+            "maps/worldminimap/001_002-1.tga": img("maps/worldminimap/001_002-1.tga", "2026-01-01T00:00:00"),
+            "maps/world_minimap_hd/9.dds": img("maps/world_minimap_hd/9.dds", "2026-01-01T00:00:00"),
+            "maps/worldminimap/title_001.tga": img("maps/worldminimap/title_001.tga", "2026-01-01T00:00:00"),
+            "maps/worldminimap/001_a-1.tga": img("maps/worldminimap/001_a-1.tga", "2026-01-01T00:00:00"),
+            "maps/world/001_002.tga": img("maps/world/001_002.tga", "2026-01-01T00:00:00"),
+        }
+
+        filtered = _filter_whitelisted_files(files, pair)
+
+        self.assertEqual(
+            list(filtered),
+            ["maps/worldminimap/title_001.tga", "maps/worldminimap/001_a-1.tga", "maps/world/001_002.tga"],
+        )
+
+    def test_scan_local_skips_whitelisted_directories_before_descending(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            skipped_dir = root / "Image" / "ExteriorPic"
+            kept_dir = root / "Image" / "Keep"
+            skipped_dir.mkdir(parents=True)
+            kept_dir.mkdir(parents=True)
+            (skipped_dir / "ignored.tga").write_bytes(b"ignored")
+            (kept_dir / "kept.tga").write_bytes(b"kept")
+
+            result = scan_local(
+                str(root),
+                {
+                    "i18n_relative": "i18n/zh_TW/ui",
+                    "mainland_relative": "ui",
+                    "whitelist": ["ui/Image/ExteriorPic"],
+                },
+            )
+
+            self.assertEqual(list(result), ["image/keep/kept"])
+
+    def test_main_rejects_non_html_output(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = Path(td) / "check_config.json"
+            config.write_text(
+                '{"pairs":[{"name":"ui","i18n":"i18n","mainland":"ui"}]}',
+                encoding="utf-8",
+            )
+
+            with self.assertRaises(SystemExit) as cm:
+                main(["--config", str(config), "--output", str(Path(td) / "out.xlsx"), "--no-ocr"])
+
+        self.assertNotEqual(cm.exception.code, 0)
+
+    def test_main_does_not_accept_removed_product_options(self):
+        removed_options = [
+            ["--state-file", "state.txt"],
+            ["--no-save-state"],
+            ["--enable-translation-check"],
+            ["--anthropic-api-key", "key"],
+            ["--thumbnail-limit", "10"],
+            ["--no-thumbnail-resize"],
+            ["--thumbnail-issue", "mainland_changed"],
+        ]
+
+        for option_args in removed_options:
+            with self.subTest(option=option_args[0]):
+                args = [
+                    *option_args,
+                    "--i18n",
+                    "missing-i18n",
+                    "--mainland",
+                    "missing-mainland",
+                    "--no-ocr",
+                ]
+                with patch(
+                    "check_i18n_images.collect_findings",
+                    return_value=([], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}),
+                ), patch("check_i18n_images._require_pillow_for_report"), patch("check_i18n_images.write_html_report"):
+                    with self.assertRaises(SystemExit) as cm:
+                        main(args)
+
+                self.assertEqual(cm.exception.code, 2)
+
+    def test_main_defaults_ocr_workers_to_one(self):
+        captured = {}
+
+        def fake_collect(args):
+            captured["ocr_workers"] = args.ocr_workers
+            return [], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}
+
+        with patch("check_i18n_images.os.cpu_count", return_value=12), patch(
+            "check_i18n_images.collect_findings", side_effect=fake_collect
+        ), patch(
+            "check_i18n_images._require_pillow_for_report"
+        ), patch("check_i18n_images.write_html_report"):
+            main([
+                "--i18n",
+                "missing-i18n",
+                "--mainland",
+                "missing-mainland",
+                "--output",
+                "out.html",
+                "--no-ocr",
+            ])
+
+        self.assertEqual(captured["ocr_workers"], 1)
+
+    def test_main_logs_version_and_current_time_before_running(self):
+        fixed_now = dt.datetime(2026, 6, 4, 16, 1, 28, tzinfo=dt.timezone(dt.timedelta(hours=8)))
+        stderr = io.StringIO()
+
+        with patch(
+            "check_i18n_images.collect_findings",
+            return_value=([], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}),
+        ), patch("check_i18n_images._require_pillow_for_report"), patch(
+            "check_i18n_images.write_html_report"
+        ), patch("check_i18n_images.dt.datetime") as mock_datetime, patch("sys.stderr", stderr):
+            mock_datetime.now.return_value = fixed_now
+            mock_datetime.fromtimestamp.side_effect = dt.datetime.fromtimestamp
+            mock_datetime.fromisoformat.side_effect = dt.datetime.fromisoformat
+            main([
+                "--i18n",
+                "missing-i18n",
+                "--mainland",
+                "missing-mainland",
+                "--output",
+                "out.html",
+                "--no-ocr",
+            ])
+
+        self.assertIn("version = 1.0.1，time = 2026-06-04 16:01:28 +08:00", stderr.getvalue())
+
+    def test_main_writes_version_line_to_run_log(self):
+        fixed_now = dt.datetime(2026, 6, 4, 16, 1, 28, tzinfo=dt.timezone(dt.timedelta(hours=8)))
+
+        with tempfile.TemporaryDirectory() as td:
+            previous_cwd = os.getcwd()
+            os.chdir(td)
+            try:
+                with patch(
+                    "check_i18n_images.collect_findings",
+                    return_value=([], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}),
+                ), patch("check_i18n_images._require_pillow_for_report"), patch(
+                    "check_i18n_images.write_html_report"
+                ), patch("check_i18n_images.dt.datetime") as mock_datetime:
+                    mock_datetime.now.return_value = fixed_now
+                    mock_datetime.fromtimestamp.side_effect = dt.datetime.fromtimestamp
+                    mock_datetime.fromisoformat.side_effect = dt.datetime.fromisoformat
+                    main([
+                        "--i18n",
+                        "missing-i18n",
+                        "--mainland",
+                        "missing-mainland",
+                        "--output",
+                        "out.html",
+                        "--no-ocr",
+                    ])
+
+                log_text = Path("Log/20260604_160128.log").read_text(encoding="utf-8")
+            finally:
+                os.chdir(previous_cwd)
+
+        self.assertIn("version = 1.0.1，time = 2026-06-04 16:01:28 +08:00", log_text)
+
+    def test_main_defaults_ocr_workers_to_at_least_one(self):
+        captured = {}
+
+        def fake_collect(args):
+            captured["ocr_workers"] = args.ocr_workers
+            return [], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}
+
+        with patch("check_i18n_images.os.cpu_count", return_value=1), patch(
+            "check_i18n_images.collect_findings", side_effect=fake_collect
+        ), patch(
+            "check_i18n_images._require_pillow_for_report"
+        ), patch("check_i18n_images.write_html_report"):
+            main([
+                "--i18n",
+                "missing-i18n",
+                "--mainland",
+                "missing-mainland",
+                "--output",
+                "out.html",
+                "--no-ocr",
+            ])
+
+        self.assertEqual(captured["ocr_workers"], 1)
+
+    def test_main_writes_run_log_and_ocr_candidate_list(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            i18n_dir = root / "i18n"
+            mainland_dir = root / "ui"
+            new_image = mainland_dir / "Image" / "new.tga"
+            i18n_dir.mkdir()
+            new_image.parent.mkdir(parents=True)
+            new_image.write_bytes(b"fake image")
+            config = root / "check_config.json"
+            config.write_text(
+                __import__("json").dumps(
+                    {
+                        "pairs": [
+                            {
+                                "name": "ui",
+                                "i18n": str(i18n_dir),
+                                "mainland": str(mainland_dir),
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            old_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with patch("check_i18n_images._require_pillow_for_report"), patch(
+                    "check_i18n_images.write_html_report"
+                ):
+                    main(["--config", str(config), "--output", str(root / "out.html"), "--no-ocr"])
+            finally:
+                os.chdir(old_cwd)
+
+            log_files = list((root / "Log").glob("*.log"))
+            ocr_lists = list((root / "Log").glob("*_ocr_images.txt"))
+            log_text = log_files[0].read_text(encoding="utf-8") if log_files else ""
+            ocr_list_text = ocr_lists[0].read_text(encoding="utf-8") if ocr_lists else ""
+
+        self.assertEqual(len(log_files), 1)
+        self.assertEqual(len(ocr_lists), 1)
+        self.assertIn("开始检查", log_text)
+        self.assertIn("Image/new.tga", ocr_list_text)
+
+    def test_main_without_args_uses_default_config_output_and_logs(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            i18n_dir = root / "i18n"
+            mainland_dir = root / "ui"
+            i18n_dir.mkdir()
+            mainland_dir.mkdir()
+            (root / "check_config.json").write_text(
+                __import__("json").dumps(
+                    {
+                        "pairs": [
+                            {
+                                "name": "ui",
+                                "i18n": str(i18n_dir),
+                                "mainland": str(mainland_dir),
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            old_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with patch("check_i18n_images._require_pillow_for_report"), patch(
+                    "check_i18n_images.write_html_report"
+                ) as write_report:
+                    main([])
+                log_files = list((root / "Log").glob("*.log"))
+                log_text = log_files[0].read_text(encoding="utf-8") if log_files else ""
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertEqual(write_report.call_args.args[0], Path("ui_image_check_report.html"))
+        self.assertEqual(len(log_files), 1)
+        self.assertIn("开始检查", log_text)
+        self.assertIn("ui_image_check_report.html", log_text)
+
+    def test_main_writes_new_no_text_list_to_run_log(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            i18n_dir = root / "i18n"
+            mainland_dir = root / "ui"
+            image = mainland_dir / "Image" / "plain.tga"
+            i18n_dir.mkdir()
+            image.parent.mkdir(parents=True)
+            image.write_bytes(b"fake image")
+            (root / "check_config.json").write_text(
+                __import__("json").dumps(
+                    {
+                        "pairs": [
+                            {
+                                "name": "ui",
+                                "i18n": str(i18n_dir),
+                                "mainland": str(mainland_dir),
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            old_cwd = os.getcwd()
+            os.chdir(root)
+            try:
+                with patch("check_i18n_images._require_pillow_for_report"), patch(
+                    "check_i18n_images.write_html_report"
+                ):
+                    main(["--no-ocr"])
+                log_file = next((root / "Log").glob("*.log"))
+                log_text = log_file.read_text(encoding="utf-8")
+            finally:
+                os.chdir(old_cwd)
+
+        self.assertIn("新增无文字图片列表", log_text)
+        self.assertIn("Image/plain.tga", log_text)
 
     def test_write_xlsx_creates_excel_package(self):
         with tempfile.TemporaryDirectory() as td:
@@ -223,7 +678,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                         str(img_path),
                         dt.datetime(2026, 1, 1, tzinfo=UTC),
                         dt.datetime(2026, 1, 2, tzinfo=UTC),
-                        "陆版文件修改时间晚于国际版",
+                        "changed detail",
                     )
                 ],
                 thumbnail_issues={"mainland_changed"},
@@ -238,33 +693,267 @@ class CheckI18nImagesTest(unittest.TestCase):
     def test_default_thumbnail_issues_uses_detail_column(self):
         self.assertEqual(DEFAULT_THUMBNAIL_ISSUES, {"__has_detail__"})
 
+    def test_module_does_not_expose_tesseract_fallback(self):
+        module = __import__("check_i18n_images")
+
+        self.assertFalse(hasattr(module, "run_tesseract_ocr"))
+        self.assertFalse(hasattr(module, "_is_tesseract_available"))
+        self.assertFalse(hasattr(module, "_tesseract_exe"))
+
+    def test_run_ocr_uses_rapidocr_without_tesseract_fallback(self):
+        image = ImageFile(
+            "source.tga",
+            "source.tga",
+            dt.datetime(2026, 1, 1, tzinfo=UTC),
+            "ui",
+        )
+
+        with patch("check_i18n_images.run_rapidocr", return_value="越海珠贝"):
+            self.assertEqual(__import__("check_i18n_images").run_ocr(image), "越海珠贝")
+
+        with patch("check_i18n_images.run_rapidocr", return_value=None):
+            self.assertEqual(__import__("check_i18n_images").run_ocr(image), None)
+
+    def test_ocr_text_detector_uses_rapidocr_when_tesseract_is_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+
+            with patch("check_i18n_images.run_ocr", return_value="测试文字") as rapidocr:
+                detector = ocr_text_detector_factory(cache_path)
+                self.assertTrue(detector(image))
+                rapidocr.assert_called_once_with(image)
+
+    def test_rapidocr_ignores_low_confidence_preprocessed_false_positive(self):
+        image = ImageFile(
+            "source.tga",
+            "source.tga",
+            dt.datetime(2026, 1, 1, tzinfo=UTC),
+            "ui",
+        )
+        ocr_results = [
+            (None, None),
+            ([[[[0, 0], [10, 0], [10, 10], [0, 10]], "战场", "0.65"]], None),
+            (None, None),
+            (None, None),
+        ]
+
+        class FakeRapidOCR:
+            def __call__(self, _path):
+                return ocr_results.pop(0)
+
+        with patch("check_i18n_images._prepare_ocr_sources", return_value=(["original.tga", "enhanced.png"], [])), patch(
+            "rapidocr_onnxruntime.RapidOCR",
+            FakeRapidOCR,
+        ):
+            import check_i18n_images
+
+            check_i18n_images._RAPIDOCR_ENGINE = None
+            try:
+                self.assertIsNone(check_i18n_images.run_rapidocr(image))
+            finally:
+                check_i18n_images._RAPIDOCR_ENGINE = None
+
+    def test_rapidocr_uses_lower_preprocessed_threshold_when_original_has_text(self):
+        image = ImageFile(
+            "source.tga",
+            "source.tga",
+            dt.datetime(2026, 1, 1, tzinfo=UTC),
+            "ui",
+        )
+        ocr_results = [
+            ([[[[0, 0], [10, 0], [10, 10], [0, 10]], "加入", "0.66"]], None),
+            ([[[[0, 0], [10, 0], [10, 10], [0, 10]], "加入丐帮", "0.743"]], None),
+        ]
+
+        class FakeRapidOCR:
+            def __call__(self, _path):
+                return ocr_results.pop(0)
+
+        with patch("check_i18n_images._prepare_ocr_sources", return_value=(["original.tga", "enhanced.png"], [])), patch(
+            "rapidocr_onnxruntime.RapidOCR",
+            FakeRapidOCR,
+        ):
+            import check_i18n_images
+
+            check_i18n_images._RAPIDOCR_ENGINE = None
+            try:
+                self.assertEqual(check_i18n_images.run_rapidocr(image), "加入丐帮")
+            finally:
+                check_i18n_images._RAPIDOCR_ENGINE = None
+
+    def test_rapidocr_normalizes_common_game_ui_ocr_confusions(self):
+        image = ImageFile(
+            "source.tga",
+            "source.tga",
+            dt.datetime(2026, 1, 1, tzinfo=UTC),
+            "ui",
+        )
+        ocr_results = [
+            ([[[[0, 0], [10, 0], [10, 10], [0, 10]], "加入", "0.66"]], None),
+            ([[[[0, 0], [10, 0], [10, 10], [0, 10]], "加入巧帮", "0.743"]], None),
+        ]
+
+        class FakeRapidOCR:
+            def __call__(self, _path):
+                return ocr_results.pop(0)
+
+        with patch("check_i18n_images._prepare_ocr_sources", return_value=(["original.tga", "enhanced.png"], [])), patch(
+            "rapidocr_onnxruntime.RapidOCR",
+            FakeRapidOCR,
+        ):
+            import check_i18n_images
+
+            check_i18n_images._RAPIDOCR_ENGINE = None
+            try:
+                self.assertEqual(check_i18n_images.run_rapidocr(image), "加入丐帮")
+            finally:
+                check_i18n_images._RAPIDOCR_ENGINE = None
+
+    def test_rapidocr_engine_is_reused_between_calls(self):
+        import check_i18n_images
+
+        check_i18n_images._RAPIDOCR_ENGINE = None
+
+        class FakeRapidOCR:
+            created = 0
+
+            def __init__(self):
+                FakeRapidOCR.created += 1
+
+            def __call__(self, _path):
+                return [[[[0, 0], [10, 0], [10, 10], [0, 10]], "加入段氏", "0.80"]], None
+
+        image = ImageFile(
+            "source.tga",
+            "source.tga",
+            dt.datetime(2026, 1, 1, tzinfo=UTC),
+            "ui",
+        )
+
+        with patch("check_i18n_images._prepare_ocr_sources", return_value=(["original.tga"], [])), patch(
+            "rapidocr_onnxruntime.RapidOCR",
+            FakeRapidOCR,
+        ):
+            try:
+                self.assertEqual(check_i18n_images.run_rapidocr(image), "加入段氏")
+                self.assertEqual(check_i18n_images.run_rapidocr(image), "加入段氏")
+            finally:
+                check_i18n_images._RAPIDOCR_ENGINE = None
+
+        self.assertEqual(FakeRapidOCR.created, 1)
+
+    def test_rapidocr_skips_preprocessing_when_original_result_is_strong(self):
+        image = ImageFile(
+            "source.tga",
+            "source.tga",
+            dt.datetime(2026, 1, 1, tzinfo=UTC),
+            "ui",
+        )
+        calls = []
+
+        class FakeRapidOCR:
+            def __call__(self, path):
+                calls.append(path)
+                return [[[[0, 0], [10, 0], [10, 10], [0, 10]], "加入凌雪阁", "0.82"]], None
+
+        with patch("check_i18n_images._prepare_ocr_sources", return_value=(["original.tga", "enhanced.png"], [])), patch(
+            "rapidocr_onnxruntime.RapidOCR",
+            FakeRapidOCR,
+        ):
+            import check_i18n_images
+
+            check_i18n_images._RAPIDOCR_ENGINE = None
+            try:
+                self.assertEqual(check_i18n_images.run_rapidocr(image), "加入凌雪阁")
+            finally:
+                check_i18n_images._RAPIDOCR_ENGINE = None
+
+        self.assertEqual(calls, ["original.tga"])
+
+    def test_run_ocr_uses_filename_hint_for_chapter_titles(self):
+        image = ImageFile(
+            "Image/ChaptersTga/教主·陆危楼.tga",
+            r"F:\client\ui\Image\ChaptersTga\教主·陆危楼.tga",
+            dt.datetime(2026, 1, 1, tzinfo=UTC),
+            "ui",
+        )
+
+        with patch("check_i18n_images.run_rapidocr", return_value="陆危楼"):
+            self.assertEqual(__import__("check_i18n_images").run_ocr(image), "教主\n陆危楼")
+
+    def test_run_ocr_does_not_use_filename_hint_for_non_text_chapter_assets(self):
+        image = ImageFile(
+            "Image/ChaptersTga/箭头-1.tga",
+            r"F:\client\ui\Image\ChaptersTga\箭头-1.tga",
+            dt.datetime(2026, 1, 1, tzinfo=UTC),
+            "ui",
+        )
+
+        with patch("check_i18n_images.run_rapidocr", return_value=None):
+            self.assertIsNone(__import__("check_i18n_images").run_ocr(image))
+
     def test_ocr_cache_records_detected_text(self):
         with tempfile.TemporaryDirectory() as td:
             cache_path = Path(td) / "ocr_cache.json"
             image_path = Path(td) / "source.tga"
             image_path.write_bytes(b"fake image")
             image = ImageFile(
-                "NewTest/source.tga",
+                "SampleOnly/source.tga",
                 str(image_path),
                 dt.datetime(2026, 1, 1, tzinfo=UTC),
                 "ui",
             )
 
-            with patch("check_i18n_images.run_ocr", return_value="文字内容"):
+            with patch("check_i18n_images.run_ocr", return_value="閺傚洤鐡ч崘鍛啇"):
                 detector = ocr_text_detector_factory(cache_path)
                 self.assertTrue(detector(image))
 
             data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
-            self.assertNotIn("has_test", data["NewTest/source.tga"])
-            self.assertEqual(data["NewTest/source.tga"]["test_str"], "文字内容")
+            self.assertNotIn("has_test", data["SampleOnly/source.tga"])
+            self.assertEqual(data["SampleOnly/source.tga"]["test_str"], "閺傚洤鐡ч崘鍛啇")
 
-    def test_ocr_cache_refreshes_entries_without_detected_text(self):
+    def test_ocr_cache_refreshes_entries_when_file_content_changed(self):
         with tempfile.TemporaryDirectory() as td:
             cache_path = Path(td) / "ocr_cache.json"
             image_path = Path(td) / "source.tga"
             image_path.write_bytes(b"fake image")
             image = ImageFile(
-                "NewTest/source.tga",
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            cache_path.write_text(
+                __import__("json").dumps(
+                    {"SampleOnly/source.tga": {"md5": "stale-md5", "has_text": False}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("check_i18n_images.run_ocr", return_value="閺傚洤鐡ч崘鍛啇"):
+                detector = ocr_text_detector_factory(cache_path)
+                self.assertTrue(detector(image))
+
+            data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
+            self.assertNotIn("has_test", data["SampleOnly/source.tga"])
+            self.assertEqual(data["SampleOnly/source.tga"]["test_str"], "閺傚洤鐡ч崘鍛啇")
+
+    def test_ocr_cache_hit_uses_cached_has_text_without_test_str(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "SampleOnly/source.tga",
                 str(image_path),
                 dt.datetime(2026, 1, 1, tzinfo=UTC),
                 "ui",
@@ -272,19 +961,18 @@ class CheckI18nImagesTest(unittest.TestCase):
             md5 = __import__("hashlib").md5(b"fake image").hexdigest()
             cache_path.write_text(
                 __import__("json").dumps(
-                    {"NewTest/source.tga": {"md5": md5, "has_text": False}},
+                    {"SampleOnly/source.tga": {"md5": md5, "has_text": False}},
                     ensure_ascii=False,
                 ),
                 encoding="utf-8",
             )
 
-            with patch("check_i18n_images.run_ocr", return_value="文字内容"):
+            with patch("check_i18n_images.run_ocr", side_effect=AssertionError("OCR should not run")):
                 detector = ocr_text_detector_factory(cache_path)
-                self.assertTrue(detector(image))
+                self.assertFalse(detector(image))
 
             data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
-            self.assertNotIn("has_test", data["NewTest/source.tga"])
-            self.assertEqual(data["NewTest/source.tga"]["test_str"], "文字内容")
+            self.assertEqual(data["SampleOnly/source.tga"]["has_text"], False)
 
     def test_ocr_cache_removes_legacy_has_test_on_cache_hit(self):
         with tempfile.TemporaryDirectory() as td:
@@ -292,7 +980,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             image_path = Path(td) / "source.tga"
             image_path.write_bytes(b"fake image")
             image = ImageFile(
-                "NewTest/source.tga",
+                "SampleOnly/source.tga",
                 str(image_path),
                 dt.datetime(2026, 1, 1, tzinfo=UTC),
                 "ui",
@@ -301,11 +989,11 @@ class CheckI18nImagesTest(unittest.TestCase):
             cache_path.write_text(
                 __import__("json").dumps(
                     {
-                        "NewTest/source.tga": {
+                        "SampleOnly/source.tga": {
                             "md5": md5,
                             "has_text": True,
                             "has_test": True,
-                            "test_str": "文字内容",
+                            "test_str": "閺傚洤鐡ч崘鍛啇",
                         }
                     },
                     ensure_ascii=False,
@@ -317,8 +1005,8 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertTrue(detector(image))
 
             data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
-            self.assertNotIn("has_test", data["NewTest/source.tga"])
-            self.assertEqual(data["NewTest/source.tga"]["test_str"], "文字内容")
+            self.assertNotIn("has_test", data["SampleOnly/source.tga"])
+            self.assertEqual(data["SampleOnly/source.tga"]["test_str"], "閺傚洤鐡ч崘鍛啇")
 
     def test_write_xlsx_embeds_thumbnail_when_detail_is_present_by_default(self):
         try:
@@ -356,7 +1044,7 @@ class CheckI18nImagesTest(unittest.TestCase):
     def test_enrich_skips_mainland_missing(self):
         """mainland_missing findings are not enriched (no mainland file to OCR)."""
         findings = [
-            Finding("ui", "mainland_missing", "a.dds", "/i18n/a.dds", "", None, None, "废弃")
+            Finding("ui", "mainland_missing", "a.dds", "/i18n/a.dds", "", None, None, "missing")
         ]
         checker = lambda m, i: ("ok", "")
         result = enrich_findings_with_translation(findings, checker)
@@ -369,7 +1057,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                 "ui", "mainland_changed", "a.dds", "/i18n/a.dds", "/ml/a.dds",
                 dt.datetime(2026, 1, 1, tzinfo=UTC),
                 dt.datetime(2026, 1, 2, tzinfo=UTC),
-                "陆版更新",
+                "闂勫棛澧楅弴瀛樻煀",
             )
         ]
         checker = lambda m, i: ("ok", "")
@@ -384,10 +1072,10 @@ class CheckI18nImagesTest(unittest.TestCase):
                 "ui", "mainland_changed", "a.dds", "/i18n/a.dds", "/ml/a.dds",
                 dt.datetime(2026, 1, 1, tzinfo=UTC),
                 dt.datetime(2026, 1, 2, tzinfo=UTC),
-                "陆版更新",
+                "闂勫棛澧楅弴瀛樻煀",
             )
         ]
-        ocr_returns = {"/ml/a.dds": "简体文字", "/i18n/a.dds": "繁體文字"}
+        ocr_returns = {"/ml/a.dds": cn(r"\u7b80\u4f53\u6587\u5b57"), "/i18n/a.dds": cn(r"\u7e41\u9ad4\u6587\u5b57")}
         checker = lambda m, i: ("ok", "")
         with patch(
             "check_i18n_images.run_ocr_from_path",
@@ -395,8 +1083,8 @@ class CheckI18nImagesTest(unittest.TestCase):
         ):
             result = enrich_findings_with_translation(findings, checker)
         self.assertEqual(result[0].translation_status, "ok")
-        self.assertEqual(result[0].mainland_ocr_text, "简体文字")
-        self.assertEqual(result[0].i18n_ocr_text, "繁體文字")
+        self.assertEqual(result[0].mainland_ocr_text, cn(r"\u7b80\u4f53\u6587\u5b57"))
+        self.assertEqual(result[0].i18n_ocr_text, cn(r"\u7e41\u9ad4\u6587\u5b57"))
 
     def test_enrich_new_with_text_has_no_i18n_ocr(self):
         """For mainland_new_with_text, i18n_path is empty so i18n_text is None -> missing."""
@@ -405,14 +1093,14 @@ class CheckI18nImagesTest(unittest.TestCase):
                 "ui", "mainland_new_with_text", "b.dds", "", "/ml/b.dds",
                 None,
                 dt.datetime(2026, 1, 2, tzinfo=UTC),
-                "新增",
+                "new detail",
             )
         ]
-        checker = lambda m, i: ("missing", "无繁体") if i is None else ("ok", "")
-        with patch("check_i18n_images.run_ocr_from_path", return_value="新增中文"):
+        checker = lambda m, i: ("missing", cn(r"\u65e0\u7e41\u4f53")) if i is None else ("ok", "")
+        with patch("check_i18n_images.run_ocr_from_path", return_value=cn(r"\u65b0\u589e\u4e2d\u6587")):
             result = enrich_findings_with_translation(findings, checker)
         self.assertEqual(result[0].translation_status, "missing")
-        self.assertEqual(result[0].translation_note, "无繁体")
+        self.assertEqual(result[0].translation_note, cn(r"\u65e0\u7e41\u4f53"))
 
     def test_write_xlsx_includes_translation_columns(self):
         """Excel output contains translation columns even when values are None."""
@@ -429,9 +1117,9 @@ class CheckI18nImagesTest(unittest.TestCase):
                         "/ml/a.dds",
                         dt.datetime(2026, 1, 1, tzinfo=UTC),
                         dt.datetime(2026, 1, 2, tzinfo=UTC),
-                        "陆版更新",
-                        mainland_ocr_text="简体",
-                        i18n_ocr_text="繁體",
+                        "闂勫棛澧楅弴瀛樻煀",
+                        mainland_ocr_text="mainland",
+                        i18n_ocr_text="i18n",
                         translation_status="ok",
                         translation_note="",
                     )
@@ -444,8 +1132,8 @@ class CheckI18nImagesTest(unittest.TestCase):
             with zipfile.ZipFile(out) as zf:
                 sheet = html.unescape(zf.read("xl/worksheets/sheet1.xml").decode("utf-8"))
             # 14 columns: header row should contain translation column headers
-            self.assertIn("翻译状态", sheet)
-            self.assertIn("翻译问题说明", sheet)
+            self.assertIn(cn(r"\u7ffb\u8bd1\u72b6\u6001"), sheet)
+            self.assertIn(cn(r"\u7ffb\u8bd1\u95ee\u9898\u8bf4\u660e"), sheet)
 
     def test_write_html_report_contains_summary_and_clickable_images(self):
         try:
@@ -484,15 +1172,15 @@ class CheckI18nImagesTest(unittest.TestCase):
             )
 
             content = out.read_text(encoding="utf-8")
-            self.assertIn("多语言图片检查汇总", content)
-            self.assertIn("报告详情", content)
-            self.assertIn("疑似废除文件", content)
+            self.assertIn("summary-table", content)
+            self.assertIn(cn(r"\u62a5\u544a\u8be6\u60c5"), content)
+            self.assertIn(cn(r"\u7591\u4f3c\u5e9f\u9664\u6587\u4ef6"), content)
             self.assertIn("summary-table", content)
             self.assertIn("sortTable", content)
             self.assertIn("filterTable", content)
-            self.assertNotIn("陆版创建时间", content)
-            self.assertIn("修改时间异常", content)
-            self.assertIn("报告详情", content)
+            self.assertNotIn(cn(r"\u9646\u7248\u521b\u5efa\u65f6\u95f4"), content)
+            self.assertIn(cn(r"\u4fee\u6539\u65f6\u95f4\u5f02\u5e38"), content)
+            self.assertIn(cn(r"\u62a5\u544a\u8be6\u60c5"), content)
             self.assertIn("<table", content)
             self.assertIn("<img", content)
             self.assertIn("data-full-src=", content)
@@ -511,7 +1199,80 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertNotIn(str(img_path), content)
             self.assertNotIn(img_path.resolve().as_uri(), content)
 
-    def test_write_html_report_includes_new_no_text_review_rows_and_ocr_text(self):
+    def test_write_html_report_creates_png_placeholder_when_source_preview_fails(self):
+        with tempfile.TemporaryDirectory() as td:
+            img_path = Path(td) / "source.tga"
+            img_path.write_bytes(b"not a real tga")
+            out = Path(td) / "report.html"
+
+            write_html_report(
+                out,
+                [
+                    Finding(
+                        "ui",
+                        "mainland_missing",
+                        "source.tga",
+                        str(img_path),
+                        "",
+                        dt.datetime(2026, 1, 1, tzinfo=UTC),
+                        None,
+                        "missing detail",
+                    ),
+                ],
+            )
+
+            content = out.read_text(encoding="utf-8")
+            asset = out.parent / "report_assets" / "img_1_i18n.tga.png"
+            self.assertTrue(asset.exists())
+            self.assertGreater(asset.stat().st_size, 0)
+            self.assertEqual(asset.read_bytes()[:8], b"\x89PNG\r\n\x1a\n")
+            self.assertIn("report_assets/img_1_i18n.tga.png", content)
+            self.assertNotIn(str(img_path), content)
+            self.assertNotIn(img_path.resolve().as_uri(), content)
+
+    def test_write_html_report_respects_max_image_px(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+
+        with tempfile.TemporaryDirectory() as td:
+            img_path = Path(td) / "source.tga"
+            Image.new("RGB", (100, 80), (255, 255, 255)).save(img_path)
+            out = Path(td) / "report.html"
+
+            write_html_report(
+                out,
+                [
+                    Finding(
+                        "ui",
+                        "mainland_missing",
+                        "source.tga",
+                        str(img_path),
+                        "",
+                        dt.datetime(2026, 1, 1, tzinfo=UTC),
+                        None,
+                        "missing detail",
+                    ),
+                ],
+                max_image_px=20,
+            )
+
+            asset = out.parent / "report_assets" / "img_1_i18n.tga.png"
+            with Image.open(asset) as img:
+                self.assertLessEqual(max(img.size), 20)
+
+    def test_report_generation_requires_pillow_before_writing_images(self):
+        with patch("check_i18n_images._is_pillow_available", return_value=False):
+            with self.assertRaises(SystemExit) as ctx:
+                _require_pillow_for_report(Path("report.html"))
+
+        message = str(ctx.exception)
+        self.assertIn("Pillow", message)
+        self.assertIn("pip install Pillow", message)
+        self.assertIn("report.html", message)
+
+    def test_write_html_report_excludes_new_no_text_detail_rows_but_keeps_summary(self):
         try:
             from PIL import Image
         except ImportError:
@@ -527,18 +1288,18 @@ class CheckI18nImagesTest(unittest.TestCase):
                     Finding(
                         "ui",
                         "mainland_new_with_text",
-                        "NewTest/text.tga",
+                        "SampleOnly/text.tga",
                         "",
                         str(img_path),
                         None,
                         dt.datetime(2026, 1, 2, tzinfo=UTC),
                         "text detail",
-                        mainland_ocr_text="大剑网三",
+                        mainland_ocr_text=cn(r"\u5927\u5251\u7f51\u4e09"),
                     ),
                     Finding(
                         "ui",
                         "mainland_new_no_text",
-                        "NewTest/plain.tga",
+                        "SampleOnly/plain.tga",
                         "",
                         str(img_path),
                         None,
@@ -550,8 +1311,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             )
 
             content = out.read_text(encoding="utf-8")
-            cn = lambda value: value.encode("ascii").decode("unicode_escape")
-            self.assertIn("NewTest/plain.tga", content)
+            self.assertNotIn("SampleOnly/plain.tga", content)
             self.assertIn(cn(r"\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"), content)
             self.assertIn(cn(r"\u8bc6\u522b\u6587\u5b57\uff1a"), content)
             self.assertIn(cn(r"\u5927\u5251\u7f51\u4e09"), content)
@@ -590,8 +1350,14 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertEqual(positions, sorted(positions))
             self.assertNotIn(f"<th onclick=\"sortTable(9)\">{cn(r'\u8bc6\u522b\u6587\u5b57')}", header_row)
             self.assertNotIn(cn(r"\u9646\u7248\u521b\u5efa\u65f6\u95f4"), header_row)
-            self.assertIn(f'class="mainland-new-with-text" title="{cn(r"\u8bc6\u522b\u6587\u5b57\uff1a\u5927\u5251\u7f51\u4e09")}" data-ocr="{cn(r"\u5927\u5251\u7f51\u4e09")}"', content)
-            self.assertIn('class="mainland-new-no-text"><td class="row-index"', content)
+            self.assertIn('"className": "mainland-new-with-text"', content)
+            self.assertNotIn('"className": "mainland-new-no-text"', content)
+            self.assertNotIn(f"<option>{cn(r'\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247')}</option>", content)
+            self.assertIn("const PAGE_SIZE = 50", content)
+            self.assertIn("function renderPage(page)", content)
+            self.assertIn("function gotoPage(page)", content)
+            self.assertIn("filteredRows = allRows.filter", content)
+            self.assertIn("<tbody></tbody>", content)
             self.assertIn('tr.mainland-new-with-text[title] { cursor:help; }', content)
             self.assertNotIn('tr.mainland-new-no-text[title] { cursor:help; }', content)
             self.assertIn("min-width:1280px", content)
