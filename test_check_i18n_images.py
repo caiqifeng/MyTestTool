@@ -472,7 +472,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                 "--no-ocr",
             ])
 
-        self.assertIn("version = 1.0.1，time = 2026-06-04 16:01:28 +08:00", stderr.getvalue())
+        self.assertIn("version = 1.0.2，time = 2026-06-04 16:01:28 +08:00", stderr.getvalue())
 
     def test_main_writes_version_line_to_run_log(self):
         fixed_now = dt.datetime(2026, 6, 4, 16, 1, 28, tzinfo=dt.timezone(dt.timedelta(hours=8)))
@@ -504,7 +504,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             finally:
                 os.chdir(previous_cwd)
 
-        self.assertIn("version = 1.0.1，time = 2026-06-04 16:01:28 +08:00", log_text)
+        self.assertIn("version = 1.0.2，time = 2026-06-04 16:01:28 +08:00", log_text)
 
     def test_main_defaults_ocr_workers_to_at_least_one(self):
         captured = {}
@@ -1324,8 +1324,8 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("data:image", content)
             self.assertIn("application/vnd.ms-excel", content)
             self.assertIn("ui_image_check_filtered.xls", content)
-            self.assertIn('<select data-filter="category" onchange="filterTable()">', content)
-            self.assertIn('<select data-filter="issue" onchange="filterTable()">', content)
+            self.assertIn('<select data-filter-col="1" data-filter="category" onchange="filterTable()">', content)
+            self.assertIn('<select data-filter-col="2" data-filter="issue" onchange="filterTable()">', content)
             self.assertIn('<option>ui</option>', content)
             self.assertIn("<colgroup>", content)
             self.assertIn(cn(r"\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171"), content)
@@ -1365,6 +1365,15 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("border-spacing:0", content)
             self.assertIn(".filter-row th { top:40px", content)
             self.assertIn("height:40px", content)
+            self.assertIn('type="date" data-date-col="6" data-date-bound="start"', content)
+            self.assertIn('type="date" data-date-col="6" data-date-bound="end"', content)
+            self.assertIn('type="date" data-date-col="7" data-date-bound="start"', content)
+            self.assertIn('type="date" data-date-col="7" data-date-bound="end"', content)
+            self.assertIn(cn(r"\u81f3"), content)
+            self.assertIn("const FILTER_COLUMNS = [0, 1, 2, 3, 8]", content)
+            self.assertIn("function parseDateOnly(value)", content)
+            self.assertIn("function dateInRange(value, start, end)", content)
+            self.assertIn("collectDateRanges()", content)
 
 
 if __name__ == "__main__":

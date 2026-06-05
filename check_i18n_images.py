@@ -25,8 +25,8 @@ from typing import Callable, Sequence
 from xml.etree import ElementTree as ET
 
 BEIJING_TZ = dt.timezone(dt.timedelta(hours=8))
-SCRIPT_VERSION = "1.0.1"
-SCRIPT_UPDATED_AT = "2026-06-04 17:17:13 +08:00"
+SCRIPT_VERSION = "1.0.2"
+SCRIPT_UPDATED_AT = "2026-06-05 09:21:59 +08:00"
 
 IMAGE_EXTENSIONS = {".dds", ".tga"}
 STATE_FILE = ".check_i18n_images_state"
@@ -1541,6 +1541,9 @@ th,td {{ border-bottom:1px solid #e7ebf1; padding:10px; vertical-align:top; font
 th {{ position:sticky; top:0; height:40px; background:#eef3f8; color:#334155; z-index:3; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }}
 .filter-row th {{ top:40px; background:#f8fafc; cursor:default; z-index:2; }}
 .filter-row input,.filter-row select {{ width:100%; padding:6px 8px; border:1px solid #cbd5e1; border-radius:4px; font-size:12px; background:white; }}
+.date-range {{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:4px; }}
+.date-range span {{ color:var(--muted); font-size:12px; }}
+.date-range input {{ min-width:0; padding:6px 4px; }}
 .row-index {{ text-align:center; color:#475569; }}
 .path {{ word-break:break-all; }}
 tr.mainland-new-with-text[title] {{ cursor:help; }}
@@ -1589,14 +1592,14 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
           <th onclick="sortTable(8)">\u8bf4\u660e<span class="sort-icon"></span></th>
         </tr>
         <tr class="filter-row">
-          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
-          <th><select data-filter="category" onchange="filterTable()"><option value="">\u5168\u90e8</option>{category_options}</select></th>
-          <th><select data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
-          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><input type="text" data-filter-col="0" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><select data-filter-col="1" data-filter="category" onchange="filterTable()"><option value="">\u5168\u90e8</option>{category_options}</select></th>
+          <th><select data-filter-col="2" data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
+          <th><input type="text" data-filter-col="3" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th></th><th></th>
-          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
-          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
-          <th><input type="text" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><div class="date-range"><input type="date" data-date-col="6" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="6" data-date-bound="end" onchange="filterTable()"></div></th>
+          <th><div class="date-range"><input type="date" data-date-col="7" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="7" data-date-bound="end" onchange="filterTable()"></div></th>
+          <th><input type="text" data-filter-col="8" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -1616,6 +1619,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 <script>
 const PAGE_SIZE = 50;
 const allRows = {rows_json};
+const FILTER_COLUMNS = [0, 1, 2, 3, 8];
 let filteredRows = allRows.slice();
 let currentPage = 1;
 let totalPages = 1;
@@ -1634,13 +1638,19 @@ function sortTable(col) {{
 }}
 function filterTable() {{
   const table = document.getElementById('detailTable');
-  const controls = Array.from(table.querySelectorAll('.filter-row input,.filter-row select'));
-  const filters = controls.map(i => i.value.trim().toLowerCase());
+  const controls = Array.from(table.querySelectorAll('.filter-row [data-filter-col]'))
+    .filter(control => FILTER_COLUMNS.includes(Number(control.dataset.filterCol)));
+  const dateRanges = collectDateRanges();
   filteredRows = allRows.filter(row => {{
-    for (let i = 0; i < filters.length; i++) {{
-      const cellText = String(row.filterValues[i] || '').trim().toLowerCase();
-      const isSelect = controls[i]?.tagName === 'SELECT';
-      if (filters[i] && (isSelect ? cellText !== filters[i] : !cellText.includes(filters[i]))) return false;
+    for (const control of controls) {{
+      const filter = control.value.trim().toLowerCase();
+      const columnIndex = Number(control.dataset.filterCol);
+      const cellText = String(row.filterValues[columnIndex] || '').trim().toLowerCase();
+      const isSelect = control.tagName === 'SELECT';
+      if (filter && (isSelect ? cellText !== filter : !cellText.includes(filter))) return false;
+    }}
+    for (const range of dateRanges) {{
+      if (!dateInRange(row.filterValues[range.columnIndex], range.start, range.end)) return false;
     }}
     return true;
   }});
@@ -1656,6 +1666,30 @@ function filterTable() {{
     }});
   }}
   renderPage(1);
+}}
+function collectDateRanges() {{
+  const ranges = new Map();
+  document.querySelectorAll('.filter-row [data-date-col]').forEach(input => {{
+    const columnIndex = Number(input.dataset.dateCol);
+    const current = ranges.get(columnIndex) || {{ columnIndex, start: null, end: null }};
+    current[input.dataset.dateBound] = parseDateOnly(input.value);
+    ranges.set(columnIndex, current);
+  }});
+  return Array.from(ranges.values()).filter(range => range.start || range.end);
+}}
+function parseDateOnly(value) {{
+  if (!value) return null;
+  const parts = value.split('-').map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}}
+function dateInRange(value, start, end) {{
+  if (!start && !end) return true;
+  const date = parseDateOnly(String(value || '').slice(0, 10));
+  if (!date) return false;
+  if (start && date < start) return false;
+  if (end && date > end) return false;
+  return true;
 }}
 function renderPage(page) {{
   totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
