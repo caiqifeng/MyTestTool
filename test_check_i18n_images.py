@@ -324,6 +324,32 @@ class CheckI18nImagesTest(unittest.TestCase):
             ],
         )
 
+    def test_config_preserves_pair_category_and_type_metadata(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = Path(td) / "check_config.json"
+            config.write_text(
+                """
+{
+  "root": "f:/project/client",
+  "pairs": [
+    {
+      "name": "ui",
+      "category": "界面",
+      "type": "UI资源",
+      "i18n": "i18n/zh_TW/ui",
+      "mainland": "ui"
+    }
+  ]
+}
+""",
+                encoding="utf-8",
+            )
+
+            pairs = _load_config_pairs(str(config))
+
+        self.assertEqual(pairs[0]["category"], "界面")
+        self.assertEqual(pairs[0]["type"], "UI资源")
+
     def test_filter_whitelisted_files_uses_pair_relative_prefix(self):
         pair = {
             "i18n_relative": "i18n/zh_TW/ui",
@@ -428,7 +454,7 @@ class CheckI18nImagesTest(unittest.TestCase):
     def test_main_defaults_ocr_workers_to_one(self):
         captured = {}
 
-        def fake_collect(args):
+        def fake_collect(args, report_callback=None):
             captured["ocr_workers"] = args.ocr_workers
             return [], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}
 
@@ -509,7 +535,7 @@ class CheckI18nImagesTest(unittest.TestCase):
     def test_main_defaults_ocr_workers_to_at_least_one(self):
         captured = {}
 
-        def fake_collect(args):
+        def fake_collect(args, report_callback=None):
             captured["ocr_workers"] = args.ocr_workers
             return [], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}
 
@@ -649,6 +675,82 @@ class CheckI18nImagesTest(unittest.TestCase):
 
         self.assertIn("新增无文字图片列表", log_text)
         self.assertIn("Image/plain.tga", log_text)
+
+    def test_main_writes_cumulative_html_report_after_each_pair(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = root / "check_config.json"
+            config.write_text(
+                __import__("json").dumps(
+                    {
+                        "root": str(root),
+                        "pairs": [
+                            {
+                                "name": "ui",
+                                "type": "UI",
+                                "i18n": "i18n_ui",
+                                "mainland": "mainland_ui",
+                            },
+                            {
+                                "name": "map",
+                                "type": "地图",
+                                "i18n": "i18n_map",
+                                "mainland": "mainland_map",
+                            },
+                        ],
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            first_finding = Finding(
+                "UI",
+                "mainland_missing",
+                "a.tga",
+                "a-i18n.tga",
+                "",
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                None,
+                "missing",
+            )
+            second_finding = Finding(
+                "地图",
+                "mainland_changed",
+                "b.tga",
+                "b-i18n.tga",
+                "b-mainland.tga",
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                dt.datetime(2026, 1, 2, tzinfo=UTC),
+                "changed",
+            )
+
+            def fake_scan(path, pair):
+                return {"one": img("one.tga", "2026-01-01T00:00:00", full=str(root / "one.tga"))}
+
+            with patch("check_i18n_images.scan_local", side_effect=fake_scan), patch(
+                "check_i18n_images.compare_category",
+                side_effect=[
+                    ([first_finding], {"normal_synced": 2, "new_no_text": 1}),
+                    ([second_finding], {"normal_synced": 3, "new_no_text": 0}),
+                ],
+            ) as compare, patch("check_i18n_images._require_pillow_for_report"), patch(
+                "check_i18n_images.write_html_report"
+            ) as write_report:
+                main(["--config", str(config), "--output", str(root / "out.html"), "--no-ocr"])
+
+        self.assertEqual(write_report.call_count, 2)
+        self.assertEqual(compare.call_args_list[0].args[0], "UI")
+        self.assertEqual(compare.call_args_list[1].args[0], "地图")
+        self.assertEqual(write_report.call_args_list[0].args[1], [first_finding])
+        self.assertEqual(write_report.call_args_list[0].kwargs["i18n_count"], 1)
+        self.assertEqual(write_report.call_args_list[0].kwargs["mainland_count"], 1)
+        self.assertEqual(write_report.call_args_list[0].kwargs["normal_synced"], 2)
+        self.assertEqual(write_report.call_args_list[0].kwargs["new_no_text"], 1)
+        self.assertEqual(write_report.call_args_list[1].args[1], [first_finding, second_finding])
+        self.assertEqual(write_report.call_args_list[1].kwargs["i18n_count"], 2)
+        self.assertEqual(write_report.call_args_list[1].kwargs["mainland_count"], 2)
+        self.assertEqual(write_report.call_args_list[1].kwargs["normal_synced"], 5)
+        self.assertEqual(write_report.call_args_list[1].kwargs["new_no_text"], 1)
 
     def test_write_xlsx_creates_excel_package(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1324,9 +1426,10 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("data:image", content)
             self.assertIn("application/vnd.ms-excel", content)
             self.assertIn("ui_image_check_filtered.xls", content)
-            self.assertIn('<select data-filter-col="1" data-filter="category" onchange="filterTable()">', content)
-            self.assertIn('<select data-filter-col="2" data-filter="issue" onchange="filterTable()">', content)
-            self.assertIn('<option>ui</option>', content)
+            self.assertNotIn('data-filter="category"', content)
+            self.assertIn('<select data-filter-col="1" data-filter="issue" onchange="filterTable()">', content)
+            self.assertIn('class="detail-tabs"', content)
+            self.assertIn('data-tab-type="ui"', content)
             self.assertIn("<colgroup>", content)
             self.assertIn(cn(r"\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171"), content)
             self.assertIn(cn(r"\u4e09\u3001\u5f02\u5e38\u56fe\u7247\uff1a\u5171"), content)
@@ -1337,7 +1440,6 @@ class CheckI18nImagesTest(unittest.TestCase):
             header_row = content[header_row_start:header_row_end]
             expected_order = [
                 cn(r"\u5e8f\u53f7"),
-                cn(r"\u7c7b\u522b"),
                 cn(r"\u95ee\u9898\u7c7b\u578b"),
                 cn(r"\u76f8\u5bf9\u8def\u5f84"),
                 cn(r"\u9646\u7248\u56fe\u7247"),
@@ -1356,24 +1458,78 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("const PAGE_SIZE = 50", content)
             self.assertIn("function renderPage(page)", content)
             self.assertIn("function gotoPage(page)", content)
+            self.assertIn("function switchTab(type)", content)
             self.assertIn("filteredRows = allRows.filter", content)
+            self.assertIn("row.pairType !== activeTabType", content)
             self.assertIn("<tbody></tbody>", content)
             self.assertIn('tr.mainland-new-with-text[title] { cursor:help; }', content)
             self.assertNotIn('tr.mainland-new-no-text[title] { cursor:help; }', content)
-            self.assertIn("min-width:1280px", content)
+            self.assertIn("min-width:1180px", content)
             self.assertIn("border-collapse:separate", content)
             self.assertIn("border-spacing:0", content)
             self.assertIn(".filter-row th { top:40px", content)
             self.assertIn("height:40px", content)
+            self.assertIn('type="date" data-date-col="5" data-date-bound="start"', content)
+            self.assertIn('type="date" data-date-col="5" data-date-bound="end"', content)
             self.assertIn('type="date" data-date-col="6" data-date-bound="start"', content)
             self.assertIn('type="date" data-date-col="6" data-date-bound="end"', content)
-            self.assertIn('type="date" data-date-col="7" data-date-bound="start"', content)
-            self.assertIn('type="date" data-date-col="7" data-date-bound="end"', content)
             self.assertIn(cn(r"\u81f3"), content)
-            self.assertIn("const FILTER_COLUMNS = [0, 1, 2, 3, 8]", content)
+            self.assertIn("const FILTER_COLUMNS = [0, 1, 2, 7]", content)
             self.assertIn("function parseDateOnly(value)", content)
             self.assertIn("function dateInRange(value, start, end)", content)
             self.assertIn("collectDateRanges()", content)
+
+    def test_write_html_report_groups_details_by_pair_type_tabs_without_category_column(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+
+        with tempfile.TemporaryDirectory() as td:
+            img_path = Path(td) / "source.tga"
+            Image.new("RGB", (16, 16), (255, 0, 0)).save(img_path)
+            out = Path(td) / "report.html"
+            write_html_report(
+                out,
+                [
+                    Finding(
+                        "UI",
+                        "mainland_missing",
+                        "ui/a.tga",
+                        str(img_path),
+                        "",
+                        dt.datetime(2026, 1, 1, tzinfo=UTC),
+                        None,
+                        "missing",
+                    ),
+                    Finding(
+                        "地图",
+                        "mainland_changed",
+                        "map/b.tga",
+                        str(img_path),
+                        str(img_path),
+                        dt.datetime(2026, 1, 1, tzinfo=UTC),
+                        dt.datetime(2026, 1, 2, tzinfo=UTC),
+                        "changed",
+                    ),
+                ],
+            )
+
+            content = out.read_text(encoding="utf-8")
+
+        self.assertIn('class="detail-tabs"', content)
+        self.assertIn('data-tab-type="UI"', content)
+        self.assertIn('data-tab-type="地图"', content)
+        self.assertIn('"pairType": "UI"', content)
+        self.assertIn('"pairType": "地图"', content)
+        header_row_start = content.index(cn(r"\u5e8f\u53f7") + "<span")
+        header_row_end = content.index("</tr>", header_row_start)
+        header_row = content[header_row_start:header_row_end]
+        self.assertNotIn(cn(r"\u7c7b\u522b"), header_row)
+        self.assertNotIn('data-filter="category"', content)
+        self.assertIn("let activeTabType =", content)
+        self.assertIn("function switchTab(type)", content)
+        self.assertIn("row.pairType === activeTabType", content)
 
 
 if __name__ == "__main__":

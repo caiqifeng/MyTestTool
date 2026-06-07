@@ -1378,11 +1378,11 @@ def write_html_report(
         i18n_dt = format_dt(finding.i18n_modified_at)
         rows.append({
             "className": issue_class,
+            "pairType": finding.category or TEXT_NONE,
             "title": row_title,
             "ocr": ocr_text,
             "cells": [
                 f'<td class="row-index">{index}</td>',
-                f'<td>{html.escape(finding.category)}</td>',
                 f'<td><span class="issue-badge {issue_class}">{html.escape(issue_label)}</span></td>',
                 f'<td class="path">{html.escape(finding.relative_path)}</td>',
                 f'<td>{html_img(mainland_asset, TEXT_MAINLAND + " " + finding.relative_path)}</td>',
@@ -1393,7 +1393,6 @@ def write_html_report(
             ],
             "filterValues": [
                 str(index),
-                finding.category,
                 issue_label,
                 finding.relative_path,
                 "",
@@ -1410,11 +1409,13 @@ def write_html_report(
         normal_synced, new_no_text,
         missing, changed, new_with_text, others, new_without_text,
     )
-    category_options = "".join(
-        f"<option>{html.escape(category)}</option>"
-        for category in sorted({f.category for f in findings if f.category})
+    detail_types = sorted({f.category or TEXT_NONE for f in detail_findings}) or [TEXT_NONE]
+    tab_buttons = "".join(
+        f'<button type="button" class="tab-button" data-tab-type="{html.escape(pair_type, quote=True)}" '
+        f'onclick="switchTab(this.dataset.tabType)">{html.escape(pair_type)}</button>'
+        for pair_type in detail_types
     )
-    doc = _html_template(summary_table, summary_cards, rows, category_options)
+    doc = _html_template(summary_table, summary_cards, rows, tab_buttons, detail_types[0])
     path.write_text(doc, encoding="utf-8")
 
 def _summary_items(items: Sequence[Finding]) -> str:
@@ -1492,9 +1493,11 @@ def _html_template(
     summary_table: str,
     summary_cards: list[str],
     rows: list[dict[str, object]],
-    category_options: str = "",
+    tab_buttons: str = "",
+    default_tab_type: str = TEXT_NONE,
 ) -> str:
     rows_json = json.dumps(rows, ensure_ascii=False)
+    default_tab_json = json.dumps(default_tab_type, ensure_ascii=False)
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -1531,12 +1534,15 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .detail-toolbar p {{ margin:0; color:var(--muted); font-size:13px; }}
 .export-button {{ flex:0 0 auto; border:1px solid #2563eb; background:#2563eb; color:white; border-radius:5px; padding:8px 14px; font-size:13px; cursor:pointer; }}
 .export-button:hover {{ background:#1d4ed8; }}
+.detail-tabs {{ display:flex; gap:8px; flex-wrap:wrap; padding:12px 18px; border-bottom:1px solid var(--line); background:#fbfdff; }}
+.tab-button {{ border:1px solid #cbd5e1; background:white; color:#334155; border-radius:5px; padding:7px 12px; font-size:13px; cursor:pointer; }}
+.tab-button.active {{ border-color:#2563eb; background:#2563eb; color:white; }}
 .pagination {{ display:flex; align-items:center; justify-content:flex-end; gap:8px; padding:12px 18px; border-top:1px solid var(--line); background:#fbfdff; }}
 .pagination button {{ border:1px solid #cbd5e1; background:white; color:#334155; border-radius:5px; padding:6px 10px; font-size:13px; cursor:pointer; }}
 .pagination button:disabled {{ opacity:.45; cursor:not-allowed; }}
 .pagination-status {{ color:var(--muted); font-size:13px; min-width:220px; text-align:center; }}
 .table-wrap {{ overflow:auto; max-height:calc(100vh - 160px); }}
-table {{ width:100%; min-width:1280px; border-collapse:separate; border-spacing:0; table-layout:fixed; }}
+table {{ width:100%; min-width:1180px; border-collapse:separate; border-spacing:0; table-layout:fixed; }}
 th,td {{ border-bottom:1px solid #e7ebf1; padding:10px; vertical-align:top; font-size:13px; }}
 th {{ position:sticky; top:0; height:40px; background:#eef3f8; color:#334155; z-index:3; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }}
 .filter-row th {{ top:40px; background:#f8fafc; cursor:default; z-index:2; }}
@@ -1566,11 +1572,11 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 {summary_table}
 <section class="detail-panel">
   <div class="detail-toolbar"><div><h2>{TEXT_REPORT_DETAIL}</h2><p>详情仅展示需处理的异常图片；新增无文字图片列表已写入本次日志。</p></div><button class="export-button" type="button" onclick="exportFilteredRows()">\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c</button></div>
+  <div class="detail-tabs" role="tablist">{tab_buttons}</div>
   <div class="table-wrap">
     <table id="detailTable">
       <colgroup>
         <col style="width:56px">
-        <col style="width:90px">
         <col style="width:150px">
         <col style="width:260px">
         <col style="width:180px">
@@ -1582,24 +1588,22 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
       <thead>
         <tr>
           <th onclick="sortTable(0)">\u5e8f\u53f7<span class="sort-icon"></span></th>
-          <th onclick="sortTable(1)">\u7c7b\u522b<span class="sort-icon"></span></th>
-          <th onclick="sortTable(2)">\u95ee\u9898\u7c7b\u578b<span class="sort-icon"></span></th>
-          <th onclick="sortTable(3)">\u76f8\u5bf9\u8def\u5f84<span class="sort-icon"></span></th>
+          <th onclick="sortTable(1)">\u95ee\u9898\u7c7b\u578b<span class="sort-icon"></span></th>
+          <th onclick="sortTable(2)">\u76f8\u5bf9\u8def\u5f84<span class="sort-icon"></span></th>
           <th>\u9646\u7248\u56fe\u7247</th>
           <th>\u56fd\u9645\u7248\u56fe\u7247</th>
-          <th onclick="sortTable(6)">\u9646\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
-          <th onclick="sortTable(7)">\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
-          <th onclick="sortTable(8)">\u8bf4\u660e<span class="sort-icon"></span></th>
+          <th onclick="sortTable(5)">\u9646\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
+          <th onclick="sortTable(6)">\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
+          <th onclick="sortTable(7)">\u8bf4\u660e<span class="sort-icon"></span></th>
         </tr>
         <tr class="filter-row">
           <th><input type="text" data-filter-col="0" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
-          <th><select data-filter-col="1" data-filter="category" onchange="filterTable()"><option value="">\u5168\u90e8</option>{category_options}</select></th>
-          <th><select data-filter-col="2" data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
-          <th><input type="text" data-filter-col="3" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><select data-filter-col="1" data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
+          <th><input type="text" data-filter-col="2" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th></th><th></th>
+          <th><div class="date-range"><input type="date" data-date-col="5" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="5" data-date-bound="end" onchange="filterTable()"></div></th>
           <th><div class="date-range"><input type="date" data-date-col="6" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="6" data-date-bound="end" onchange="filterTable()"></div></th>
-          <th><div class="date-range"><input type="date" data-date-col="7" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="7" data-date-bound="end" onchange="filterTable()"></div></th>
-          <th><input type="text" data-filter-col="8" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><input type="text" data-filter-col="7" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -1619,12 +1623,20 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 <script>
 const PAGE_SIZE = 50;
 const allRows = {rows_json};
-const FILTER_COLUMNS = [0, 1, 2, 3, 8];
-let filteredRows = allRows.slice();
+const FILTER_COLUMNS = [0, 1, 2, 7];
+let activeTabType = {default_tab_json};
+let filteredRows = allRows.filter(row => row.pairType === activeTabType);
 let currentPage = 1;
 let totalPages = 1;
 let sortCol = -1;
 let sortAsc = true;
+function switchTab(type) {{
+  activeTabType = type;
+  document.querySelectorAll('.tab-button').forEach(button => {{
+    button.classList.toggle('active', button.dataset.tabType === activeTabType);
+  }});
+  filterTable();
+}}
 function sortTable(col) {{
   if (sortCol === col) sortAsc = !sortAsc; else {{ sortCol = col; sortAsc = true; }}
   filteredRows.sort((a,b) => {{
@@ -1642,6 +1654,7 @@ function filterTable() {{
     .filter(control => FILTER_COLUMNS.includes(Number(control.dataset.filterCol)));
   const dateRanges = collectDateRanges();
   filteredRows = allRows.filter(row => {{
+    if (row.pairType !== activeTabType) return false;
     for (const control of controls) {{
       const filter = control.value.trim().toLowerCase();
       const columnIndex = Number(control.dataset.filterCol);
@@ -1755,7 +1768,7 @@ async function exportFilteredRows() {{
     const temp = document.createElement('tr');
     temp.innerHTML = row.cells.join('');
     const cellHtml = await Promise.all(Array.from(temp.cells).map(async (cell, index) => {{
-      if (index === 4 || index === 5) return `<td>${{await buildExportImageCell(cell)}}</td>`;
+      if (index === 3 || index === 4) return `<td>${{await buildExportImageCell(cell)}}</td>`;
       return `<td>${{htmlEscape(cell.textContent.trim())}}</td>`;
     }}));
     cellHtml.push(`<td>${{htmlEscape(row.ocr || '')}}</td>`);
@@ -1788,6 +1801,7 @@ function closePreview() {{
   document.getElementById('previewImage').src = '';
 }}
 document.addEventListener('keydown', event => {{ if (event.key === 'Escape') closePreview(); }});
+switchTab(activeTabType);
 renderPage(1);
 </script>
 </body>
@@ -1994,6 +2008,13 @@ def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
     return pairs
 
 
+def _pair_report_type(pair: dict[str, str]) -> str:
+    return (
+        str(pair.get("type") or pair.get("category") or pair.get("name") or pair.get("mainland") or "")
+        .strip()
+    )
+
+
 def _normalize_whitelist(items: object) -> list[object]:
     if not isinstance(items, list):
         return []
@@ -2038,7 +2059,10 @@ def _save_intermediate(path: Path, findings: list[Finding], i18n_count: int, mai
     path.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
 
 
-def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str, int]]:
+def collect_findings(
+    args: argparse.Namespace,
+    report_callback: Callable[[list[Finding], dict[str, int]], None] | None = None,
+) -> tuple[list[Finding], dict[str, int]]:
     last_check_at = args.since
     if args.assume_new_has_text:
         detector = assume_text_detector
@@ -2062,6 +2086,7 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
 
     for idx, pair in enumerate(pairs, 1):
         name = pair.get("name", "") or pair["mainland"]
+        report_type = _pair_report_type(pair)
         log_step(f"开始处理配对目录 [{idx}/{pair_count}]: {name}")
         print(f"[{idx}/{pair_count}] 正在扫描: {name}", file=sys.stderr)
         is_remote = pair["i18n"].lower().startswith(("http://", "https://"))
@@ -2085,7 +2110,7 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
         )
         log_step(f"开始比较目录: {name}")
         pair_findings, pair_stats = compare_category(
-            pair.get("name", ""),
+            report_type,
             i18n_files,
             mainland_files,
             last_check_at,
@@ -2106,6 +2131,16 @@ def collect_findings(args: argparse.Namespace) -> tuple[list[Finding], dict[str,
             f"累计 {len(all_findings)} 项",
             file=sys.stderr,
         )
+        if report_callback is not None:
+            report_callback(
+                list(all_findings),
+                {
+                    "i18n_count": total_i18n,
+                    "mainland_count": total_mainland,
+                    "normal_synced": total_normal_synced,
+                    "new_no_text": total_new_no_text,
+                },
+            )
 
     stats = {
         "i18n_count": total_i18n,
@@ -2175,21 +2210,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     log_step(f"开始检查: output={args.output}")
     log_step(f"日志文件: {log_file}")
     log_step(f"OCR 图片清单: {ocr_candidate_file}")
-    findings, counts = collect_findings(args)
+    _require_pillow_for_report(output_path)
+    report_written = False
+
+    def write_cumulative_report(current_findings: list[Finding], current_counts: dict[str, int]) -> None:
+        nonlocal report_written
+        log_step(
+            f"生成累计 HTML 报告: {output_path} findings={len(current_findings)} "
+            f"i18n={current_counts['i18n_count']} mainland={current_counts['mainland_count']}"
+        )
+        write_html_report(
+            output_path,
+            current_findings,
+            i18n_count=current_counts["i18n_count"],
+            mainland_count=current_counts["mainland_count"],
+            normal_synced=current_counts["normal_synced"],
+            new_no_text=current_counts["new_no_text"],
+            max_image_px=args.max_image_px,
+        )
+        report_written = True
+
+    findings, counts = collect_findings(args, report_callback=write_cumulative_report)
     _write_ocr_candidate_list()
     log_step(f"OCR 图片清单已写入: {ocr_candidate_file} count={len(_OCR_CANDIDATES)}")
     log_new_no_text_findings(findings)
-    _require_pillow_for_report(output_path)
-    log_step(f"开始生成 HTML 报告: {output_path}")
-    write_html_report(
-        output_path,
-        findings,
-        i18n_count=counts["i18n_count"],
-        mainland_count=counts["mainland_count"],
-        normal_synced=counts["normal_synced"],
-        new_no_text=counts["new_no_text"],
-        max_image_px=args.max_image_px,
-    )
+    if not report_written:
+        log_step(f"开始生成 HTML 报告: {output_path}")
+        write_cumulative_report(findings, counts)
     log_step(f"检查完成: findings={len(findings)} output={args.output}")
     print(f"检查完成: {len(findings)} 项，输出: {args.output}")
     return 0
