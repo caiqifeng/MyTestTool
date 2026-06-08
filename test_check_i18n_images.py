@@ -1301,6 +1301,23 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertNotIn(str(img_path), content)
             self.assertNotIn(img_path.resolve().as_uri(), content)
 
+    def test_write_html_report_title_includes_project_name_and_run_date(self):
+        fixed_now = dt.datetime(2026, 6, 8, 9, 30, tzinfo=dt.timezone(dt.timedelta(hours=8)))
+
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "report.html"
+            with patch("check_i18n_images.dt.datetime") as mock_datetime:
+                mock_datetime.now.return_value = fixed_now
+                mock_datetime.fromtimestamp.side_effect = dt.datetime.fromtimestamp
+                mock_datetime.fromisoformat.side_effect = dt.datetime.fromisoformat
+                write_html_report(out, [])
+
+            content = out.read_text(encoding="utf-8")
+
+        expected_title = "《剑网三》多语言图片检查汇总（2026.06.08）"
+        self.assertIn(f"<title>{expected_title}</title>", content)
+        self.assertIn(f"<h1>{expected_title}</h1>", content)
+
     def test_write_html_report_creates_png_placeholder_when_source_preview_fails(self):
         with tempfile.TemporaryDirectory() as td:
             img_path = Path(td) / "source.tga"

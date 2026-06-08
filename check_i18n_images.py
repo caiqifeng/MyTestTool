@@ -36,6 +36,7 @@ DEFAULT_THUMBNAIL_ISSUES = {
 }
 _RAPIDOCR_ENGINE = None
 _RAPIDOCR_LOCAL = threading.local()
+TEXT_PROJECT_NAME = "\u5251\u7f51\u4e09"
 TEXT_REPORT_TITLE = "\u591a\u8bed\u8a00\u56fe\u7247\u68c0\u67e5\u6c47\u603b"
 TEXT_RUN_RESULT = "\u672c\u8f6e\u6267\u884c\u7ed3\u679c"
 TEXT_MISSING_ISSUE = "\u7591\u4f3c\u5e9f\u9664\u6587\u4ef6"
@@ -1303,6 +1304,14 @@ def html_img(asset: str, label: str) -> str:
     )
 
 
+def build_report_title(now: dt.datetime | None = None) -> str:
+    current = now or dt.datetime.now(BEIJING_TZ)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=BEIJING_TZ)
+    current = current.astimezone(BEIJING_TZ)
+    return f"\u300a{TEXT_PROJECT_NAME}\u300b{TEXT_REPORT_TITLE}\uff08{current:%Y.%m.%d}\uff09"
+
+
 def write_html_report(
     path: Path,
     findings: Sequence[Finding],
@@ -1404,10 +1413,11 @@ def write_html_report(
         })
 
     total_abnormal = len(findings) - len(new_without_text)
+    report_title = build_report_title()
     summary_table = _build_summary_table(
         i18n_count, mainland_count, total_abnormal,
         normal_synced, new_no_text,
-        missing, changed, new_with_text, others, new_without_text,
+        missing, changed, new_with_text, others, new_without_text, report_title,
     )
     detail_types = sorted({f.category or TEXT_NONE for f in detail_findings}) or [TEXT_NONE]
     tab_buttons = "".join(
@@ -1415,7 +1425,7 @@ def write_html_report(
         f'onclick="switchTab(this.dataset.tabType)">{html.escape(pair_type)}</button>'
         for pair_type in detail_types
     )
-    doc = _html_template(summary_table, summary_cards, rows, tab_buttons, detail_types[0])
+    doc = _html_template(summary_table, summary_cards, rows, tab_buttons, detail_types[0], report_title)
     path.write_text(doc, encoding="utf-8")
 
 def _summary_items(items: Sequence[Finding]) -> str:
@@ -1438,6 +1448,7 @@ def _build_summary_table(
     new_with_text: list[Finding],
     others: list[Finding],
     new_without_text: list[Finding] | None = None,
+    report_title: str = TEXT_REPORT_TITLE,
 ) -> str:
     new_without_text = new_without_text or []
     checked_rows = "".join(
@@ -1472,7 +1483,7 @@ def _build_summary_table(
       <div class="hero-panel">
         <div>
           <p class="eyebrow">Image Localization Audit</p>
-          <h1>{TEXT_REPORT_TITLE}</h1>
+          <h1>{html.escape(report_title)}</h1>
           <p class="subtitle">\u81ea\u52a8\u68c0\u67e5\u56fd\u9645\u7248\u4e0e\u9646\u7248\u56fe\u7247\u5dee\u5f02\uff0c\u8f93\u51fa\u5f02\u5e38\u9879\u3001\u590d\u6838\u9879\u3001\u7f29\u7565\u56fe\u548c OCR \u8bc6\u522b\u6587\u672c\u3002</p>
         </div>
         <div class="run-result"><span>{TEXT_RUN_RESULT}</span><strong>{total_abnormal}</strong><small>\u5f02\u5e38\u9879</small></div>
@@ -1495,6 +1506,7 @@ def _html_template(
     rows: list[dict[str, object]],
     tab_buttons: str = "",
     default_tab_type: str = TEXT_NONE,
+    report_title: str = TEXT_REPORT_TITLE,
 ) -> str:
     rows_json = json.dumps(rows, ensure_ascii=False)
     default_tab_json = json.dumps(default_tab_type, ensure_ascii=False)
@@ -1502,7 +1514,7 @@ def _html_template(
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<title>{TEXT_REPORT_TITLE}</title>
+<title>{html.escape(report_title)}</title>
 <style>
 :root {{ --bg:#f4f6f8; --panel:#ffffff; --text:#1f2937; --muted:#64748b; --line:#d8dee8; --header:#102033; --danger:#b42318; --warning:#b76e00; --review:#475569; }}
 * {{ box-sizing:border-box; }}
