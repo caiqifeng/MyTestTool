@@ -19,6 +19,7 @@ from check_i18n_images import (
     format_progress_line,
     ocr_text_detector_factory,
     main,
+    update_ocr_cache_operation,
     scan_local,
     write_html_report,
     write_xlsx,
@@ -1191,6 +1192,20 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertEqual(data["SampleOnly/source.tga"]["md5"], md5)
             self.assertTrue(data["SampleOnly/source.tga"]["has_text"])
 
+    def test_update_ocr_cache_operation_writes_ignore_marker(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            update_ocr_cache_operation(
+                cache_path,
+                "SampleOnly/source.tga",
+                "abc123",
+                "ignore",
+            )
+
+            data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["SampleOnly/source.tga"]["md5"], "abc123")
+            self.assertEqual(data["SampleOnly/source.tga"]["operation"], "ignore")
+
     def test_write_xlsx_embeds_thumbnail_when_detail_is_present_by_default(self):
         try:
             from PIL import Image
@@ -1555,6 +1570,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("operationStatus", content)
             self.assertIn("ignoreFinding", content)
             self.assertIn("entry.operation = OPERATION_IGNORE", content)
+            self.assertNotIn("showOpenFilePicker", content)
             self.assertIn('"operation": "ignore"', content)
             self.assertNotIn(cn(r"\u9646\u7248\u521b\u5efa\u65f6\u95f4"), header_row)
             self.assertIn('"className": "mainland-new-with-text"', content)
@@ -1583,6 +1599,41 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("function parseDateOnly(value)", content)
             self.assertIn("function dateInRange(value, start, end)", content)
             self.assertIn("collectDateRanges()", content)
+
+    def test_write_html_report_does_not_show_ignore_button_for_missing_files(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+
+        with tempfile.TemporaryDirectory() as td:
+            img_path = Path(td) / "source.tga"
+            Image.new("RGB", (16, 16), (255, 0, 0)).save(img_path)
+            out = Path(td) / "report.html"
+
+            write_html_report(
+                out,
+                [
+                    Finding(
+                        "ui",
+                        "mainland_missing",
+                        "SampleOnly/missing.tga",
+                        str(img_path),
+                        "",
+                        dt.datetime(2026, 1, 1, tzinfo=UTC),
+                        None,
+                        "missing detail",
+                    ),
+                ],
+            )
+
+            content = out.read_text(encoding="utf-8")
+            self.assertIn(cn(r"\u64cd\u4f5c"), content)
+            self.assertIn('"className": "mainland-missing"', content)
+            self.assertIn('"canIgnore": false', content)
+            self.assertIn('"missing detail", ""]', content)
+            self.assertNotIn('onclick=\\"ignoreFinding(1)\\"', content)
+            self.assertNotIn('>忽略</button>', content)
 
     def test_write_html_report_groups_details_by_pair_type_tabs_without_category_column(self):
         try:

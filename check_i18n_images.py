@@ -8,10 +8,12 @@ import dataclasses
 import datetime as dt
 import hashlib
 import html
+import http.server
 import json
 import shutil
 import os
 import re
+import socketserver
 import subprocess
 import sys
 import tempfile
@@ -716,6 +718,22 @@ def save_ocr_cache(cache_path: Path, cache: dict[str, dict[str, object]]) -> Non
         json.dumps(cache, ensure_ascii=False, indent=2, default=str),
         encoding="utf-8",
     )
+
+
+def update_ocr_cache_operation(
+    cache_path: Path,
+    relative_path: str,
+    file_md5: str,
+    operation: str,
+) -> None:
+    cache = load_ocr_cache(cache_path)
+    entry = cache.get(relative_path)
+    if not isinstance(entry, dict):
+        entry = {}
+    entry["md5"] = file_md5
+    entry["operation"] = operation
+    cache[relative_path] = entry
+    save_ocr_cache(cache_path, cache)
 
 
 def ocr_text_detector_factory(
@@ -1428,12 +1446,17 @@ def write_html_report(
         mainland_dt = format_dt(finding.mainland_modified_at)
         i18n_dt = format_dt(finding.i18n_modified_at)
         operation = finding.operation or ""
+        can_ignore = finding.issue != "mainland_missing"
         operation_label = TEXT_IGNORED if operation == OCR_OPERATION_IGNORE else TEXT_IGNORE
         operation_class = "ignored" if operation == OCR_OPERATION_IGNORE else ""
-        operation_cell = (
-            f'<td><button class="operation-button {operation_class}" type="button" '
-            f'onclick="ignoreFinding({index})">{html.escape(operation_label)}</button></td>'
-        )
+        if can_ignore:
+            operation_cell = (
+                f'<td><button class="operation-button {operation_class}" type="button" '
+                f'onclick="ignoreFinding({index})">{html.escape(operation_label)}</button></td>'
+            )
+        else:
+            operation_cell = "<td></td>"
+        operation_filter_label = operation_label if can_ignore else ""
         rows.append({
             "rowIndex": index,
             "className": issue_class,
@@ -1441,6 +1464,7 @@ def write_html_report(
             "title": row_title,
             "ocr": ocr_text,
             "operation": operation,
+            "canIgnore": can_ignore,
             "relativePath": finding.relative_path,
             "mainlandMd5": finding.mainland_md5 or "",
             "cells": [
@@ -1463,7 +1487,7 @@ def write_html_report(
                 mainland_dt,
                 i18n_dt,
                 finding.detail,
-                operation_label,
+                operation_filter_label,
             ],
         })
 
@@ -1699,13 +1723,13 @@ const allRows = {rows_json};
 const FILTER_COLUMNS = [0, 1, 2, 7, 8];
 const OCR_CACHE_FILE_NAME = '{OCR_CACHE_FILE}';
 const OPERATION_IGNORE = '{OCR_OPERATION_IGNORE}';
+const OCR_CACHE_OPERATION_API = '/api/ocr-cache/operation';
 let activeTabType = {default_tab_json};
 let filteredRows = allRows.filter(row => row.pairType === activeTabType);
 let currentPage = 1;
 let totalPages = 1;
 let sortCol = -1;
 let sortAsc = true;
-let ocrCacheHandle = null;
 allRows.forEach(row => updateRowOperation(row, row.operation || ''));
 function switchTab(type) {{
   activeTabType = type;
@@ -1809,10 +1833,17 @@ function operationStatus(operation) {{
   return operation === OPERATION_IGNORE ? '{TEXT_IGNORED}' : '{TEXT_IGNORE}';
 }}
 function buildOperationCell(row) {{
+  if (!row.canIgnore) return '<td></td>';
   const ignored = row.operation === OPERATION_IGNORE;
   return `<td><button class="operation-button${{ignored ? ' ignored' : ''}}" type="button" onclick="ignoreFinding(${{row.rowIndex}})">${{ignored ? '{TEXT_IGNORED}' : '{TEXT_IGNORE}'}}</button></td>`;
 }}
 function updateRowOperation(row, operation) {{
+  if (!row.canIgnore) {{
+    row.operation = '';
+    row.filterValues[8] = '';
+    row.cells[8] = '<td></td>';
+    return;
+  }}
   row.operation = operation;
   row.filterValues[8] = operationStatus(operation);
   row.cells[8] = buildOperationCell(row);
@@ -1820,63 +1851,60 @@ function updateRowOperation(row, operation) {{
 function findRowByIndex(rowIndex) {{
   return allRows.find(row => Number(row.rowIndex) === Number(rowIndex));
 }}
-async function selectOcrCacheFile() {{
-  if (!window.showOpenFilePicker) return null;
-  const handles = await window.showOpenFilePicker({{
-    multiple: false,
-    types: [{{ description: 'OCR Cache JSON', accept: {{ 'application/json': ['.json'] }} }}],
-  }});
-  ocrCacheHandle = handles[0] || null;
-  return ocrCacheHandle;
-}}
 async function readOcrCache() {{
-  const handle = ocrCacheHandle || await selectOcrCacheFile();
-  if (!handle) return null;
-  const file = await handle.getFile();
-  const text = await file.text();
+  const response = await fetch(OCR_CACHE_FILE_NAME, {{ cache: 'no-store' }});
+  if (!response.ok) return {{}};
+  const text = await response.text();
   return text.trim() ? JSON.parse(text) : {{}};
 }}
 async function writeOcrCache(cache) {{
-  if (ocrCacheHandle && ocrCacheHandle.createWritable) {{
-    const writable = await ocrCacheHandle.createWritable();
-    await writable.write(JSON.stringify(cache, null, 2));
-    await writable.close();
-    return;
+  const response = await fetch(OCR_CACHE_OPERATION_API, {{
+    method: 'POST',
+    headers: {{ 'Content-Type': 'application/json' }},
+    body: JSON.stringify(cache),
+  }});
+  if (!response.ok) {{
+    throw new Error(`本地报告服务写入失败：${{response.status}}`);
   }}
-  const blob = new Blob([JSON.stringify(cache, null, 2)], {{ type: 'application/json;charset=utf-8' }});
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = OCR_CACHE_FILE_NAME;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+}}
+async function writeIgnoreOperation(row) {{
+  try {{
+    const response = await fetch(OCR_CACHE_OPERATION_API, {{
+      method: 'POST',
+      headers: {{ 'Content-Type': 'application/json' }},
+      body: JSON.stringify({{
+        relativePath: row.relativePath,
+        md5: row.mainlandMd5,
+        operation: OPERATION_IGNORE,
+      }}),
+    }});
+    if (response.ok) {{
+      return;
+    }}
+  }} catch (error) {{
+  }}
+  const cache = await readOcrCache();
+  const entry = cache[row.relativePath] && typeof cache[row.relativePath] === 'object'
+    ? cache[row.relativePath]
+    : {{}};
+  entry.md5 = row.mainlandMd5;
+  entry.operation = OPERATION_IGNORE;
+  cache[row.relativePath] = entry;
+  await writeOcrCache(cache);
 }}
 async function ignoreFinding(rowIndex) {{
   const row = findRowByIndex(rowIndex);
-  if (!row || row.operation === OPERATION_IGNORE) return;
+  if (!row || !row.canIgnore || row.operation === OPERATION_IGNORE) return;
   if (!row.relativePath || !row.mainlandMd5) {{
     alert('缺少缓存键或 md5，无法写入忽略标识。');
     return;
   }}
   try {{
-    const cache = await readOcrCache();
-    if (cache === null) {{
-      alert('当前浏览器不支持直接写入本地文件，请使用支持文件访问的浏览器打开报告。');
-      return;
-    }}
-    const entry = cache[row.relativePath] && typeof cache[row.relativePath] === 'object'
-      ? cache[row.relativePath]
-      : {{}};
-    entry.md5 = row.mainlandMd5;
-    entry.operation = OPERATION_IGNORE;
-    cache[row.relativePath] = entry;
-    await writeOcrCache(cache);
+    await writeIgnoreOperation(row);
     updateRowOperation(row, OPERATION_IGNORE);
     filterTable();
   }} catch (error) {{
-    alert(`写入 ${{OCR_CACHE_FILE_NAME}} 失败：${{error && error.message ? error.message : error}}`);
+    alert(`自动写入 ${{OCR_CACHE_FILE_NAME}} 失败：请使用本地报告服务打开页面。${{error && error.message ? ' ' + error.message : ''}}`);
   }}
 }}
 function htmlEscape(value) {{
@@ -1958,6 +1986,63 @@ renderPage(1);
 </body>
 </html>
 """
+
+
+def serve_report(report_path: Path, cache_path: Path, host: str = "127.0.0.1", port: int = 8765) -> int:
+    report_path = report_path.resolve()
+    cache_path = cache_path.resolve()
+    root_dir = report_path.parent
+
+    class ReportHandler(http.server.SimpleHTTPRequestHandler):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, directory=str(root_dir), **kwargs)
+
+        def do_POST(self) -> None:
+            if self.path.split("?", 1)[0] != "/api/ocr-cache/operation":
+                self.send_error(404)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                data = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+                if "relativePath" in data:
+                    update_ocr_cache_operation(
+                        cache_path,
+                        str(data["relativePath"]),
+                        str(data["md5"]),
+                        str(data["operation"]),
+                    )
+                else:
+                    cache_path.write_text(
+                        json.dumps(data, ensure_ascii=False, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                response = b'{"ok":true}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(response)))
+                self.end_headers()
+                self.wfile.write(response)
+            except Exception as exc:
+                response = json.dumps({"ok": False, "error": str(exc)}, ensure_ascii=False).encode("utf-8")
+                self.send_response(500)
+                self.send_header("Content-Type", "application/json; charset=utf-8")
+                self.send_header("Content-Length", str(len(response)))
+                self.end_headers()
+                self.wfile.write(response)
+
+    class ReusableTCPServer(socketserver.TCPServer):
+        allow_reuse_address = True
+
+    with ReusableTCPServer((host, port), ReportHandler) as httpd:
+        url = f"http://{host}:{httpd.server_address[1]}/{report_path.name}"
+        print(f"报告服务已启动: {url}")
+        print(f"OCR 缓存: {cache_path}")
+        try:
+            os.startfile(url)
+        except Exception:
+            pass
+        httpd.serve_forever()
+    return 0
 
 
 def add_thumbnail(
@@ -2341,6 +2426,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="HTML 报告预览图最长边像素上限（保持纵横比）；默认 720",
     )
+    parser.add_argument(
+        "--serve-report",
+        action="store_true",
+        help="生成报告后启动本地服务打开页面，使 HTML 可自动写回 .ocr_cache.json",
+    )
+    parser.add_argument(
+        "--serve-port",
+        type=int,
+        default=8765,
+        help="--serve-report 使用的本地端口，默认 8765",
+    )
     args = parser.parse_args(argv)
 
     # auto-detect config file
@@ -2390,6 +2486,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         write_cumulative_report(findings, counts)
     log_step(f"检查完成: findings={len(findings)} output={args.output}")
     print(f"检查完成: {len(findings)} 项，输出: {args.output}")
+    if args.serve_report:
+        return serve_report(output_path, Path(args.ocr_cache_file), port=args.serve_port)
     return 0
 
 if __name__ == "__main__":
