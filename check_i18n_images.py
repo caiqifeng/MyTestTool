@@ -729,7 +729,7 @@ def ocr_text_detector_factory(
                 return bool(entry.get("has_text", False))
 
         text = run_ocr(image)
-        has_text = bool(re.search(r"[\w\u4e00-\u9fff]", text or ""))
+        has_text = bool(re.search(r"[\u4e00-\u9fff]", text or ""))
         with cache_lock:
             cache[file_key] = {
                 "md5": file_md5,

@@ -156,6 +156,25 @@ class CheckI18nImagesTest(unittest.TestCase):
             ],
         )
 
+    def test_ocr_text_detector_treats_only_chinese_text_as_text(self):
+        detector = ocr_text_detector_factory()
+        with tempfile.TemporaryDirectory() as td:
+            english_path = Path(td) / "english.dds"
+            chinese_path = Path(td) / "chinese.dds"
+            english_path.write_bytes(b"english")
+            chinese_path.write_bytes(b"chinese")
+            english_image = img("english.dds", "2026-01-03T00:00:00", full=str(english_path))
+            chinese_image = img("chinese.dds", "2026-01-03T00:00:00", full=str(chinese_path))
+
+            with patch("check_i18n_images.run_ocr") as run_ocr:
+                run_ocr.side_effect = lambda image: {
+                    "english.dds": "Season 2026_01",
+                    "chinese.dds": cn(r"\u8d5b\u5b63\u5f00\u542f"),
+                }[image.relative_path]
+
+                self.assertFalse(detector(english_image))
+                self.assertTrue(detector(chinese_image))
+
     def test_new_mainland_ignores_last_check_time_for_mainland_only_images(self):
         old_candidate = img("SampleOnly/text.tga", "2026-01-01T00:00:00")
 
