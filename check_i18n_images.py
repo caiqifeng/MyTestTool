@@ -14,6 +14,7 @@ import shutil
 import os
 import re
 import socketserver
+import sqlite3
 import subprocess
 import sys
 import tempfile
@@ -734,6 +735,224 @@ def update_ocr_cache_operation(
     entry["operation"] = operation
     cache[relative_path] = entry
     save_ocr_cache(cache_path, cache)
+
+
+def init_ocr_cache_db(db_path: Path) -> None:
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ocr_cache (
+                relative_path TEXT PRIMARY KEY,
+                md5 TEXT NOT NULL,
+                has_text INTEGER,
+                test_str TEXT,
+                operation TEXT,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS review_operation (
+                relative_path TEXT PRIMARY KEY,
+                md5 TEXT NOT NULL,
+                operation TEXT NOT NULL,
+                operator TEXT,
+                updated_at TEXT NOT NULL
+            )
+            """
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _now_text() -> str:
+    return dt.datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S %z")
+
+
+def migrate_ocr_json_to_sqlite(json_path: Path, db_path: Path) -> int:
+    data = load_ocr_cache(json_path)
+    init_ocr_cache_db(db_path)
+    count = 0
+    now_text = _now_text()
+    conn = sqlite3.connect(db_path)
+    try:
+        for relative_path, entry in data.items():
+            if not isinstance(entry, dict):
+                continue
+            file_md5 = entry.get("md5")
+            if not isinstance(file_md5, str) or not file_md5:
+                continue
+            has_text = entry.get("has_text")
+            has_text_value = None if has_text is None else int(bool(has_text))
+            test_str = entry.get("test_str")
+            operation = entry.get("operation")
+            conn.execute(
+                """
+                INSERT INTO ocr_cache(relative_path, md5, has_text, test_str, operation, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(relative_path) DO UPDATE SET
+                    md5=excluded.md5,
+                    has_text=excluded.has_text,
+                    test_str=excluded.test_str,
+                    operation=excluded.operation,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    relative_path,
+                    file_md5,
+                    has_text_value,
+                    test_str if isinstance(test_str, str) else "",
+                    operation if isinstance(operation, str) else None,
+                    now_text,
+                ),
+            )
+            if isinstance(operation, str) and operation:
+                conn.execute(
+                    """
+                    INSERT INTO review_operation(relative_path, md5, operation, operator, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(relative_path) DO UPDATE SET
+                        md5=excluded.md5,
+                        operation=excluded.operation,
+                        operator=excluded.operator,
+                        updated_at=excluded.updated_at
+                    """,
+                    (relative_path, file_md5, operation, "", now_text),
+                )
+            count += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return count
+
+
+def update_ocr_cache_operation_sqlite(
+    db_path: Path,
+    relative_path: str,
+    file_md5: str,
+    operation: str,
+    operator: str = "",
+) -> None:
+    init_ocr_cache_db(db_path)
+    now_text = _now_text()
+    conn = sqlite3.connect(db_path)
+    try:
+        conn.execute(
+            """
+            INSERT INTO ocr_cache(relative_path, md5, operation, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(relative_path) DO UPDATE SET
+                md5=excluded.md5,
+                operation=excluded.operation,
+                updated_at=excluded.updated_at
+            """,
+            (relative_path, file_md5, operation, now_text),
+        )
+        conn.execute(
+            """
+            INSERT INTO review_operation(relative_path, md5, operation, operator, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(relative_path) DO UPDATE SET
+                md5=excluded.md5,
+                operation=excluded.operation,
+                operator=excluded.operator,
+                updated_at=excluded.updated_at
+            """,
+            (relative_path, file_md5, operation, operator, now_text),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def sqlite_ocr_text_detector_factory(
+    db_path: Path,
+) -> Callable[[ImageFile], bool]:
+    init_ocr_cache_db(db_path)
+    db_lock = threading.Lock()
+
+    def _entry_for(image: ImageFile, file_md5: str) -> dict[str, object] | None:
+        with db_lock:
+            conn = sqlite3.connect(db_path)
+            try:
+                row = conn.execute(
+                    """
+                    SELECT c.has_text, c.test_str, COALESCE(r.operation, c.operation) AS operation
+                    FROM ocr_cache c
+                    LEFT JOIN review_operation r
+                      ON r.relative_path = c.relative_path AND r.md5 = c.md5
+                    WHERE c.relative_path=? AND c.md5=?
+                    """,
+                    (image.relative_path, file_md5),
+                ).fetchone()
+            finally:
+                conn.close()
+        if row is None:
+            return None
+        return {"has_text": row[0], "test_str": row[1], "operation": row[2]}
+
+    def detect(image: ImageFile) -> bool:
+        file_md5 = _file_md5(image.full_path)
+        entry = _entry_for(image, file_md5)
+        if entry is not None and entry.get("has_text") is not None:
+            return bool(entry.get("has_text"))
+
+        text = run_ocr(image)
+        has_text = bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+        operation = entry.get("operation") if entry is not None else None
+        now_text = _now_text()
+        with db_lock:
+            conn = sqlite3.connect(db_path)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO ocr_cache(relative_path, md5, has_text, test_str, operation, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(relative_path) DO UPDATE SET
+                        md5=excluded.md5,
+                        has_text=excluded.has_text,
+                        test_str=excluded.test_str,
+                        operation=excluded.operation,
+                        updated_at=excluded.updated_at
+                    """,
+                    (
+                        image.relative_path,
+                        file_md5,
+                        int(has_text),
+                        text or "",
+                        operation if isinstance(operation, str) else None,
+                        now_text,
+                    ),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+        return has_text
+
+    def ocr_text_for(image: ImageFile) -> str | None:
+        file_md5 = _file_md5(image.full_path)
+        entry = _entry_for(image, file_md5)
+        text = entry.get("test_str") if entry is not None else None
+        return text if isinstance(text, str) and text else None
+
+    def operation_for(image: ImageFile) -> str | None:
+        file_md5 = _file_md5(image.full_path)
+        entry = _entry_for(image, file_md5)
+        operation = entry.get("operation") if entry is not None else None
+        return operation if isinstance(operation, str) else None
+
+    def md5_for(image: ImageFile) -> str | None:
+        return _file_md5(image.full_path)
+
+    setattr(detect, "ocr_text_for", ocr_text_for)
+    setattr(detect, "operation_for", operation_for)
+    setattr(detect, "md5_for", md5_for)
+    return detect
 
 
 def ocr_text_detector_factory(
@@ -1988,9 +2207,16 @@ renderPage(1);
 """
 
 
-def serve_report(report_path: Path, cache_path: Path, host: str = "127.0.0.1", port: int = 8765) -> int:
+def serve_report(
+    report_path: Path,
+    cache_path: Path,
+    cache_db_path: Path | None = None,
+    host: str = "127.0.0.1",
+    port: int = 8765,
+) -> int:
     report_path = report_path.resolve()
     cache_path = cache_path.resolve()
+    cache_db_path = cache_db_path.resolve() if cache_db_path is not None else None
     root_dir = report_path.parent
 
     class ReportHandler(http.server.SimpleHTTPRequestHandler):
@@ -2005,12 +2231,20 @@ def serve_report(report_path: Path, cache_path: Path, host: str = "127.0.0.1", p
                 length = int(self.headers.get("Content-Length", "0"))
                 data = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
                 if "relativePath" in data:
-                    update_ocr_cache_operation(
-                        cache_path,
-                        str(data["relativePath"]),
-                        str(data["md5"]),
-                        str(data["operation"]),
-                    )
+                    if cache_db_path is not None:
+                        update_ocr_cache_operation_sqlite(
+                            cache_db_path,
+                            str(data["relativePath"]),
+                            str(data["md5"]),
+                            str(data["operation"]),
+                        )
+                    else:
+                        update_ocr_cache_operation(
+                            cache_path,
+                            str(data["relativePath"]),
+                            str(data["md5"]),
+                            str(data["operation"]),
+                        )
                 else:
                     cache_path.write_text(
                         json.dumps(data, ensure_ascii=False, indent=2, default=str),
@@ -2036,7 +2270,7 @@ def serve_report(report_path: Path, cache_path: Path, host: str = "127.0.0.1", p
     with ReusableTCPServer((host, port), ReportHandler) as httpd:
         url = f"http://{host}:{httpd.server_address[1]}/{report_path.name}"
         print(f"报告服务已启动: {url}")
-        print(f"OCR 缓存: {cache_path}")
+        print(f"OCR 缓存: {cache_db_path or cache_path}")
         try:
             os.startfile(url)
         except Exception:
@@ -2303,7 +2537,10 @@ def collect_findings(
     if args.assume_new_has_text:
         detector = assume_text_detector
     elif not args.no_ocr:
-        detector = ocr_text_detector_factory(cache_path=Path(args.ocr_cache_file))
+        if getattr(args, "ocr_cache_db", None):
+            detector = sqlite_ocr_text_detector_factory(Path(args.ocr_cache_db))
+        else:
+            detector = ocr_text_detector_factory(cache_path=Path(args.ocr_cache_file))
     else:
         detector = default_text_detector
 
@@ -2411,6 +2648,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help=f"OCR 检测结果缓存文件（默认 {OCR_CACHE_FILE}），记录已检查文件避免重复 OCR",
     )
     parser.add_argument(
+        "--ocr-cache-db",
+        default=None,
+        help="SQLite OCR 缓存数据库路径；指定后优先读写 SQLite，不再写 .ocr_cache.json",
+    )
+    parser.add_argument(
         "--max-files",
         type=int,
         help="测试用：每个对比目录按相对路径排序后最多取多少张图片",
@@ -2429,7 +2671,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--serve-report",
         action="store_true",
-        help="生成报告后启动本地服务打开页面，使 HTML 可自动写回 .ocr_cache.json",
+        help="生成报告后启动本地服务打开页面，使 HTML 可自动写回 OCR 缓存",
     )
     parser.add_argument(
         "--serve-port",
@@ -2487,7 +2729,13 @@ def main(argv: Sequence[str] | None = None) -> int:
     log_step(f"检查完成: findings={len(findings)} output={args.output}")
     print(f"检查完成: {len(findings)} 项，输出: {args.output}")
     if args.serve_report:
-        return serve_report(output_path, Path(args.ocr_cache_file), port=args.serve_port)
+        cache_db_path = Path(args.ocr_cache_db) if args.ocr_cache_db else None
+        return serve_report(
+            output_path,
+            Path(args.ocr_cache_file),
+            cache_db_path=cache_db_path,
+            port=args.serve_port,
+        )
     return 0
 
 if __name__ == "__main__":

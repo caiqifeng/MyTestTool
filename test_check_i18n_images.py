@@ -17,8 +17,11 @@ from check_i18n_images import (
     compare_category,
     enrich_findings_with_translation,
     format_progress_line,
+    migrate_ocr_json_to_sqlite,
     ocr_text_detector_factory,
     main,
+    sqlite_ocr_text_detector_factory,
+    update_ocr_cache_operation_sqlite,
     update_ocr_cache_operation,
     scan_local,
     write_html_report,
@@ -1205,6 +1208,87 @@ class CheckI18nImagesTest(unittest.TestCase):
             data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
             self.assertEqual(data["SampleOnly/source.tga"]["md5"], "abc123")
             self.assertEqual(data["SampleOnly/source.tga"]["operation"], "ignore")
+
+    def test_migrate_ocr_json_to_sqlite_preserves_text_and_operation(self):
+        with tempfile.TemporaryDirectory() as td:
+            json_path = Path(td) / "ocr_cache.json"
+            db_path = Path(td) / "ocr_cache.db"
+            json_path.write_text(
+                __import__("json").dumps(
+                    {
+                        "SampleOnly/source.tga": {
+                            "md5": "abc123",
+                            "has_text": True,
+                            "test_str": cn(r"\u8d5b\u5b63\u5f00\u542f"),
+                            "operation": "ignore",
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            count = migrate_ocr_json_to_sqlite(json_path, db_path)
+
+            self.assertEqual(count, 1)
+            import sqlite3
+
+            conn = sqlite3.connect(db_path)
+            try:
+                row = conn.execute(
+                    "SELECT md5, has_text, test_str, operation FROM ocr_cache WHERE relative_path=?",
+                    ("SampleOnly/source.tga",),
+                ).fetchone()
+            finally:
+                conn.close()
+            self.assertEqual(row, ("abc123", 1, cn(r"\u8d5b\u5b63\u5f00\u542f"), "ignore"))
+
+    def test_sqlite_ocr_cache_hit_exposes_ignore_operation_for_same_md5(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "ocr_cache.db"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            md5 = __import__("hashlib").md5(b"fake image").hexdigest()
+            update_ocr_cache_operation_sqlite(db_path, "SampleOnly/source.tga", md5, "ignore")
+
+            with patch("check_i18n_images.run_ocr", return_value=cn(r"\u8d5b\u5b63\u5f00\u542f")):
+                detector = sqlite_ocr_text_detector_factory(db_path)
+                findings, _stats = compare_category("ui", {}, {"SampleOnly/source.tga": image}, None, detector)
+
+            self.assertEqual(findings[0].issue, "mainland_new_with_text")
+            self.assertEqual(findings[0].operation, "ignore")
+            self.assertEqual(findings[0].mainland_md5, md5)
+
+    def test_sqlite_ocr_cache_does_not_reuse_ignore_when_md5_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "ocr_cache.db"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"old image")
+            old_md5 = __import__("hashlib").md5(b"old image").hexdigest()
+            update_ocr_cache_operation_sqlite(db_path, "SampleOnly/source.tga", old_md5, "ignore")
+
+            image_path.write_bytes(b"new image")
+            new_md5 = __import__("hashlib").md5(b"new image").hexdigest()
+            image = ImageFile(
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+
+            with patch("check_i18n_images.run_ocr", return_value=cn(r"\u8d5b\u5b63\u5f00\u542f")):
+                detector = sqlite_ocr_text_detector_factory(db_path)
+                findings, _stats = compare_category("ui", {}, {"SampleOnly/source.tga": image}, None, detector)
+
+            self.assertEqual(findings[0].issue, "mainland_new_with_text")
+            self.assertIsNone(findings[0].operation)
+            self.assertEqual(findings[0].mainland_md5, new_md5)
 
     def test_write_xlsx_embeds_thumbnail_when_detail_is_present_by_default(self):
         try:
