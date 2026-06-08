@@ -1129,6 +1129,68 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertNotIn("has_test", data["SampleOnly/source.tga"])
             self.assertEqual(data["SampleOnly/source.tga"]["test_str"], "閺傚洤鐡ч崘鍛啇")
 
+    def test_ocr_cache_hit_exposes_ignore_operation_for_same_md5(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            md5 = __import__("hashlib").md5(b"fake image").hexdigest()
+            cache_path.write_text(
+                __import__("json").dumps(
+                    {
+                        "SampleOnly/source.tga": {
+                            "md5": md5,
+                            "has_text": True,
+                            "test_str": cn(r"\u8d5b\u5b63\u5f00\u542f"),
+                            "operation": "ignore",
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            detector = ocr_text_detector_factory(cache_path)
+            findings, _stats = compare_category("ui", {}, {"SampleOnly/source.tga": image}, None, detector)
+
+            self.assertEqual(findings[0].issue, "mainland_new_with_text")
+            self.assertEqual(findings[0].operation, "ignore")
+
+    def test_ocr_cache_preserves_ignore_operation_when_refreshing_same_md5(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            md5 = __import__("hashlib").md5(b"fake image").hexdigest()
+            cache_path.write_text(
+                __import__("json").dumps(
+                    {"SampleOnly/source.tga": {"md5": md5, "operation": "ignore"}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            with patch("check_i18n_images.run_ocr", return_value=cn(r"\u8d5b\u5b63\u5f00\u542f")):
+                detector = ocr_text_detector_factory(cache_path)
+                self.assertTrue(detector(image))
+
+            data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["SampleOnly/source.tga"]["operation"], "ignore")
+            self.assertEqual(data["SampleOnly/source.tga"]["md5"], md5)
+            self.assertTrue(data["SampleOnly/source.tga"]["has_text"])
+
     def test_write_xlsx_embeds_thumbnail_when_detail_is_present_by_default(self):
         try:
             from PIL import Image
@@ -1433,6 +1495,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                         dt.datetime(2026, 1, 2, tzinfo=UTC),
                         "text detail",
                         mainland_ocr_text=cn(r"\u5927\u5251\u7f51\u4e09"),
+                        operation="ignore",
                     ),
                     Finding(
                         "ui",
@@ -1483,10 +1546,16 @@ class CheckI18nImagesTest(unittest.TestCase):
                 cn(r"\u9646\u7248\u4fee\u6539\u65f6\u95f4"),
                 cn(r"\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4"),
                 cn(r"\u8bf4\u660e"),
+                cn(r"\u64cd\u4f5c"),
             ]
             positions = [header_row.index(label) for label in expected_order]
             self.assertEqual(positions, sorted(positions))
             self.assertNotIn(f"<th onclick=\"sortTable(9)\">{cn(r'\u8bc6\u522b\u6587\u5b57')}", header_row)
+            self.assertIn(cn(r"\u5df2\u5ffd\u7565"), content)
+            self.assertIn("operationStatus", content)
+            self.assertIn("ignoreFinding", content)
+            self.assertIn("entry.operation = OPERATION_IGNORE", content)
+            self.assertIn('"operation": "ignore"', content)
             self.assertNotIn(cn(r"\u9646\u7248\u521b\u5efa\u65f6\u95f4"), header_row)
             self.assertIn('"className": "mainland-new-with-text"', content)
             self.assertNotIn('"className": "mainland-new-no-text"', content)
@@ -1510,7 +1579,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn('type="date" data-date-col="6" data-date-bound="start"', content)
             self.assertIn('type="date" data-date-col="6" data-date-bound="end"', content)
             self.assertIn(cn(r"\u81f3"), content)
-            self.assertIn("const FILTER_COLUMNS = [0, 1, 2, 7]", content)
+            self.assertIn("const FILTER_COLUMNS = [0, 1, 2, 7, 8]", content)
             self.assertIn("function parseDateOnly(value)", content)
             self.assertIn("function dateInRange(value, start, end)", content)
             self.assertIn("collectDateRanges()", content)

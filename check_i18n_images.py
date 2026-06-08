@@ -31,6 +31,7 @@ SCRIPT_UPDATED_AT = "2026-06-05 09:21:59 +08:00"
 IMAGE_EXTENSIONS = {".dds", ".tga"}
 STATE_FILE = ".check_i18n_images_state"
 OCR_CACHE_FILE = ".ocr_cache.json"
+OCR_OPERATION_IGNORE = "ignore"
 DEFAULT_THUMBNAIL_ISSUES = {
     "__has_detail__",
 }
@@ -53,6 +54,9 @@ TEXT_MAINLAND_IMAGE = "\u9646\u7248\u56fe\u7247"
 TEXT_I18N_MODIFIED = "\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4"
 TEXT_MAINLAND_MODIFIED = "\u9646\u7248\u4fee\u6539\u65f6\u95f4"
 TEXT_DETAIL = "\u8bf4\u660e"
+TEXT_OPERATION = "\u64cd\u4f5c"
+TEXT_IGNORE = "\u5ffd\u7565"
+TEXT_IGNORED = "\u5df2\u5ffd\u7565"
 TEXT_I18N = "\u56fd\u9645\u7248"
 TEXT_MAINLAND = "\u9646\u7248"
 TEXT_NONE = "\u65e0"
@@ -87,6 +91,8 @@ class Finding:
     # ok / error / missing / no_cn_text
     translation_status: str | None = None
     translation_note: str | None = None
+    operation: str | None = None
+    mainland_md5: str | None = None
 
 
 def normalize_rel(path: str) -> str:
@@ -229,12 +235,16 @@ def compare_category(
     progress_started_at = time.monotonic()
     progress_line_length = 0
 
-    def detect_text(index_and_image: tuple[int, ImageFile]) -> tuple[int, ImageFile, bool, str | None, str]:
+    def detect_text(index_and_image: tuple[int, ImageFile]) -> tuple[int, ImageFile, bool, str | None, str, str | None, str | None]:
         index, image = index_and_image
         has_text = text_detector(image)
         ocr_text_getter = getattr(text_detector, "ocr_text_for", None)
         ocr_text = ocr_text_getter(image) if callable(ocr_text_getter) else None
-        return index, image, has_text, ocr_text, threading.current_thread().name
+        operation_getter = getattr(text_detector, "operation_for", None)
+        operation = operation_getter(image) if callable(operation_getter) else None
+        md5_getter = getattr(text_detector, "md5_for", None)
+        file_md5 = md5_getter(image) if callable(md5_getter) else None
+        return index, image, has_text, ocr_text, threading.current_thread().name, operation, file_md5
 
     def print_ocr_progress(done_count: int, image: ImageFile, worker_name: str) -> None:
         nonlocal progress_line_length
@@ -263,7 +273,7 @@ def compare_category(
         for item in indexed_images:
             result = detect_text(item)
             detected_results.append(result)
-            _index, image, _has_text, _ocr_text, worker_name = result
+            _index, image, _has_text, _ocr_text, worker_name, _operation, _file_md5 = result
             print_ocr_progress(len(detected_results), image, worker_name)
     else:
         log_step(f"启动 OCR 并发: workers={worker_count} count={new_total}")
@@ -273,11 +283,11 @@ def compare_category(
             for future in as_completed(futures):
                 result = future.result()
                 detected_results.append(result)
-                _index, image, _has_text, _ocr_text, worker_name = result
+                _index, image, _has_text, _ocr_text, worker_name, _operation, _file_md5 = result
                 print_ocr_progress(len(detected_results), image, worker_name)
         detected_results.sort(key=lambda item: item[0])
 
-    for _progress_index, mainland_file, has_text, mainland_ocr_text, _worker_name in detected_results:
+    for _progress_index, mainland_file, has_text, mainland_ocr_text, _worker_name, operation, file_md5 in detected_results:
         if has_text:
             findings.append(
                 Finding(
@@ -291,6 +301,8 @@ def compare_category(
                     "陆版新增图片且检测到文字",
                     mainland_created_at=mainland_file.created_at,
                     mainland_ocr_text=mainland_ocr_text,
+                    operation=operation,
+                    mainland_md5=file_md5,
                 )
             )
         else:
@@ -306,6 +318,8 @@ def compare_category(
                     mainland_file.modified_at,
                     "陆版新增图片，OCR 未检测到文字，建议人工复核",
                     mainland_created_at=mainland_file.created_at,
+                    operation=operation,
+                    mainland_md5=file_md5,
                 )
             )
     if new_total:
@@ -715,6 +729,8 @@ def ocr_text_detector_factory(
     def detect(image: ImageFile) -> bool:
         file_key = image.relative_path
         file_md5 = _file_md5(image.full_path)
+        setattr(detect, "_last_md5", file_md5)
+        setattr(detect, "_last_operation", None)
         with cache_lock:
             entry = cache.get(file_key)
             if (
@@ -722,6 +738,9 @@ def ocr_text_detector_factory(
                 and entry.get("md5") == file_md5
                 and "has_text" in entry
             ):
+                operation = entry.get("operation")
+                if isinstance(operation, str):
+                    setattr(detect, "_last_operation", operation)
                 if "has_test" in entry:
                     entry.pop("has_test", None)
                     if cache_path is not None:
@@ -731,11 +750,20 @@ def ocr_text_detector_factory(
         text = run_ocr(image)
         has_text = bool(re.search(r"[\u4e00-\u9fff]", text or ""))
         with cache_lock:
-            cache[file_key] = {
+            existing_entry = cache.get(file_key)
+            operation = (
+                existing_entry.get("operation")
+                if isinstance(existing_entry, dict) and existing_entry.get("md5") == file_md5
+                else None
+            )
+            new_entry: dict[str, object] = {
                 "md5": file_md5,
                 "has_text": has_text,
                 "test_str": text or "",
             }
+            if isinstance(operation, str):
+                new_entry["operation"] = operation
+            cache[file_key] = new_entry
             if cache_path is not None:
                 save_ocr_cache(cache_path, cache)
         return has_text
@@ -749,7 +777,21 @@ def ocr_text_detector_factory(
                 return text
         return None
 
+    def operation_for(image: ImageFile) -> str | None:
+        file_md5 = _file_md5(image.full_path)
+        with cache_lock:
+            entry = cache.get(image.relative_path)
+        if isinstance(entry, dict) and entry.get("md5") == file_md5:
+            operation = entry.get("operation")
+            return operation if isinstance(operation, str) else None
+        return None
+
+    def md5_for(image: ImageFile) -> str | None:
+        return _file_md5(image.full_path)
+
     setattr(detect, "ocr_text_for", ocr_text_for)
+    setattr(detect, "operation_for", operation_for)
+    setattr(detect, "md5_for", md5_for)
     return detect
 
 _TRANSLATION_SYSTEM_PROMPT = (
@@ -1385,11 +1427,22 @@ def write_html_report(
         issue_label = issue_title(finding.issue)
         mainland_dt = format_dt(finding.mainland_modified_at)
         i18n_dt = format_dt(finding.i18n_modified_at)
+        operation = finding.operation or ""
+        operation_label = TEXT_IGNORED if operation == OCR_OPERATION_IGNORE else TEXT_IGNORE
+        operation_class = "ignored" if operation == OCR_OPERATION_IGNORE else ""
+        operation_cell = (
+            f'<td><button class="operation-button {operation_class}" type="button" '
+            f'onclick="ignoreFinding({index})">{html.escape(operation_label)}</button></td>'
+        )
         rows.append({
+            "rowIndex": index,
             "className": issue_class,
             "pairType": finding.category or TEXT_NONE,
             "title": row_title,
             "ocr": ocr_text,
+            "operation": operation,
+            "relativePath": finding.relative_path,
+            "mainlandMd5": finding.mainland_md5 or "",
             "cells": [
                 f'<td class="row-index">{index}</td>',
                 f'<td><span class="issue-badge {issue_class}">{html.escape(issue_label)}</span></td>',
@@ -1399,6 +1452,7 @@ def write_html_report(
                 f'<td>{html.escape(mainland_dt)}</td>',
                 f'<td>{html.escape(i18n_dt)}</td>',
                 f'<td>{html.escape(finding.detail)}</td>',
+                operation_cell,
             ],
             "filterValues": [
                 str(index),
@@ -1409,6 +1463,7 @@ def write_html_report(
                 mainland_dt,
                 i18n_dt,
                 finding.detail,
+                operation_label,
             ],
         })
 
@@ -1571,6 +1626,9 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 .issue-badge.mainland-new-no-text {{ color:#334155; background:#e2e8f0; }}
 .thumb-button {{ width:168px; height:110px; padding:0; border:1px solid #cbd5e1; border-radius:5px; background:#f8fafc; cursor:zoom-in; display:inline-flex; align-items:center; justify-content:center; }}
 .thumb-button img {{ max-width:166px; max-height:108px; object-fit:contain; }}
+.operation-button {{ border:1px solid #cbd5e1; background:white; color:#334155; border-radius:5px; padding:6px 10px; font-size:13px; cursor:pointer; white-space:nowrap; }}
+.operation-button:hover {{ border-color:#2563eb; color:#1d4ed8; }}
+.operation-button.ignored {{ border-color:#94a3b8; background:#e2e8f0; color:#475569; cursor:default; }}
 .overlay {{ position:fixed; inset:0; background:rgba(15,23,42,.82); display:none; align-items:center; justify-content:center; padding:32px; z-index:20; }}
 .overlay.open {{ display:flex; }}
 .preview {{ max-width:96vw; max-height:92vh; background:#fff; border-radius:8px; padding:12px; }}
@@ -1596,6 +1654,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
         <col style="width:170px">
         <col style="width:170px">
         <col style="width:220px">
+        <col style="width:120px">
       </colgroup>
       <thead>
         <tr>
@@ -1607,6 +1666,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
           <th onclick="sortTable(5)">\u9646\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
           <th onclick="sortTable(6)">\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4<span class="sort-icon"></span></th>
           <th onclick="sortTable(7)">\u8bf4\u660e<span class="sort-icon"></span></th>
+          <th onclick="sortTable(8)">{TEXT_OPERATION}<span class="sort-icon"></span></th>
         </tr>
         <tr class="filter-row">
           <th><input type="text" data-filter-col="0" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
@@ -1616,6 +1676,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
           <th><div class="date-range"><input type="date" data-date-col="5" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="5" data-date-bound="end" onchange="filterTable()"></div></th>
           <th><div class="date-range"><input type="date" data-date-col="6" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="6" data-date-bound="end" onchange="filterTable()"></div></th>
           <th><input type="text" data-filter-col="7" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
+          <th><select data-filter-col="8" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_IGNORE}</option><option>{TEXT_IGNORED}</option></select></th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -1635,13 +1696,17 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 <script>
 const PAGE_SIZE = 50;
 const allRows = {rows_json};
-const FILTER_COLUMNS = [0, 1, 2, 7];
+const FILTER_COLUMNS = [0, 1, 2, 7, 8];
+const OCR_CACHE_FILE_NAME = '{OCR_CACHE_FILE}';
+const OPERATION_IGNORE = '{OCR_OPERATION_IGNORE}';
 let activeTabType = {default_tab_json};
 let filteredRows = allRows.filter(row => row.pairType === activeTabType);
 let currentPage = 1;
 let totalPages = 1;
 let sortCol = -1;
 let sortAsc = true;
+let ocrCacheHandle = null;
+allRows.forEach(row => updateRowOperation(row, row.operation || ''));
 function switchTab(type) {{
   activeTabType = type;
   document.querySelectorAll('.tab-button').forEach(button => {{
@@ -1739,6 +1804,80 @@ function renderPage(page) {{
 }}
 function gotoPage(page) {{
   renderPage(page);
+}}
+function operationStatus(operation) {{
+  return operation === OPERATION_IGNORE ? '{TEXT_IGNORED}' : '{TEXT_IGNORE}';
+}}
+function buildOperationCell(row) {{
+  const ignored = row.operation === OPERATION_IGNORE;
+  return `<td><button class="operation-button${{ignored ? ' ignored' : ''}}" type="button" onclick="ignoreFinding(${{row.rowIndex}})">${{ignored ? '{TEXT_IGNORED}' : '{TEXT_IGNORE}'}}</button></td>`;
+}}
+function updateRowOperation(row, operation) {{
+  row.operation = operation;
+  row.filterValues[8] = operationStatus(operation);
+  row.cells[8] = buildOperationCell(row);
+}}
+function findRowByIndex(rowIndex) {{
+  return allRows.find(row => Number(row.rowIndex) === Number(rowIndex));
+}}
+async function selectOcrCacheFile() {{
+  if (!window.showOpenFilePicker) return null;
+  const handles = await window.showOpenFilePicker({{
+    multiple: false,
+    types: [{{ description: 'OCR Cache JSON', accept: {{ 'application/json': ['.json'] }} }}],
+  }});
+  ocrCacheHandle = handles[0] || null;
+  return ocrCacheHandle;
+}}
+async function readOcrCache() {{
+  const handle = ocrCacheHandle || await selectOcrCacheFile();
+  if (!handle) return null;
+  const file = await handle.getFile();
+  const text = await file.text();
+  return text.trim() ? JSON.parse(text) : {{}};
+}}
+async function writeOcrCache(cache) {{
+  if (ocrCacheHandle && ocrCacheHandle.createWritable) {{
+    const writable = await ocrCacheHandle.createWritable();
+    await writable.write(JSON.stringify(cache, null, 2));
+    await writable.close();
+    return;
+  }}
+  const blob = new Blob([JSON.stringify(cache, null, 2)], {{ type: 'application/json;charset=utf-8' }});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = OCR_CACHE_FILE_NAME;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}}
+async function ignoreFinding(rowIndex) {{
+  const row = findRowByIndex(rowIndex);
+  if (!row || row.operation === OPERATION_IGNORE) return;
+  if (!row.relativePath || !row.mainlandMd5) {{
+    alert('缺少缓存键或 md5，无法写入忽略标识。');
+    return;
+  }}
+  try {{
+    const cache = await readOcrCache();
+    if (cache === null) {{
+      alert('当前浏览器不支持直接写入本地文件，请使用支持文件访问的浏览器打开报告。');
+      return;
+    }}
+    const entry = cache[row.relativePath] && typeof cache[row.relativePath] === 'object'
+      ? cache[row.relativePath]
+      : {{}};
+    entry.md5 = row.mainlandMd5;
+    entry.operation = OPERATION_IGNORE;
+    cache[row.relativePath] = entry;
+    await writeOcrCache(cache);
+    updateRowOperation(row, OPERATION_IGNORE);
+    filterTable();
+  }} catch (error) {{
+    alert(`写入 ${{OCR_CACHE_FILE_NAME}} 失败：${{error && error.message ? error.message : error}}`);
+  }}
 }}
 function htmlEscape(value) {{
   return String(value || '')
