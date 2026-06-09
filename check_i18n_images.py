@@ -1666,7 +1666,7 @@ def write_html_report(
         mainland_dt = format_dt(finding.mainland_modified_at)
         i18n_dt = format_dt(finding.i18n_modified_at)
         operation = finding.operation or ""
-        can_ignore = finding.issue != "mainland_missing"
+        can_ignore = finding.issue == "mainland_new_with_text" and bool(finding.mainland_md5)
         operation_label = TEXT_IGNORED if operation == OCR_OPERATION_IGNORE else TEXT_IGNORE
         operation_class = "ignored" if operation == OCR_OPERATION_IGNORE else ""
         if can_ignore:

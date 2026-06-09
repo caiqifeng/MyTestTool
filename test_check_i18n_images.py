@@ -1736,6 +1736,39 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertNotIn('onclick=\\"ignoreFinding(1)\\"', content)
             self.assertNotIn('>忽略</button>', content)
 
+    def test_write_html_report_does_not_show_ignore_button_for_changed_files(self):
+        try:
+            from PIL import Image
+        except ImportError:
+            self.skipTest("Pillow is not installed")
+
+        with tempfile.TemporaryDirectory() as td:
+            img_path = Path(td) / "source.tga"
+            Image.new("RGB", (16, 16), (255, 0, 0)).save(img_path)
+            out = Path(td) / "report.html"
+
+            write_html_report(
+                out,
+                [
+                    Finding(
+                        "ui",
+                        "mainland_changed",
+                        "SampleOnly/changed.tga",
+                        str(img_path),
+                        str(img_path),
+                        dt.datetime(2026, 1, 1, tzinfo=UTC),
+                        dt.datetime(2026, 1, 2, tzinfo=UTC),
+                        "changed detail",
+                    ),
+                ],
+            )
+
+            content = out.read_text(encoding="utf-8")
+            self.assertIn('"className": "mainland-changed"', content)
+            self.assertIn('"canIgnore": false', content)
+            self.assertIn('"changed detail", ""]', content)
+            self.assertNotIn('onclick=\\"ignoreFinding(1)\\"', content)
+
     def test_write_html_report_groups_details_by_pair_type_tabs_without_category_column(self):
         try:
             from PIL import Image
