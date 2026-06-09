@@ -1357,12 +1357,52 @@ class CheckI18nImagesTest(unittest.TestCase):
             conn = sqlite3.connect(db_path)
             try:
                 row = conn.execute(
-                    "SELECT md5, has_text, test_str, operation FROM ocr_cache WHERE relative_path=?",
+                    "SELECT md5, has_text, has_cn, test_str, operation FROM ocr_cache WHERE relative_path=?",
                     ("SampleOnly/source.tga",),
                 ).fetchone()
             finally:
                 conn.close()
-            self.assertEqual(row, ("abc123", 1, cn(r"\u8d5b\u5b63\u5f00\u542f"), "ignore"))
+            self.assertEqual(row, ("abc123", 1, 1, cn(r"\u8d5b\u5b63\u5f00\u542f"), "ignore"))
+
+    def test_migrate_ocr_json_to_sqlite_sets_has_cn_from_test_str(self):
+        with tempfile.TemporaryDirectory() as td:
+            json_path = Path(td) / "ocr_cache.json"
+            db_path = Path(td) / "ocr_cache.db"
+            json_path.write_text(
+                __import__("json").dumps(
+                    {
+                        "SampleOnly/chinese.tga": {
+                            "md5": "cn-md5",
+                            "has_text": True,
+                            "test_str": cn(r"\u8d5b\u5b63\u5f00\u542f"),
+                        },
+                        "SampleOnly/ascii.tga": {
+                            "md5": "ascii-md5",
+                            "has_text": True,
+                            "test_str": "Season_2026 123",
+                        },
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+
+            migrate_ocr_json_to_sqlite(json_path, db_path)
+
+            import sqlite3
+
+            conn = sqlite3.connect(db_path)
+            try:
+                columns = [row[1] for row in conn.execute("PRAGMA table_info(ocr_cache)").fetchall()]
+                rows = {
+                    row[0]: (row[1], row[2])
+                    for row in conn.execute("SELECT relative_path, has_text, has_cn FROM ocr_cache").fetchall()
+                }
+            finally:
+                conn.close()
+            self.assertIn("has_cn", columns)
+            self.assertEqual(rows["SampleOnly/chinese.tga"], (1, 1))
+            self.assertEqual(rows["SampleOnly/ascii.tga"], (1, 0))
 
     def test_sqlite_ocr_cache_hit_exposes_ignore_operation_for_same_md5(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1804,7 +1844,10 @@ class CheckI18nImagesTest(unittest.TestCase):
 
             content = out.read_text(encoding="utf-8")
             self.assertNotIn("SampleOnly/plain.tga", content)
-            self.assertIn(cn(r"\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"), content)
+            self.assertIn("新增含字符图片", content)
+            self.assertIn("新增带中文图片", content)
+            self.assertNotIn(cn(r"\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"), content)
+            self.assertNotIn(cn(r"\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247"), content)
             self.assertIn(cn(r"\u8bc6\u522b\u6587\u5b57\uff1a"), content)
             self.assertIn(cn(r"\u5927\u5251\u7f51\u4e09"), content)
             self.assertIn("report-shell", content)

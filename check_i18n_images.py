@@ -47,8 +47,8 @@ TEXT_REPORT_TITLE = "\u591a\u8bed\u8a00\u56fe\u7247\u68c0\u67e5\u6c47\u603b"
 TEXT_RUN_RESULT = "\u672c\u8f6e\u6267\u884c\u7ed3\u679c"
 TEXT_MISSING_ISSUE = "\u7591\u4f3c\u5e9f\u9664\u6587\u4ef6"
 TEXT_CHANGED_ISSUE = "\u4fee\u6539\u65f6\u95f4\u5f02\u5e38"
-TEXT_NEW_TEXT_ISSUE = "\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247"
-TEXT_NEW_NO_TEXT_ISSUE = "\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"
+TEXT_NEW_TEXT_ISSUE = "\u65b0\u589e\u5e26\u4e2d\u6587\u56fe\u7247"
+TEXT_NEW_NO_TEXT_ISSUE = "\u65b0\u589e\u542b\u5b57\u7b26\u56fe\u7247"
 TEXT_REPORT_DETAIL = "\u62a5\u544a\u8be6\u60c5"
 TEXT_OTHER_ISSUE = "\u5176\u4ed6\u95ee\u9898"
 TEXT_CATEGORY = "\u7c7b\u522b"
@@ -88,6 +88,11 @@ def default_output_path(script_path: Path | None = None) -> Path:
 
 def default_ocr_cache_db_path(script_path: Path | None = None) -> Path:
     return script_dir(script_path) / OCR_CACHE_DB_FILE
+
+
+def _contains_chinese_text(text: str | None) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
 
 @dataclass(frozen=True)
 class ImageFile:
@@ -192,9 +197,9 @@ def _write_ocr_candidate_list() -> None:
 
 def log_new_no_text_findings(findings: Sequence[Finding]) -> None:
     items = [f for f in findings if f.issue == "mainland_new_no_text"]
-    log_step(f"新增无文字图片列表: count={len(items)}")
+    log_step(f"{TEXT_NEW_NO_TEXT_ISSUE}列表: count={len(items)}")
     for index, finding in enumerate(items, 1):
-        log_step(f"新增无文字图片 {index}: {finding.relative_path} | {finding.mainland_path}")
+        log_step(f"{TEXT_NEW_NO_TEXT_ISSUE} {index}: {finding.relative_path} | {finding.mainland_path}")
 
 
 def default_ocr_workers() -> int:
@@ -784,12 +789,21 @@ def init_ocr_cache_db(db_path: Path) -> None:
                 relative_path TEXT PRIMARY KEY,
                 md5 TEXT NOT NULL,
                 has_text INTEGER,
+                has_cn INTEGER,
                 test_str TEXT,
                 operation TEXT,
                 updated_at TEXT NOT NULL
             )
             """
         )
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(ocr_cache)").fetchall()}
+        if "has_cn" not in columns:
+            conn.execute("ALTER TABLE ocr_cache ADD COLUMN has_cn INTEGER")
+        for rowid, test_str in conn.execute("SELECT rowid, test_str FROM ocr_cache WHERE has_cn IS NULL").fetchall():
+            conn.execute(
+                "UPDATE ocr_cache SET has_cn=? WHERE rowid=?",
+                (int(_contains_chinese_text(test_str if isinstance(test_str, str) else "")), rowid),
+            )
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS review_operation (
@@ -826,14 +840,17 @@ def migrate_ocr_json_to_sqlite(json_path: Path, db_path: Path) -> int:
             has_text = entry.get("has_text")
             has_text_value = None if has_text is None else int(bool(has_text))
             test_str = entry.get("test_str")
+            test_text = test_str if isinstance(test_str, str) else ""
+            has_cn_value = int(_contains_chinese_text(test_text))
             operation = entry.get("operation")
             conn.execute(
                 """
-                INSERT INTO ocr_cache(relative_path, md5, has_text, test_str, operation, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO ocr_cache(relative_path, md5, has_text, has_cn, test_str, operation, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(relative_path) DO UPDATE SET
                     md5=excluded.md5,
                     has_text=excluded.has_text,
+                    has_cn=excluded.has_cn,
                     test_str=excluded.test_str,
                     operation=excluded.operation,
                     updated_at=excluded.updated_at
@@ -842,7 +859,8 @@ def migrate_ocr_json_to_sqlite(json_path: Path, db_path: Path) -> int:
                     relative_path,
                     file_md5,
                     has_text_value,
-                    test_str if isinstance(test_str, str) else "",
+                    has_cn_value,
+                    test_text,
                     operation if isinstance(operation, str) else None,
                     now_text,
                 ),
@@ -918,7 +936,7 @@ def sqlite_ocr_text_detector_factory(
             try:
                 row = conn.execute(
                     """
-                    SELECT c.has_text, c.test_str, COALESCE(r.operation, c.operation) AS operation
+                    SELECT c.has_text, c.has_cn, c.test_str, COALESCE(r.operation, c.operation) AS operation
                     FROM ocr_cache c
                     LEFT JOIN review_operation r
                       ON r.relative_path = c.relative_path AND r.md5 = c.md5
@@ -930,19 +948,23 @@ def sqlite_ocr_text_detector_factory(
                 conn.close()
         if row is None:
             return None
-        return {"has_text": row[0], "test_str": row[1], "operation": row[2]}
+        return {"has_text": row[0], "has_cn": row[1], "test_str": row[2], "operation": row[3]}
 
     def detect(image: ImageFile) -> bool:
         file_md5 = _file_md5(image.full_path)
         entry = _entry_for(image, file_md5)
         if entry is not None and entry.get("has_text") is not None:
+            has_cn = entry.get("has_cn")
+            if has_cn is not None:
+                return bool(has_cn)
             text = entry.get("test_str")
             if isinstance(text, str) and text:
-                return bool(re.search(r"[\u4e00-\u9fff]", text))
+                return _contains_chinese_text(text)
             return bool(entry.get("has_text"))
 
         text = run_ocr(image)
-        has_text = bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+        has_text = bool(text)
+        has_cn = _contains_chinese_text(text)
         operation = entry.get("operation") if entry is not None else None
         now_text = _now_text()
         with db_lock:
@@ -950,11 +972,12 @@ def sqlite_ocr_text_detector_factory(
             try:
                 conn.execute(
                     """
-                    INSERT INTO ocr_cache(relative_path, md5, has_text, test_str, operation, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO ocr_cache(relative_path, md5, has_text, has_cn, test_str, operation, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(relative_path) DO UPDATE SET
                         md5=excluded.md5,
                         has_text=excluded.has_text,
+                        has_cn=excluded.has_cn,
                         test_str=excluded.test_str,
                         operation=excluded.operation,
                         updated_at=excluded.updated_at
@@ -963,6 +986,7 @@ def sqlite_ocr_text_detector_factory(
                         image.relative_path,
                         file_md5,
                         int(has_text),
+                        int(has_cn),
                         text or "",
                         operation if isinstance(operation, str) else None,
                         now_text,
@@ -971,7 +995,7 @@ def sqlite_ocr_text_detector_factory(
                 conn.commit()
             finally:
                 conn.close()
-        return has_text
+        return has_cn
 
     def ocr_text_for(image: ImageFile) -> str | None:
         file_md5 = _file_md5(image.full_path)
@@ -1027,10 +1051,14 @@ def ocr_text_detector_factory(
                     entry.pop("has_test", None)
                     if cache_path is not None:
                         save_ocr_cache(cache_path, cache)
+                text = entry.get("test_str")
+                if isinstance(text, str) and text:
+                    return _contains_chinese_text(text)
                 return bool(entry.get("has_text", False))
 
         text = run_ocr(image)
-        has_text = bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+        has_text = bool(text)
+        has_cn = _contains_chinese_text(text)
         with cache_lock:
             existing_entry = cache.get(file_key)
             operation = (
@@ -1041,6 +1069,7 @@ def ocr_text_detector_factory(
             new_entry: dict[str, object] = {
                 "md5": file_md5,
                 "has_text": has_text,
+                "has_cn": has_cn,
                 "test_str": text or "",
             }
             if isinstance(operation, str):
@@ -1048,7 +1077,7 @@ def ocr_text_detector_factory(
             cache[file_key] = new_entry
             if cache_path is not None:
                 save_ocr_cache(cache_path, cache)
-        return has_text
+        return has_cn
 
     def ocr_text_for(image: ImageFile) -> str | None:
         with cache_lock:
@@ -1386,7 +1415,7 @@ def write_xlsx_with_openpyxl(
         ["", "", ""],
         ["二、正常图片", f"{normal_synced + new_no_text} 张", ""],
         ["正常同步文件", f"{normal_synced} 张", "两边都有且修改时间正常"],
-        ["新增无文字图片", f"{new_no_text} 张", "陆版新增但无文字，无需翻译"],
+        [TEXT_NEW_NO_TEXT_ISSUE, f"{new_no_text} 张", "陆版新增但未识别到中文，无需翻译"],
         ["", "", ""],
         ["三、异常图片", f"{len(findings)} 张", ""],
     ]
@@ -1395,7 +1424,7 @@ def write_xlsx_with_openpyxl(
     if changed_count:
         summary_rows.append(["修改时间异常", f"{changed_count} 张", "陆版修改时间晚于国际版（需更新翻译）"])
     if new_text_count:
-        summary_rows.append(["新增带文字图片", f"{new_text_count} 张", "陆版新增含文字图片（缺少国际版对应翻译）"])
+        summary_rows.append([TEXT_NEW_TEXT_ISSUE, f"{new_text_count} 张", "陆版新增含中文图片（缺少国际版对应翻译）"])
     if other_count:
         summary_rows.append(["其他问题", f"{other_count} 张", ""])
     summary_rows.append(["", "", ""])
@@ -1666,8 +1695,8 @@ def write_html_report(
     issue_type_labels = {
         "mainland_missing": "\u56fd\u9645\u7248\u5b58\u5728\u4f46\u9646\u7248\u7f3a\u5931\uff0c\u7591\u4f3c\u5e9f\u5f03\u6216\u8def\u5f84\u4e0d\u4e00\u81f4",
         "mainland_changed": "\u9646\u7248\u4fee\u6539\u65f6\u95f4\u665a\u4e8e\u56fd\u9645\u7248\uff0c\u9700\u8981\u786e\u8ba4\u56fd\u9645\u7248\u662f\u5426\u540c\u6b65",
-        "mainland_new_with_text": "\u9646\u7248\u65b0\u589e\u4e14 OCR \u8bc6\u522b\u5230\u6587\u5b57\uff0c\u9700\u8981\u8865\u5145\u56fd\u9645\u7248\u7ffb\u8bd1",
-        "mainland_new_no_text": "\u9646\u7248\u65b0\u589e\u4f46 OCR \u672a\u8bc6\u522b\u6587\u5b57\uff0c\u8fdb\u5165\u8be6\u60c5\u4f9b\u4eba\u5de5\u590d\u6838",
+        "mainland_new_with_text": "\u9646\u7248\u65b0\u589e\u4e14 OCR \u8bc6\u522b\u5230\u4e2d\u6587\uff0c\u9700\u8981\u8865\u5145\u56fd\u9645\u7248\u7ffb\u8bd1",
+        "mainland_new_no_text": "\u9646\u7248\u65b0\u589e\u4f46 OCR \u672a\u8bc6\u522b\u5230\u4e2d\u6587\uff0c\u4f5c\u4e3a\u6b63\u5e38\u7c7b\u578b",
     }
 
     def issue_summary_card(issue_key: str, items: list[Finding], index: int) -> str:
@@ -1847,7 +1876,7 @@ def _build_summary_table(
         f"<tr><td>{label}</td><td>{count} 张</td><td>{note}</td></tr>"
         for label, count, note in [
             ("\u6b63\u5e38\u540c\u6b65\u6587\u4ef6", normal_synced, "\u4e24\u8fb9\u90fd\u6709\u4e14\u4fee\u6539\u65f6\u95f4\u6b63\u5e38"),
-            ("\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247", len(new_without_text), "\u9646\u7248\u65b0\u589e\u65e0\u6587\u5b57\uff0c\u8be6\u60c5\u4e2d\u4f9b\u4eba\u5de5\u590d\u6838"),
+            (TEXT_NEW_NO_TEXT_ISSUE, len(new_without_text), "\u9646\u7248\u65b0\u589e\u4f46 OCR \u672a\u8bc6\u522b\u5230\u4e2d\u6587\uff0c\u4f5c\u4e3a\u6b63\u5e38\u7c7b\u578b"),
         ]
     )
     abnormal_rows = "".join(
@@ -1855,7 +1884,7 @@ def _build_summary_table(
         for label, count, note in [
             ("\u7591\u4f3c\u5e9f\u5f03\u6587\u4ef6", len(missing), "\u56fd\u9645\u7248\u6709\u3001\u9646\u7248\u65e0\uff08\u53ef\u80fd\u5df2\u5e9f\u5f03\uff09"),
             ("\u4fee\u6539\u65f6\u95f4\u5f02\u5e38", len(changed), "\u9646\u7248\u4fee\u6539\u65f6\u95f4\u665a\u4e8e\u56fd\u9645\u7248\uff08\u9700\u66f4\u65b0\u7ffb\u8bd1\uff09"),
-            ("\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247", len(new_with_text), "\u9646\u7248\u65b0\u589e\u542b\u6587\u5b57\u56fe\u7247\uff08\u7f3a\u5c11\u56fd\u9645\u7248\u5bf9\u5e94\u7ffb\u8bd1\uff09"),
+            (TEXT_NEW_TEXT_ISSUE, len(new_with_text), "\u9646\u7248\u65b0\u589e\u542b\u4e2d\u6587\u56fe\u7247\uff08\u7f3a\u5c11\u56fd\u9645\u7248\u5bf9\u5e94\u7ffb\u8bd1\uff09"),
         ]
     )
     if others:
@@ -1972,7 +2001,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 <main>
 {summary_table}
 <section class="detail-panel">
-  <div class="detail-toolbar"><div><h2>{TEXT_REPORT_DETAIL}</h2><p>详情仅展示需处理的异常图片；新增无文字图片列表已写入本次日志。</p></div><button class="export-button" type="button" onclick="exportFilteredRows()">\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c</button></div>
+  <div class="detail-toolbar"><div><h2>{TEXT_REPORT_DETAIL}</h2><p>详情仅展示需处理的异常图片；{TEXT_NEW_NO_TEXT_ISSUE}列表已写入本次日志。</p></div><button class="export-button" type="button" onclick="exportFilteredRows()">\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c</button></div>
   <div class="detail-tabs" role="tablist">{tab_buttons}</div>
   <div class="table-wrap">
     <table id="detailTable">
@@ -2703,7 +2732,7 @@ def collect_findings(
         )
         print(
             f"  正常同步 {pair_stats['normal_synced']} 张, "
-            f"新增无文字 {pair_stats['new_no_text']} 张, "
+            f"{TEXT_NEW_NO_TEXT_ISSUE} {pair_stats['new_no_text']} 张, "
             f"发现问题 {len(pair_findings)} 项, "
             f"累计 {len(all_findings)} 项",
             file=sys.stderr,
