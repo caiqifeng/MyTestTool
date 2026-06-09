@@ -2042,7 +2042,7 @@ th {{ position:sticky; top:0; height:40px; background:#eef3f8; color:#334155; z-
 .date-range input {{ min-width:0; padding:6px 4px; }}
 .row-index {{ text-align:center; color:#475569; }}
 .path {{ word-break:break-all; }}
-tr.mainland-new-with-text[title] {{ cursor:help; }}
+tr.mainland-new-with-text[title],tr.mainland-new-with-chars[title] {{ cursor:help; }}
 .issue-badge {{ display:inline-flex; align-items:center; border-radius:999px; padding:3px 8px; font-size:12px; font-weight:600; white-space:nowrap; }}
 .issue-badge.mainland-missing,.issue-badge.mainland-new-with-text {{ color:#7a271a; background:#fee4e2; }}
 .issue-badge.mainland-changed {{ color:#7a4a00; background:#ffefd0; }}
