@@ -15,6 +15,9 @@ from check_i18n_images import (
     _load_config_pairs,
     apply_max_file_sample,
     compare_category,
+    default_config_path,
+    default_ocr_cache_db_path,
+    default_output_path,
     enrich_findings_with_translation,
     format_progress_line,
     migrate_ocr_json_to_sqlite,
@@ -631,7 +634,10 @@ class CheckI18nImagesTest(unittest.TestCase):
             mainland_dir = root / "ui"
             i18n_dir.mkdir()
             mainland_dir.mkdir()
-            (root / "check_config.json").write_text(
+            config = root / "check_config.json"
+            output = root / "ui_image_check_report.html"
+            cache_db = root / ".ocr_cache.db"
+            config.write_text(
                 __import__("json").dumps(
                     {
                         "pairs": [
@@ -645,22 +651,31 @@ class CheckI18nImagesTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            old_cwd = os.getcwd()
-            os.chdir(root)
-            try:
-                with patch("check_i18n_images._require_pillow_for_report"), patch(
-                    "check_i18n_images.write_html_report"
-                ) as write_report:
-                    main([])
-                log_files = list((root / "Log").glob("*.log"))
-                log_text = log_files[0].read_text(encoding="utf-8") if log_files else ""
-            finally:
-                os.chdir(old_cwd)
+            with patch("check_i18n_images.default_config_path", return_value=config), patch(
+                "check_i18n_images.default_output_path", return_value=output
+            ), patch("check_i18n_images.default_ocr_cache_db_path", return_value=cache_db), patch(
+                "check_i18n_images._require_pillow_for_report"
+            ), patch("check_i18n_images.write_html_report") as write_report:
+                main([])
 
-        self.assertEqual(write_report.call_args.args[0], Path("ui_image_check_report.html"))
-        self.assertEqual(len(log_files), 1)
-        self.assertIn("开始检查", log_text)
-        self.assertIn("ui_image_check_report.html", log_text)
+        self.assertEqual(write_report.call_args.args[0], output)
+        self.assertEqual(write_report.call_args.kwargs["ocr_cache_name"], ".ocr_cache.db")
+
+    def test_script_sibling_defaults_are_used_for_config_output_and_sqlite_cache(self):
+        script_path = Path("C:/work/tools/check_i18n_images.py")
+
+        self.assertEqual(default_config_path(script_path), Path("C:/work/tools/check_config.json"))
+        self.assertEqual(default_output_path(script_path), Path("C:/work/tools/ui_image_check_report.html"))
+        self.assertEqual(default_ocr_cache_db_path(script_path), Path("C:/work/tools/.ocr_cache.db"))
+
+    def test_help_no_longer_exposes_ocr_cache_arguments(self):
+        stdout = io.StringIO()
+        with patch("sys.stdout", stdout), self.assertRaises(SystemExit):
+            main(["--help"])
+
+        help_text = stdout.getvalue()
+        self.assertNotIn("--ocr-cache-db", help_text)
+        self.assertNotIn("--ocr-cache-file", help_text)
 
     def test_main_writes_new_no_text_list_to_run_log(self):
         with tempfile.TemporaryDirectory() as td:
@@ -671,7 +686,10 @@ class CheckI18nImagesTest(unittest.TestCase):
             i18n_dir.mkdir()
             image.parent.mkdir(parents=True)
             image.write_bytes(b"fake image")
-            (root / "check_config.json").write_text(
+            config = root / "check_config.json"
+            output = root / "ui_image_check_report.html"
+            cache_db = root / ".ocr_cache.db"
+            config.write_text(
                 __import__("json").dumps(
                     {
                         "pairs": [
@@ -688,16 +706,18 @@ class CheckI18nImagesTest(unittest.TestCase):
             old_cwd = os.getcwd()
             os.chdir(root)
             try:
-                with patch("check_i18n_images._require_pillow_for_report"), patch(
-                    "check_i18n_images.write_html_report"
-                ):
+                with patch("check_i18n_images.default_config_path", return_value=config), patch(
+                    "check_i18n_images.default_output_path", return_value=output
+                ), patch("check_i18n_images.default_ocr_cache_db_path", return_value=cache_db), patch(
+                    "check_i18n_images._require_pillow_for_report"
+                ), patch("check_i18n_images.write_html_report"):
                     main(["--no-ocr"])
                 log_file = next((root / "Log").glob("*.log"))
                 log_text = log_file.read_text(encoding="utf-8")
             finally:
                 os.chdir(old_cwd)
 
-        self.assertIn("新增无文字图片列表", log_text)
+        self.assertIn("count=1", log_text)
         self.assertIn("Image/plain.tga", log_text)
 
     def test_main_writes_cumulative_html_report_after_each_pair(self):
@@ -1225,7 +1245,9 @@ class CheckI18nImagesTest(unittest.TestCase):
 
             content = out.read_text(encoding="utf-8")
             self.assertIn("const OCR_CACHE_FILE_NAME = '.ocr_cache.db';", content)
-            self.assertIn("自动写入 ${OCR_CACHE_FILE_NAME} 失败", content)
+            self.assertIn("file://", content)
+            self.assertNotIn("readOcrCache", content)
+            self.assertNotIn("writeOcrCache", content)
 
     def test_serve_report_defaults_to_port_9080(self):
         self.assertEqual(serve_report.__defaults__[-1], 9080)
@@ -1674,7 +1696,9 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn(cn(r"\u5df2\u5ffd\u7565"), content)
             self.assertIn("operationStatus", content)
             self.assertIn("ignoreFinding", content)
-            self.assertIn("entry.operation = OPERATION_IGNORE", content)
+            self.assertNotIn("entry.operation = OPERATION_IGNORE", content)
+            self.assertNotIn("readOcrCache", content)
+            self.assertNotIn("writeOcrCache", content)
             self.assertNotIn("showOpenFilePicker", content)
             self.assertIn('"operation": "ignore"', content)
             self.assertNotIn(cn(r"\u9646\u7248\u521b\u5efa\u65f6\u95f4"), header_row)

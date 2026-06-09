@@ -34,6 +34,7 @@ SCRIPT_UPDATED_AT = "2026-06-05 09:21:59 +08:00"
 IMAGE_EXTENSIONS = {".dds", ".tga"}
 STATE_FILE = ".check_i18n_images_state"
 OCR_CACHE_FILE = ".ocr_cache.json"
+OCR_CACHE_DB_FILE = ".ocr_cache.db"
 OCR_OPERATION_IGNORE = "ignore"
 DEFAULT_THUMBNAIL_ISSUES = {
     "__has_detail__",
@@ -68,6 +69,22 @@ TEXT_OCR_TEXT = "\u8bc6\u522b\u6587\u5b57"
 _RUN_LOG_FILE: Path | None = None
 _OCR_CANDIDATE_FILE: Path | None = None
 _OCR_CANDIDATES: list[ImageFile] = []
+
+
+def script_dir(script_path: Path | None = None) -> Path:
+    return (script_path or Path(__file__)).resolve().parent
+
+
+def default_config_path(script_path: Path | None = None) -> Path:
+    return script_dir(script_path) / "check_config.json"
+
+
+def default_output_path(script_path: Path | None = None) -> Path:
+    return script_dir(script_path) / "ui_image_check_report.html"
+
+
+def default_ocr_cache_db_path(script_path: Path | None = None) -> Path:
+    return script_dir(script_path) / OCR_CACHE_DB_FILE
 
 @dataclass(frozen=True)
 class ImageFile:
@@ -1599,7 +1616,7 @@ def write_html_report(
     normal_synced: int = 0,
     new_no_text: int = 0,
     max_image_px: int | None = None,
-    ocr_cache_name: str = OCR_CACHE_FILE,
+    ocr_cache_name: str = OCR_CACHE_DB_FILE,
 ) -> None:
     assets_dir = path.parent / f"{path.stem}_assets"
     if assets_dir.exists():
@@ -1814,7 +1831,7 @@ def _html_template(
     tab_buttons: str = "",
     default_tab_type: str = TEXT_NONE,
     report_title: str = TEXT_REPORT_TITLE,
-    ocr_cache_name: str = OCR_CACHE_FILE,
+    ocr_cache_name: str = OCR_CACHE_DB_FILE,
 ) -> str:
     rows_json = json.dumps(rows, ensure_ascii=False)
     default_tab_json = json.dumps(default_tab_type, ensure_ascii=False)
@@ -2080,46 +2097,19 @@ function updateRowOperation(row, operation) {{
 function findRowByIndex(rowIndex) {{
   return allRows.find(row => Number(row.rowIndex) === Number(rowIndex));
 }}
-async function readOcrCache() {{
-  const response = await fetch(OCR_CACHE_FILE_NAME, {{ cache: 'no-store' }});
-  if (!response.ok) return {{}};
-  const text = await response.text();
-  return text.trim() ? JSON.parse(text) : {{}};
-}}
-async function writeOcrCache(cache) {{
+async function writeIgnoreOperation(row) {{
   const response = await fetch(OCR_CACHE_OPERATION_API, {{
     method: 'POST',
     headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify(cache),
+    body: JSON.stringify({{
+      relativePath: row.relativePath,
+      md5: row.mainlandMd5,
+      operation: OPERATION_IGNORE,
+    }}),
   }});
   if (!response.ok) {{
     throw new Error(`本地报告服务写入失败：${{response.status}}`);
   }}
-}}
-async function writeIgnoreOperation(row) {{
-  try {{
-    const response = await fetch(OCR_CACHE_OPERATION_API, {{
-      method: 'POST',
-      headers: {{ 'Content-Type': 'application/json' }},
-      body: JSON.stringify({{
-        relativePath: row.relativePath,
-        md5: row.mainlandMd5,
-        operation: OPERATION_IGNORE,
-      }}),
-    }});
-    if (response.ok) {{
-      return;
-    }}
-  }} catch (error) {{
-  }}
-  const cache = await readOcrCache();
-  const entry = cache[row.relativePath] && typeof cache[row.relativePath] === 'object'
-    ? cache[row.relativePath]
-    : {{}};
-  entry.md5 = row.mainlandMd5;
-  entry.operation = OPERATION_IGNORE;
-  cache[row.relativePath] = entry;
-  await writeOcrCache(cache);
 }}
 async function ignoreFinding(rowIndex) {{
   const row = findRowByIndex(rowIndex);
@@ -2547,17 +2537,11 @@ def collect_findings(
     if args.assume_new_has_text:
         detector = assume_text_detector
     elif not args.no_ocr:
-        if getattr(args, "ocr_cache_db", None):
-            detector = sqlite_ocr_text_detector_factory(Path(args.ocr_cache_db))
-        else:
-            detector = ocr_text_detector_factory(cache_path=Path(args.ocr_cache_file))
+        detector = sqlite_ocr_text_detector_factory(Path(args.ocr_cache_db))
     else:
         detector = default_text_detector
 
-    if args.config:
-        pairs = _load_config_pairs(args.config)
-    else:
-        pairs = [{"name": "", "i18n": args.i18n, "mainland": args.mainland}]
+    pairs = args.config_pairs if getattr(args, "config_pairs", None) is not None else [{"name": "", "i18n": args.i18n, "mainland": args.mainland}]
 
     all_findings: list[Finding] = []
     total_i18n = 0
@@ -2636,10 +2620,10 @@ def collect_findings(
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="检查国际版/陆版图片差异，并输出 HTML。")
-    parser.add_argument("--config", default=None, help="JSON 配置文件路径（默认自动查找当前目录 check_config.json）")
+    parser.add_argument("--config", default=None, help="JSON 配置文件路径（默认使用脚本同级目录 check_config.json）")
     parser.add_argument("--i18n", default=None, help="国际版图片目录路径（与 --mainland 配对，或使用 --config）")
     parser.add_argument("--mainland", default=None, help="陆版图片目录路径（与 --i18n 配对，或使用 --config）")
-    parser.add_argument("--output", default="ui_image_check_report.html", help="输出文件路径，支持 .html / .htm")
+    parser.add_argument("--output", default=None, help="输出文件路径，默认脚本同级目录 ui_image_check_report.html")
     parser.add_argument(
         "--since",
         type=parse_dt,
@@ -2651,16 +2635,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=int,
         default=default_ocr_workers(),
         help="OCR 并发线程数，默认 1",
-    )
-    parser.add_argument(
-        "--ocr-cache-file",
-        default=OCR_CACHE_FILE,
-        help=f"OCR 检测结果缓存文件（默认 {OCR_CACHE_FILE}），记录已检查文件避免重复 OCR",
-    )
-    parser.add_argument(
-        "--ocr-cache-db",
-        default=None,
-        help="SQLite OCR 缓存数据库路径；指定后优先读写 SQLite，不再写 .ocr_cache.json",
     )
     parser.add_argument(
         "--max-files",
@@ -2691,14 +2665,21 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    # auto-detect config file
-    if not args.config and not args.i18n and not args.mainland:
-        default_config = Path("check_config.json")
-        if default_config.exists():
-            args.config = str(default_config.resolve())
+    if args.output is None:
+        args.output = str(default_output_path())
+    args.ocr_cache_db = str(default_ocr_cache_db_path())
+
+    if not args.config:
+        args.config = str(default_config_path())
 
     if not args.config and (not args.i18n or not args.mainland):
-        parser.error("请指定 --i18n 和 --mainland，或 --config 配置文件，或在当前目录放置 check_config.json")
+        parser.error("请指定 --i18n 和 --mainland，或 --config 配置文件")
+    if args.config and not Path(args.config).is_file():
+        parser.error(f"配置文件不存在或不可读取: {args.config}")
+    try:
+        args.config_pairs = _load_config_pairs(args.config) if args.config else None
+    except Exception as exc:
+        parser.error(f"配置文件读取异常: {args.config}: {exc}")
 
     output_path = Path(args.output)
     if output_path.suffix.lower() not in {".html", ".htm"}:
@@ -2726,7 +2707,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             normal_synced=current_counts["normal_synced"],
             new_no_text=current_counts["new_no_text"],
             max_image_px=args.max_image_px,
-            ocr_cache_name=Path(args.ocr_cache_db).name if args.ocr_cache_db else Path(args.ocr_cache_file).name,
+            ocr_cache_name=Path(args.ocr_cache_db).name,
         )
         report_written = True
 
@@ -2740,11 +2721,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     log_step(f"检查完成: findings={len(findings)} output={args.output}")
     print(f"检查完成: {len(findings)} 项，输出: {args.output}")
     if args.serve_report:
-        cache_db_path = Path(args.ocr_cache_db) if args.ocr_cache_db else None
         return serve_report(
             output_path,
-            Path(args.ocr_cache_file),
-            cache_db_path=cache_db_path,
+            Path(OCR_CACHE_FILE),
+            cache_db_path=Path(args.ocr_cache_db),
             port=args.serve_port,
         )
     return 0
