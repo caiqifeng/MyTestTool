@@ -1752,6 +1752,39 @@ def write_html_report(
     )
     path.write_text(doc, encoding="utf-8")
 
+
+def write_error_report(path: Path, messages: Sequence[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    items = "\n".join(f"<li>{html.escape(message)}</li>" for message in messages)
+    title = build_report_title()
+    doc = f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>{html.escape(title)}</title>
+<style>
+body {{ margin:0; font-family:"Microsoft YaHei", "Segoe UI", Arial, sans-serif; background:#f8fafc; color:#1f2937; }}
+main {{ max-width:960px; margin:48px auto; padding:0 24px; }}
+.error-panel {{ border:1px solid #f4b4ad; background:#fff5f5; border-radius:8px; padding:24px; }}
+.error-title {{ margin:0 0 12px; color:#b42318; font-size:24px; }}
+.error-list {{ color:#b42318; line-height:1.8; font-size:14px; }}
+</style>
+</head>
+<body>
+<main>
+<section class="error-panel">
+<h1 class="error-title">ERROR：配置目录不存在</h1>
+<ul class="error-list">
+{items}
+</ul>
+</section>
+</main>
+</body>
+</html>
+"""
+    path.write_text(doc, encoding="utf-8")
+
+
 def _summary_items(items: Sequence[Finding]) -> str:
     if not items:
         return f"<li>{TEXT_NONE}</li>"
@@ -2478,6 +2511,19 @@ def _load_config_pairs(config_path: str) -> list[dict[str, str]]:
     return pairs
 
 
+def validate_config_pair_paths(pairs: Sequence[dict[str, str]]) -> list[str]:
+    errors: list[str] = []
+    for index, pair in enumerate(pairs, 1):
+        name = pair.get("name", "") or pair.get("mainland", "") or str(index)
+        for label, key in (("国际版目录", "i18n"), ("陆版目录", "mainland")):
+            value = str(pair.get(key, ""))
+            if value.lower().startswith(("http://", "https://")):
+                continue
+            if not Path(value).exists():
+                errors.append(f"ERROR: {label}不存在: pair={name} path={value}")
+    return errors
+
+
 def _pair_report_type(pair: dict[str, str]) -> str:
     return (
         str(pair.get("type") or pair.get("category") or pair.get("name") or pair.get("mainland") or "")
@@ -2669,7 +2715,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.output = str(default_output_path())
     args.ocr_cache_db = str(default_ocr_cache_db_path())
 
-    if not args.config:
+    if not args.config and not args.i18n and not args.mainland:
         args.config = str(default_config_path())
 
     if not args.config and (not args.i18n or not args.mainland):
@@ -2684,6 +2730,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     output_path = Path(args.output)
     if output_path.suffix.lower() not in {".html", ".htm"}:
         parser.error("输出文件只支持 .html / .htm")
+
+    config_path_errors = validate_config_pair_paths(args.config_pairs or [])
+    if config_path_errors:
+        for message in config_path_errors:
+            print(f"\033[31m{message}\033[0m", file=sys.stderr)
+        write_error_report(output_path, config_path_errors)
+        print(f"检查失败: 配置目录不存在，输出: {output_path}")
+        return 1
 
     log_file, ocr_candidate_file = _init_run_outputs()
     log_step(format_version_line())

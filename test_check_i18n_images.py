@@ -448,6 +448,37 @@ class CheckI18nImagesTest(unittest.TestCase):
 
         self.assertNotEqual(cm.exception.code, 0)
 
+    def test_main_writes_red_error_report_when_config_directory_is_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = root / "check_config.json"
+            output = root / "out.html"
+            missing_i18n = root / "missing_i18n"
+            missing_mainland = root / "missing_mainland"
+            config.write_text(
+                __import__("json").dumps(
+                    {
+                        "pairs": [
+                            {
+                                "name": "ui",
+                                "i18n": str(missing_i18n),
+                                "mainland": str(missing_mainland),
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            result = main(["--config", str(config), "--output", str(output), "--no-ocr"])
+
+            content = output.read_text(encoding="utf-8")
+            self.assertEqual(result, 1)
+            self.assertIn("ERROR", content)
+            self.assertIn("color:#b42318", content)
+            self.assertIn("missing_i18n", content)
+            self.assertIn("missing_mainland", content)
+
     def test_main_does_not_accept_removed_product_options(self):
         removed_options = [
             ["--state-file", "state.txt"],
@@ -767,6 +798,8 @@ class CheckI18nImagesTest(unittest.TestCase):
                 dt.datetime(2026, 1, 2, tzinfo=UTC),
                 "changed",
             )
+            for directory in ("i18n_ui", "mainland_ui", "i18n_map", "mainland_map"):
+                (root / directory).mkdir()
 
             def fake_scan(path, pair):
                 return {"one": img("one.tga", "2026-01-01T00:00:00", full=str(root / "one.tga"))}
