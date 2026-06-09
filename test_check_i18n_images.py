@@ -1341,6 +1341,42 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertEqual(findings[0].operation, "ignore")
             self.assertEqual(findings[0].mainland_md5, md5)
 
+    def test_sqlite_ocr_cache_hit_progress_reports_unchanged_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "ocr_cache.db"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            md5 = __import__("hashlib").md5(b"fake image").hexdigest()
+            json_path = Path(td) / "ocr_cache.json"
+            json_path.write_text(
+                __import__("json").dumps(
+                    {"SampleOnly/source.tga": {"md5": md5, "has_text": False}},
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            migrate_ocr_json_to_sqlite(json_path, db_path)
+
+            stderr = io.StringIO()
+            with patch("sys.stderr", stderr), patch(
+                "check_i18n_images.run_ocr",
+                side_effect=AssertionError("OCR should not run"),
+            ):
+                detector = sqlite_ocr_text_detector_factory(db_path)
+                compare_category("ui", {}, {"SampleOnly/source.tga": image}, None, detector)
+
+            output = stderr.getvalue()
+            self.assertIn("文件名：source.tga", output)
+            self.assertIn(f"md5:{md5}", output)
+            self.assertIn("【文件未修改】", output)
+            self.assertIn(f"路径：{image_path}", output)
+
     def test_sqlite_ocr_cache_does_not_reuse_ignore_when_md5_changes(self):
         with tempfile.TemporaryDirectory() as td:
             db_path = Path(td) / "ocr_cache.db"

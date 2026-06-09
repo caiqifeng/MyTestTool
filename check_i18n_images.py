@@ -255,8 +255,10 @@ def compare_category(
     progress_started_at = time.monotonic()
     progress_line_length = 0
 
-    def detect_text(index_and_image: tuple[int, ImageFile]) -> tuple[int, ImageFile, bool, str | None, str, str | None, str | None]:
+    def detect_text(index_and_image: tuple[int, ImageFile]) -> tuple[int, ImageFile, bool, str | None, str, str | None, str | None, bool]:
         index, image = index_and_image
+        cache_hit_getter = getattr(text_detector, "cache_hit_for", None)
+        cache_hit = bool(cache_hit_getter(image)) if callable(cache_hit_getter) else False
         has_text = text_detector(image)
         ocr_text_getter = getattr(text_detector, "ocr_text_for", None)
         ocr_text = ocr_text_getter(image) if callable(ocr_text_getter) else None
@@ -264,9 +266,15 @@ def compare_category(
         operation = operation_getter(image) if callable(operation_getter) else None
         md5_getter = getattr(text_detector, "md5_for", None)
         file_md5 = md5_getter(image) if callable(md5_getter) else None
-        return index, image, has_text, ocr_text, threading.current_thread().name, operation, file_md5
+        return index, image, has_text, ocr_text, threading.current_thread().name, operation, file_md5, cache_hit
 
-    def print_ocr_progress(done_count: int, image: ImageFile, worker_name: str) -> None:
+    def print_ocr_progress(
+        done_count: int,
+        image: ImageFile,
+        worker_name: str,
+        file_md5: str | None,
+        cache_hit: bool,
+    ) -> None:
         nonlocal progress_line_length
         elapsed_minutes = int((time.monotonic() - progress_started_at) // 60)
         elapsed_hours = elapsed_minutes // 60
@@ -278,6 +286,8 @@ def compare_category(
             elapsed_remainder_minutes,
             image.full_path,
             worker_name,
+            file_md5=file_md5,
+            cache_hit=cache_hit,
         )
         padding = max(0, progress_line_length - len(progress_line))
         progress_line_length = len(progress_line)
@@ -293,8 +303,8 @@ def compare_category(
         for item in indexed_images:
             result = detect_text(item)
             detected_results.append(result)
-            _index, image, _has_text, _ocr_text, worker_name, _operation, _file_md5 = result
-            print_ocr_progress(len(detected_results), image, worker_name)
+            _index, image, _has_text, _ocr_text, worker_name, _operation, file_md5, cache_hit = result
+            print_ocr_progress(len(detected_results), image, worker_name, file_md5, cache_hit)
     else:
         log_step(f"启动 OCR 并发: workers={worker_count} count={new_total}")
         with ThreadPoolExecutor(max_workers=worker_count) as executor:
@@ -303,11 +313,11 @@ def compare_category(
             for future in as_completed(futures):
                 result = future.result()
                 detected_results.append(result)
-                _index, image, _has_text, _ocr_text, worker_name, _operation, _file_md5 = result
-                print_ocr_progress(len(detected_results), image, worker_name)
+                _index, image, _has_text, _ocr_text, worker_name, _operation, file_md5, cache_hit = result
+                print_ocr_progress(len(detected_results), image, worker_name, file_md5, cache_hit)
         detected_results.sort(key=lambda item: item[0])
 
-    for _progress_index, mainland_file, has_text, mainland_ocr_text, _worker_name, operation, file_md5 in detected_results:
+    for _progress_index, mainland_file, has_text, mainland_ocr_text, _worker_name, operation, file_md5, _cache_hit in detected_results:
         if has_text:
             findings.append(
                 Finding(
@@ -354,12 +364,18 @@ def format_progress_line(
     elapsed_minutes: int,
     full_path: str,
     worker_name: str | None = None,
+    file_md5: str | None = None,
+    cache_hit: bool = False,
 ) -> str:
     worker = f"OCR线程：{worker_name}；" if worker_name else ""
+    file_status = ""
+    if cache_hit and file_md5:
+        file_status = f"--> 文件名：{Path(full_path).name}, md5:{file_md5},【文件未修改】，"
     return (
         f"当前分析进度：{progress_index}/{total}，"
         f"共执行：{elapsed_hours:02d}小时{elapsed_minutes:02d}分钟；"
         f"{worker}"
+        f"{file_status}"
         f"路径：{full_path}"
     )
 
@@ -966,9 +982,15 @@ def sqlite_ocr_text_detector_factory(
     def md5_for(image: ImageFile) -> str | None:
         return _file_md5(image.full_path)
 
+    def cache_hit_for(image: ImageFile) -> bool:
+        file_md5 = _file_md5(image.full_path)
+        entry = _entry_for(image, file_md5)
+        return entry is not None and entry.get("has_text") is not None
+
     setattr(detect, "ocr_text_for", ocr_text_for)
     setattr(detect, "operation_for", operation_for)
     setattr(detect, "md5_for", md5_for)
+    setattr(detect, "cache_hit_for", cache_hit_for)
     return detect
 
 
