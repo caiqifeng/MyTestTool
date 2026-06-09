@@ -1209,6 +1209,23 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertEqual(data["SampleOnly/source.tga"]["md5"], "abc123")
             self.assertEqual(data["SampleOnly/source.tga"]["operation"], "ignore")
 
+    def test_html_report_uses_sqlite_cache_name_when_configured(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "report.html"
+            write_html_report(
+                out,
+                [],
+                i18n_count=0,
+                mainland_count=0,
+                normal_synced=0,
+                new_no_text=0,
+                ocr_cache_name=".ocr_cache.db",
+            )
+
+            content = out.read_text(encoding="utf-8")
+            self.assertIn("const OCR_CACHE_FILE_NAME = '.ocr_cache.db';", content)
+            self.assertIn("自动写入 ${OCR_CACHE_FILE_NAME} 失败", content)
+
     def test_migrate_ocr_json_to_sqlite_preserves_text_and_operation(self):
         with tempfile.TemporaryDirectory() as td:
             json_path = Path(td) / "ocr_cache.json"

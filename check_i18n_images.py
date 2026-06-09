@@ -1599,6 +1599,7 @@ def write_html_report(
     normal_synced: int = 0,
     new_no_text: int = 0,
     max_image_px: int | None = None,
+    ocr_cache_name: str = OCR_CACHE_FILE,
 ) -> None:
     assets_dir = path.parent / f"{path.stem}_assets"
     if assets_dir.exists():
@@ -1723,7 +1724,15 @@ def write_html_report(
         f'onclick="switchTab(this.dataset.tabType)">{html.escape(pair_type)}</button>'
         for pair_type in detail_types
     )
-    doc = _html_template(summary_table, summary_cards, rows, tab_buttons, detail_types[0], report_title)
+    doc = _html_template(
+        summary_table,
+        summary_cards,
+        rows,
+        tab_buttons,
+        detail_types[0],
+        report_title,
+        ocr_cache_name,
+    )
     path.write_text(doc, encoding="utf-8")
 
 def _summary_items(items: Sequence[Finding]) -> str:
@@ -1805,6 +1814,7 @@ def _html_template(
     tab_buttons: str = "",
     default_tab_type: str = TEXT_NONE,
     report_title: str = TEXT_REPORT_TITLE,
+    ocr_cache_name: str = OCR_CACHE_FILE,
 ) -> str:
     rows_json = json.dumps(rows, ensure_ascii=False)
     default_tab_json = json.dumps(default_tab_type, ensure_ascii=False)
@@ -1940,7 +1950,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 const PAGE_SIZE = 50;
 const allRows = {rows_json};
 const FILTER_COLUMNS = [0, 1, 2, 7, 8];
-const OCR_CACHE_FILE_NAME = '{OCR_CACHE_FILE}';
+const OCR_CACHE_FILE_NAME = '{html.escape(ocr_cache_name)}';
 const OPERATION_IGNORE = '{OCR_OPERATION_IGNORE}';
 const OCR_CACHE_OPERATION_API = '/api/ocr-cache/operation';
 let activeTabType = {default_tab_json};
@@ -2123,7 +2133,7 @@ async function ignoreFinding(rowIndex) {{
     updateRowOperation(row, OPERATION_IGNORE);
     filterTable();
   }} catch (error) {{
-    alert(`自动写入 ${{OCR_CACHE_FILE_NAME}} 失败：请使用本地报告服务打开页面。${{error && error.message ? ' ' + error.message : ''}}`);
+    alert(`自动写入 ${{OCR_CACHE_FILE_NAME}} 失败：请不要用 file:// 直接打开，请用 --serve-report 启动的本地报告服务页面。${{error && error.message ? ' ' + error.message : ''}}`);
   }}
 }}
 function htmlEscape(value) {{
@@ -2716,6 +2726,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             normal_synced=current_counts["normal_synced"],
             new_no_text=current_counts["new_no_text"],
             max_image_px=args.max_image_px,
+            ocr_cache_name=Path(args.ocr_cache_db).name if args.ocr_cache_db else Path(args.ocr_cache_file).name,
         )
         report_written = True
 
