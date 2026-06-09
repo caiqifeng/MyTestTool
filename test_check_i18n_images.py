@@ -21,6 +21,7 @@ from check_i18n_images import (
     ocr_text_detector_factory,
     main,
     sqlite_ocr_text_detector_factory,
+    serve_report,
     update_ocr_cache_operation_sqlite,
     update_ocr_cache_operation,
     scan_local,
@@ -1225,6 +1226,9 @@ class CheckI18nImagesTest(unittest.TestCase):
             content = out.read_text(encoding="utf-8")
             self.assertIn("const OCR_CACHE_FILE_NAME = '.ocr_cache.db';", content)
             self.assertIn("自动写入 ${OCR_CACHE_FILE_NAME} 失败", content)
+
+    def test_serve_report_defaults_to_port_9080(self):
+        self.assertEqual(serve_report.__defaults__[-1], 9080)
 
     def test_migrate_ocr_json_to_sqlite_preserves_text_and_operation(self):
         with tempfile.TemporaryDirectory() as td:

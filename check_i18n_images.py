@@ -2222,7 +2222,7 @@ def serve_report(
     cache_path: Path,
     cache_db_path: Path | None = None,
     host: str = "127.0.0.1",
-    port: int = 8765,
+    port: int = 9080,
 ) -> int:
     report_path = report_path.resolve()
     cache_path = cache_path.resolve()
@@ -2686,8 +2686,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--serve-port",
         type=int,
-        default=8765,
-        help="--serve-report 使用的本地端口，默认 8765",
+        default=9080,
+        help="--serve-report 使用的本地端口，默认 9080",
     )
     args = parser.parse_args(argv)
 
