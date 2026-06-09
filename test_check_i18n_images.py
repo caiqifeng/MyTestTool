@@ -1458,8 +1458,45 @@ class CheckI18nImagesTest(unittest.TestCase):
                 detector = sqlite_ocr_text_detector_factory(db_path)
                 findings, stats = compare_category("ui", {}, {"SampleOnly/source.tga": image}, None, detector)
 
+            self.assertEqual(findings[0].issue, "mainland_new_with_chars")
+            self.assertEqual(stats["new_no_text"], 0)
+            self.assertEqual(stats["new_with_chars"], 1)
+
+    def test_sqlite_ocr_cache_hit_with_has_text_false_stays_no_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "ocr_cache.db"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            md5 = __import__("hashlib").md5(b"fake image").hexdigest()
+            json_path = Path(td) / "ocr_cache.json"
+            json_path.write_text(
+                __import__("json").dumps(
+                    {
+                        "SampleOnly/source.tga": {
+                            "md5": md5,
+                            "has_text": False,
+                            "test_str": "",
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            migrate_ocr_json_to_sqlite(json_path, db_path)
+
+            with patch("check_i18n_images.run_ocr", side_effect=AssertionError("OCR should not run")):
+                detector = sqlite_ocr_text_detector_factory(db_path)
+                findings, stats = compare_category("ui", {}, {"SampleOnly/source.tga": image}, None, detector)
+
             self.assertEqual(findings[0].issue, "mainland_new_no_text")
             self.assertEqual(stats["new_no_text"], 1)
+            self.assertEqual(stats["new_with_chars"], 0)
 
     def test_sqlite_ocr_cache_hit_progress_reports_unchanged_file(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1830,6 +1867,17 @@ class CheckI18nImagesTest(unittest.TestCase):
                     ),
                     Finding(
                         "ui",
+                        "mainland_new_with_chars",
+                        "SampleOnly/ascii.tga",
+                        "",
+                        str(img_path),
+                        None,
+                        dt.datetime(2026, 1, 2, tzinfo=UTC),
+                        "ascii detail",
+                        mainland_ocr_text="Season_2026 123",
+                    ),
+                    Finding(
+                        "ui",
                         "mainland_new_no_text",
                         "SampleOnly/plain.tga",
                         "",
@@ -1840,13 +1888,15 @@ class CheckI18nImagesTest(unittest.TestCase):
                     ),
                 ],
                 new_no_text=1,
+                new_with_chars=1,
             )
 
             content = out.read_text(encoding="utf-8")
             self.assertNotIn("SampleOnly/plain.tga", content)
+            self.assertNotIn("SampleOnly/ascii.tga", content)
             self.assertIn("新增含字符图片", content)
+            self.assertIn("新增无文字图片", content)
             self.assertIn("新增带中文图片", content)
-            self.assertNotIn(cn(r"\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"), content)
             self.assertNotIn(cn(r"\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247"), content)
             self.assertIn(cn(r"\u8bc6\u522b\u6587\u5b57\uff1a"), content)
             self.assertIn(cn(r"\u5927\u5251\u7f51\u4e09"), content)

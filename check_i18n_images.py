@@ -48,7 +48,8 @@ TEXT_RUN_RESULT = "\u672c\u8f6e\u6267\u884c\u7ed3\u679c"
 TEXT_MISSING_ISSUE = "\u7591\u4f3c\u5e9f\u9664\u6587\u4ef6"
 TEXT_CHANGED_ISSUE = "\u4fee\u6539\u65f6\u95f4\u5f02\u5e38"
 TEXT_NEW_TEXT_ISSUE = "\u65b0\u589e\u5e26\u4e2d\u6587\u56fe\u7247"
-TEXT_NEW_NO_TEXT_ISSUE = "\u65b0\u589e\u542b\u5b57\u7b26\u56fe\u7247"
+TEXT_NEW_CHAR_ISSUE = "\u65b0\u589e\u542b\u5b57\u7b26\u56fe\u7247"
+TEXT_NEW_NO_TEXT_ISSUE = "\u65b0\u589e\u65e0\u6587\u5b57\u56fe\u7247"
 TEXT_REPORT_DETAIL = "\u62a5\u544a\u8be6\u60c5"
 TEXT_OTHER_ISSUE = "\u5176\u4ed6\u95ee\u9898"
 TEXT_CATEGORY = "\u7c7b\u522b"
@@ -92,6 +93,16 @@ def default_ocr_cache_db_path(script_path: Path | None = None) -> Path:
 
 def _contains_chinese_text(text: str | None) -> bool:
     return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
+
+
+def _ocr_text_status(has_text: object, has_cn: object, text: str | None = None) -> str:
+    if bool(has_cn):
+        return "cn"
+    if has_text is False or has_text == 0:
+        return "none"
+    if text:
+        return "cn" if _contains_chinese_text(text) else "chars"
+    return "chars" if bool(has_text) else "none"
 
 
 @dataclass(frozen=True)
@@ -217,6 +228,7 @@ def compare_category(
     findings: list[Finding] = []
     normal_synced = 0
     new_no_text = 0
+    new_with_chars = 0
 
     new_mainland_files: list[tuple[str, ImageFile]] = []
     for rel, mainland_file in sorted(mainland_files.items()):
@@ -263,18 +275,20 @@ def compare_category(
     progress_started_at = time.monotonic()
     progress_line_length = 0
 
-    def detect_text(index_and_image: tuple[int, ImageFile]) -> tuple[int, ImageFile, bool, str | None, str, str | None, str | None, bool]:
+    def detect_text(index_and_image: tuple[int, ImageFile]) -> tuple[int, ImageFile, bool, str | None, str, str | None, str | None, bool, str]:
         index, image = index_and_image
         cache_hit_getter = getattr(text_detector, "cache_hit_for", None)
         cache_hit = bool(cache_hit_getter(image)) if callable(cache_hit_getter) else False
         has_text = text_detector(image)
         ocr_text_getter = getattr(text_detector, "ocr_text_for", None)
         ocr_text = ocr_text_getter(image) if callable(ocr_text_getter) else None
+        text_status_getter = getattr(text_detector, "text_status_for", None)
+        text_status = text_status_getter(image) if callable(text_status_getter) else ("cn" if has_text else "none")
         operation_getter = getattr(text_detector, "operation_for", None)
         operation = operation_getter(image) if callable(operation_getter) else None
         md5_getter = getattr(text_detector, "md5_for", None)
         file_md5 = md5_getter(image) if callable(md5_getter) else None
-        return index, image, has_text, ocr_text, threading.current_thread().name, operation, file_md5, cache_hit
+        return index, image, has_text, ocr_text, threading.current_thread().name, operation, file_md5, cache_hit, text_status
 
     def print_ocr_progress(
         done_count: int,
@@ -311,7 +325,7 @@ def compare_category(
         for item in indexed_images:
             result = detect_text(item)
             detected_results.append(result)
-            _index, image, _has_text, _ocr_text, worker_name, _operation, file_md5, cache_hit = result
+            _index, image, _has_text, _ocr_text, worker_name, _operation, file_md5, cache_hit, _text_status = result
             print_ocr_progress(len(detected_results), image, worker_name, file_md5, cache_hit)
     else:
         log_step(f"启动 OCR 并发: workers={worker_count} count={new_total}")
@@ -321,12 +335,12 @@ def compare_category(
             for future in as_completed(futures):
                 result = future.result()
                 detected_results.append(result)
-                _index, image, _has_text, _ocr_text, worker_name, _operation, file_md5, cache_hit = result
+                _index, image, _has_text, _ocr_text, worker_name, _operation, file_md5, cache_hit, _text_status = result
                 print_ocr_progress(len(detected_results), image, worker_name, file_md5, cache_hit)
         detected_results.sort(key=lambda item: item[0])
 
-    for _progress_index, mainland_file, has_text, mainland_ocr_text, _worker_name, operation, file_md5, _cache_hit in detected_results:
-        if has_text:
+    for _progress_index, mainland_file, has_text, mainland_ocr_text, _worker_name, operation, file_md5, _cache_hit, text_status in detected_results:
+        if text_status == "cn":
             findings.append(
                 Finding(
                     category,
@@ -337,6 +351,24 @@ def compare_category(
                     None,
                     mainland_file.modified_at,
                     "陆版新增图片且检测到文字",
+                    mainland_created_at=mainland_file.created_at,
+                    mainland_ocr_text=mainland_ocr_text,
+                    operation=operation,
+                    mainland_md5=file_md5,
+                )
+            )
+        elif text_status == "chars":
+            new_with_chars += 1
+            findings.append(
+                Finding(
+                    category,
+                    "mainland_new_with_chars",
+                    mainland_file.relative_path,
+                    "",
+                    mainland_file.full_path,
+                    None,
+                    mainland_file.modified_at,
+                    "陆版新增图片，OCR 检测到非中文字符，无需翻译",
                     mainland_created_at=mainland_file.created_at,
                     mainland_ocr_text=mainland_ocr_text,
                     operation=operation,
@@ -362,7 +394,11 @@ def compare_category(
             )
     if new_total:
         print(file=sys.stderr)
-    return findings, {"normal_synced": normal_synced, "new_no_text": new_no_text}
+    return findings, {
+        "normal_synced": normal_synced,
+        "new_no_text": new_no_text,
+        "new_with_chars": new_with_chars,
+    }
 
 
 def format_progress_line(
@@ -954,13 +990,7 @@ def sqlite_ocr_text_detector_factory(
         file_md5 = _file_md5(image.full_path)
         entry = _entry_for(image, file_md5)
         if entry is not None and entry.get("has_text") is not None:
-            has_cn = entry.get("has_cn")
-            if has_cn is not None:
-                return bool(has_cn)
-            text = entry.get("test_str")
-            if isinstance(text, str) and text:
-                return _contains_chinese_text(text)
-            return bool(entry.get("has_text"))
+            return text_status_for(image) == "cn"
 
         text = run_ocr(image)
         has_text = bool(text)
@@ -997,6 +1027,14 @@ def sqlite_ocr_text_detector_factory(
                 conn.close()
         return has_cn
 
+    def text_status_for(image: ImageFile) -> str:
+        file_md5 = _file_md5(image.full_path)
+        entry = _entry_for(image, file_md5)
+        if entry is None:
+            return "none"
+        text = entry.get("test_str")
+        return _ocr_text_status(entry.get("has_text"), entry.get("has_cn"), text if isinstance(text, str) else None)
+
     def ocr_text_for(image: ImageFile) -> str | None:
         file_md5 = _file_md5(image.full_path)
         entry = _entry_for(image, file_md5)
@@ -1021,6 +1059,7 @@ def sqlite_ocr_text_detector_factory(
     setattr(detect, "operation_for", operation_for)
     setattr(detect, "md5_for", md5_for)
     setattr(detect, "cache_hit_for", cache_hit_for)
+    setattr(detect, "text_status_for", text_status_for)
     return detect
 
 
@@ -1052,9 +1091,11 @@ def ocr_text_detector_factory(
                     if cache_path is not None:
                         save_ocr_cache(cache_path, cache)
                 text = entry.get("test_str")
-                if isinstance(text, str) and text:
-                    return _contains_chinese_text(text)
-                return bool(entry.get("has_text", False))
+                return _ocr_text_status(
+                    entry.get("has_text"),
+                    entry.get("has_cn"),
+                    text if isinstance(text, str) else None,
+                ) == "cn"
 
         text = run_ocr(image)
         has_text = bool(text)
@@ -1100,9 +1141,19 @@ def ocr_text_detector_factory(
     def md5_for(image: ImageFile) -> str | None:
         return _file_md5(image.full_path)
 
+    def text_status_for(image: ImageFile) -> str:
+        file_md5 = _file_md5(image.full_path)
+        with cache_lock:
+            entry = cache.get(image.relative_path)
+        if isinstance(entry, dict) and entry.get("md5") == file_md5:
+            text = entry.get("test_str")
+            return _ocr_text_status(entry.get("has_text"), entry.get("has_cn"), text if isinstance(text, str) else None)
+        return "none"
+
     setattr(detect, "ocr_text_for", ocr_text_for)
     setattr(detect, "operation_for", operation_for)
     setattr(detect, "md5_for", md5_for)
+    setattr(detect, "text_status_for", text_status_for)
     return detect
 
 _TRANSLATION_SYSTEM_PROMPT = (
@@ -1403,9 +1454,11 @@ def write_xlsx_with_openpyxl(
     missing_count = sum(1 for f in findings if f.issue == "mainland_missing")
     changed_count = sum(1 for f in findings if f.issue == "mainland_changed")
     new_text_count = sum(1 for f in findings if f.issue == "mainland_new_with_text")
-    other_count = len(findings) - missing_count - changed_count - new_text_count
+    new_chars_count = sum(1 for f in findings if f.issue == "mainland_new_with_chars")
+    other_count = len(findings) - missing_count - changed_count - new_text_count - new_chars_count
     normal_synced = stats.get("normal_synced", 0)
     new_no_text = stats.get("new_no_text", 0)
+    new_with_chars = stats.get("new_with_chars", new_chars_count)
 
     summary_header_font = Font(bold=True, size=13)
     summary_rows = [
@@ -1413,11 +1466,12 @@ def write_xlsx_with_openpyxl(
         ["国际版图片", f"{stats.get('i18n_count', 0)} 张", ""],
         ["陆版图片", f"{stats.get('mainland_count', 0)} 张", ""],
         ["", "", ""],
-        ["二、正常图片", f"{normal_synced + new_no_text} 张", ""],
+        ["二、正常图片", f"{normal_synced + new_with_chars + new_no_text} 张", ""],
         ["正常同步文件", f"{normal_synced} 张", "两边都有且修改时间正常"],
-        [TEXT_NEW_NO_TEXT_ISSUE, f"{new_no_text} 张", "陆版新增但未识别到中文，无需翻译"],
+        [TEXT_NEW_CHAR_ISSUE, f"{new_with_chars} 张", "陆版新增但只识别到非中文字符，无需翻译"],
+        [TEXT_NEW_NO_TEXT_ISSUE, f"{new_no_text} 张", "陆版新增且未识别到文字，无需翻译"],
         ["", "", ""],
-        ["三、异常图片", f"{len(findings)} 张", ""],
+        ["三、异常图片", f"{len(findings) - new_chars_count} 张", ""],
     ]
     if missing_count:
         summary_rows.append(["疑似废除文件", f"{missing_count} 张", "国际版有、陆版无（可能已废弃）"])
@@ -1563,6 +1617,7 @@ def issue_title(issue: str) -> str:
         "mainland_missing": TEXT_MISSING_ISSUE,
         "mainland_changed": TEXT_CHANGED_ISSUE,
         "mainland_new_with_text": TEXT_NEW_TEXT_ISSUE,
+        "mainland_new_with_chars": TEXT_NEW_CHAR_ISSUE,
         "mainland_new_no_text": TEXT_NEW_NO_TEXT_ISSUE,
     }.get(issue, issue)
 
@@ -1672,6 +1727,7 @@ def write_html_report(
     mainland_count: int = 0,
     normal_synced: int = 0,
     new_no_text: int = 0,
+    new_with_chars: int = 0,
     max_image_px: int | None = None,
     ocr_cache_name: str = OCR_CACHE_DB_FILE,
 ) -> None:
@@ -1681,6 +1737,7 @@ def write_html_report(
     missing = [f for f in findings if f.issue == "mainland_missing"]
     changed = [f for f in findings if f.issue == "mainland_changed"]
     new_with_text = [f for f in findings if f.issue == "mainland_new_with_text"]
+    new_with_chars_findings = [f for f in findings if f.issue == "mainland_new_with_chars"]
     new_without_text = [f for f in findings if f.issue == "mainland_new_no_text"]
     others = [
         f for f in findings
@@ -1688,6 +1745,7 @@ def write_html_report(
             "mainland_missing",
             "mainland_changed",
             "mainland_new_with_text",
+            "mainland_new_with_chars",
             "mainland_new_no_text",
         }
     ]
@@ -1696,6 +1754,7 @@ def write_html_report(
         "mainland_missing": "\u56fd\u9645\u7248\u5b58\u5728\u4f46\u9646\u7248\u7f3a\u5931\uff0c\u7591\u4f3c\u5e9f\u5f03\u6216\u8def\u5f84\u4e0d\u4e00\u81f4",
         "mainland_changed": "\u9646\u7248\u4fee\u6539\u65f6\u95f4\u665a\u4e8e\u56fd\u9645\u7248\uff0c\u9700\u8981\u786e\u8ba4\u56fd\u9645\u7248\u662f\u5426\u540c\u6b65",
         "mainland_new_with_text": "\u9646\u7248\u65b0\u589e\u4e14 OCR \u8bc6\u522b\u5230\u4e2d\u6587\uff0c\u9700\u8981\u8865\u5145\u56fd\u9645\u7248\u7ffb\u8bd1",
+        "mainland_new_with_chars": "\u9646\u7248\u65b0\u589e\u4e14 OCR \u8bc6\u522b\u5230\u975e\u4e2d\u6587\u5b57\u7b26\uff0c\u4f5c\u4e3a\u6b63\u5e38\u7c7b\u578b",
         "mainland_new_no_text": "\u9646\u7248\u65b0\u589e\u4f46 OCR \u672a\u8bc6\u522b\u5230\u4e2d\u6587\uff0c\u4f5c\u4e3a\u6b63\u5e38\u7c7b\u578b",
     }
 
@@ -1726,7 +1785,7 @@ def write_html_report(
             f'<ul>{_summary_items(others)}</ul></section>'
         )
 
-    detail_findings = [f for f in findings if f.issue != "mainland_new_no_text"]
+    detail_findings = [f for f in findings if f.issue not in {"mainland_new_no_text", "mainland_new_with_chars"}]
     rows = []
     for index, finding in enumerate(detail_findings, 1):
         i18n_asset = make_html_image_asset(finding.i18n_path, assets_dir, index, "i18n", max_image_px)
@@ -1785,12 +1844,12 @@ def write_html_report(
             ],
         })
 
-    total_abnormal = len(findings) - len(new_without_text)
+    total_abnormal = len(findings) - len(new_without_text) - len(new_with_chars_findings)
     report_title = build_report_title()
     summary_table = _build_summary_table(
         i18n_count, mainland_count, total_abnormal,
-        normal_synced, new_no_text,
-        missing, changed, new_with_text, others, new_without_text, report_title,
+        normal_synced, new_no_text, new_with_chars,
+        missing, changed, new_with_text, others, new_without_text, new_with_chars_findings, report_title,
     )
     detail_types = sorted({f.category or TEXT_NONE for f in detail_findings}) or [TEXT_NONE]
     tab_buttons = "".join(
@@ -1857,14 +1916,17 @@ def _build_summary_table(
     total_abnormal: int,
     normal_synced: int,
     new_no_text: int,
+    new_with_chars: int,
     missing: list[Finding],
     changed: list[Finding],
     new_with_text: list[Finding],
     others: list[Finding],
     new_without_text: list[Finding] | None = None,
+    new_with_chars_findings: list[Finding] | None = None,
     report_title: str = TEXT_REPORT_TITLE,
 ) -> str:
     new_without_text = new_without_text or []
+    new_with_chars_findings = new_with_chars_findings or []
     checked_rows = "".join(
         f"<tr><td>{label}</td><td>{count} 张</td></tr>"
         for label, count in [
@@ -1876,7 +1938,8 @@ def _build_summary_table(
         f"<tr><td>{label}</td><td>{count} 张</td><td>{note}</td></tr>"
         for label, count, note in [
             ("\u6b63\u5e38\u540c\u6b65\u6587\u4ef6", normal_synced, "\u4e24\u8fb9\u90fd\u6709\u4e14\u4fee\u6539\u65f6\u95f4\u6b63\u5e38"),
-            (TEXT_NEW_NO_TEXT_ISSUE, len(new_without_text), "\u9646\u7248\u65b0\u589e\u4f46 OCR \u672a\u8bc6\u522b\u5230\u4e2d\u6587\uff0c\u4f5c\u4e3a\u6b63\u5e38\u7c7b\u578b"),
+            (TEXT_NEW_CHAR_ISSUE, new_with_chars or len(new_with_chars_findings), "\u9646\u7248\u65b0\u589e\u4f46 OCR \u53ea\u8bc6\u522b\u5230\u975e\u4e2d\u6587\u5b57\u7b26\uff0c\u4f5c\u4e3a\u6b63\u5e38\u7c7b\u578b"),
+            (TEXT_NEW_NO_TEXT_ISSUE, new_no_text or len(new_without_text), "\u9646\u7248\u65b0\u589e\u4e14 OCR \u672a\u8bc6\u522b\u5230\u6587\u5b57\uff0c\u4f5c\u4e3a\u6b63\u5e38\u7c7b\u578b"),
         ]
     )
     abnormal_rows = "".join(
@@ -1905,7 +1968,7 @@ def _build_summary_table(
       <div class="issue-breakdown">
         <p><strong>\u4e00\u3001\u5171\u68c0\u67e5\u56fe\u7247</strong></p>
         <table class="summary-table"><thead><tr><th>\u6307\u6807</th><th>\u6570\u91cf</th></tr></thead><tbody>{checked_rows}</tbody></table>
-        <p class="summary-heading"><strong>\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171 {normal_synced + len(new_without_text)} \u5f20</strong></p>
+        <p class="summary-heading"><strong>\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171 {normal_synced + (new_with_chars or len(new_with_chars_findings)) + (new_no_text or len(new_without_text))} \u5f20</strong></p>
         <table class="summary-table"><thead><tr><th>\u6b63\u5e38\u7c7b\u578b</th><th>\u6570\u91cf</th><th>\u8bf4\u660e</th></tr></thead><tbody>{normal_rows}</tbody></table>
         <p class="summary-heading"><strong>\u4e09\u3001\u5f02\u5e38\u56fe\u7247\uff1a\u5171 <span class="abnormal-count">{total_abnormal}</span> \u5f20</strong></p>
         <table class="summary-table"><thead><tr><th>\u95ee\u9898\u7c7b\u578b</th><th>\u6570\u91cf</th><th>\u8bf4\u660e</th></tr></thead><tbody>{abnormal_rows}</tbody></table>
@@ -2687,6 +2750,7 @@ def collect_findings(
     total_mainland = 0
     total_normal_synced = 0
     total_new_no_text = 0
+    total_new_with_chars = 0
 
     pair_count = len(pairs)
 
@@ -2726,6 +2790,7 @@ def collect_findings(
         all_findings.extend(pair_findings)
         total_normal_synced += pair_stats["normal_synced"]
         total_new_no_text += pair_stats["new_no_text"]
+        total_new_with_chars += pair_stats.get("new_with_chars", 0)
         log_step(
             f"目录比较完成: {name} normal_synced={pair_stats['normal_synced']} "
             f"new_no_text={pair_stats['new_no_text']} findings={len(pair_findings)}"
@@ -2745,6 +2810,7 @@ def collect_findings(
                     "mainland_count": total_mainland,
                     "normal_synced": total_normal_synced,
                     "new_no_text": total_new_no_text,
+                    "new_with_chars": total_new_with_chars,
                 },
             )
 
@@ -2753,6 +2819,7 @@ def collect_findings(
         "mainland_count": total_mainland,
         "normal_synced": total_normal_synced,
         "new_no_text": total_new_no_text,
+        "new_with_chars": total_new_with_chars,
     }
     return all_findings, stats
 
@@ -2855,6 +2922,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             mainland_count=current_counts["mainland_count"],
             normal_synced=current_counts["normal_synced"],
             new_no_text=current_counts["new_no_text"],
+            new_with_chars=current_counts.get("new_with_chars", 0),
             max_image_px=args.max_image_px,
             ocr_cache_name=Path(args.ocr_cache_db).name,
         )
