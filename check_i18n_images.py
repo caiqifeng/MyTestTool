@@ -1793,7 +1793,7 @@ def write_html_report(
         issue_class = html.escape(finding.issue.replace("_", "-"))
         ocr_text = finding.mainland_ocr_text or ""
         row_title = ""
-        if finding.issue == "mainland_new_with_text" and ocr_text:
+        if finding.issue in {"mainland_new_with_text", "mainland_new_with_chars"} and ocr_text:
             row_title = f"{TEXT_OCR_TEXT}\uff1a{ocr_text}"
         issue_label = issue_title(finding.issue)
         mainland_dt = format_dt(finding.mainland_modified_at)

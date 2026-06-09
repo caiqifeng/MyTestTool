@@ -1898,6 +1898,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("新增无文字图片", content)
             self.assertIn("新增带中文图片", content)
             self.assertIn("<option>新增含字符图片</option>", content)
+            self.assertIn("识别文字：Season_2026 123", content)
             self.assertNotIn(cn(r"\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247"), content)
             self.assertIn(cn(r"\u8bc6\u522b\u6587\u5b57\uff1a"), content)
             self.assertIn(cn(r"\u5927\u5251\u7f51\u4e09"), content)
