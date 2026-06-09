@@ -1893,10 +1893,11 @@ class CheckI18nImagesTest(unittest.TestCase):
 
             content = out.read_text(encoding="utf-8")
             self.assertNotIn("SampleOnly/plain.tga", content)
-            self.assertNotIn("SampleOnly/ascii.tga", content)
+            self.assertIn("SampleOnly/ascii.tga", content)
             self.assertIn("新增含字符图片", content)
             self.assertIn("新增无文字图片", content)
             self.assertIn("新增带中文图片", content)
+            self.assertIn("<option>新增含字符图片</option>", content)
             self.assertNotIn(cn(r"\u65b0\u589e\u5e26\u6587\u5b57\u56fe\u7247"), content)
             self.assertIn(cn(r"\u8bc6\u522b\u6587\u5b57\uff1a"), content)
             self.assertIn(cn(r"\u5927\u5251\u7f51\u4e09"), content)

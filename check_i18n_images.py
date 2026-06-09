@@ -1785,7 +1785,7 @@ def write_html_report(
             f'<ul>{_summary_items(others)}</ul></section>'
         )
 
-    detail_findings = [f for f in findings if f.issue not in {"mainland_new_no_text", "mainland_new_with_chars"}]
+    detail_findings = [f for f in findings if f.issue != "mainland_new_no_text"]
     rows = []
     for index, finding in enumerate(detail_findings, 1):
         i18n_asset = make_html_image_asset(finding.i18n_path, assets_dir, index, "i18n", max_image_px)
@@ -2046,7 +2046,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
 .issue-badge {{ display:inline-flex; align-items:center; border-radius:999px; padding:3px 8px; font-size:12px; font-weight:600; white-space:nowrap; }}
 .issue-badge.mainland-missing,.issue-badge.mainland-new-with-text {{ color:#7a271a; background:#fee4e2; }}
 .issue-badge.mainland-changed {{ color:#7a4a00; background:#ffefd0; }}
-.issue-badge.mainland-new-no-text {{ color:#334155; background:#e2e8f0; }}
+.issue-badge.mainland-new-with-chars,.issue-badge.mainland-new-no-text {{ color:#334155; background:#e2e8f0; }}
 .thumb-button {{ width:168px; height:110px; padding:0; border:1px solid #cbd5e1; border-radius:5px; background:#f8fafc; cursor:zoom-in; display:inline-flex; align-items:center; justify-content:center; }}
 .thumb-button img {{ max-width:166px; max-height:108px; object-fit:contain; }}
 .operation-button {{ border:1px solid #cbd5e1; background:white; color:#334155; border-radius:5px; padding:6px 10px; font-size:13px; cursor:pointer; white-space:nowrap; }}
@@ -2093,7 +2093,7 @@ tr.mainland-new-with-text[title] {{ cursor:help; }}
         </tr>
         <tr class="filter-row">
           <th><input type="text" data-filter-col="0" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
-          <th><select data-filter-col="1" data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
+          <th><select data-filter-col="1" data-filter="issue" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_MISSING_ISSUE}</option><option>{TEXT_CHANGED_ISSUE}</option><option>{TEXT_NEW_TEXT_ISSUE}</option><option>{TEXT_NEW_CHAR_ISSUE}</option><option>{TEXT_OTHER_ISSUE}</option></select></th>
           <th><input type="text" data-filter-col="2" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
           <th></th><th></th>
           <th><div class="date-range"><input type="date" data-date-col="5" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="5" data-date-bound="end" onchange="filterTable()"></div></th>
