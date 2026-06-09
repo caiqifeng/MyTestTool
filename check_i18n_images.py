@@ -13,6 +13,7 @@ import json
 import shutil
 import os
 import re
+import socket
 import socketserver
 import sqlite3
 import subprocess
@@ -69,6 +70,8 @@ TEXT_OCR_TEXT = "\u8bc6\u522b\u6587\u5b57"
 _RUN_LOG_FILE: Path | None = None
 _OCR_CANDIDATE_FILE: Path | None = None
 _OCR_CANDIDATES: list[ImageFile] = []
+_REPORT_SERVICE_LOCK = threading.Lock()
+_REPORT_SERVICE_STARTED: set[tuple[str, int]] = set()
 
 
 def script_dir(script_path: Path | None = None) -> Path:
@@ -933,6 +936,9 @@ def sqlite_ocr_text_detector_factory(
         file_md5 = _file_md5(image.full_path)
         entry = _entry_for(image, file_md5)
         if entry is not None and entry.get("has_text") is not None:
+            text = entry.get("test_str")
+            if isinstance(text, str) and text:
+                return bool(re.search(r"[\u4e00-\u9fff]", text))
             return bool(entry.get("has_text"))
 
         text = run_ocr(image)
@@ -2334,6 +2340,42 @@ def serve_report(
     return 0
 
 
+def _is_port_open(host: str, port: int) -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.settimeout(0.2)
+        return sock.connect_ex((host, port)) == 0
+
+
+def start_report_service_once(
+    report_path: Path,
+    cache_path: Path,
+    cache_db_path: Path | None = None,
+    host: str = "127.0.0.1",
+    port: int = 9080,
+) -> bool:
+    service_key = (host, port)
+    with _REPORT_SERVICE_LOCK:
+        if service_key in _REPORT_SERVICE_STARTED:
+            log_step(f"报告服务已在本进程启动，跳过重复启动: http://{host}:{port}/")
+            return False
+        if _is_port_open(host, port):
+            _REPORT_SERVICE_STARTED.add(service_key)
+            log_step(f"报告服务端口已占用，跳过重复启动: http://{host}:{port}/")
+            print(f"报告服务已存在，跳过重复启动: http://{host}:{port}/")
+            return False
+        _REPORT_SERVICE_STARTED.add(service_key)
+
+    thread = threading.Thread(
+        target=serve_report,
+        args=(report_path, cache_path),
+        kwargs={"cache_db_path": cache_db_path, "host": host, "port": port},
+        daemon=True,
+        name=f"report-service-{port}",
+    )
+    thread.start()
+    return True
+
+
 def add_thumbnail(
     ws,
     pil_image,
@@ -2687,6 +2729,7 @@ def collect_findings(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    invoked_from_cli = argv is None
     parser = argparse.ArgumentParser(description="检查国际版/陆版图片差异，并输出 HTML。")
     parser.add_argument("--config", default=None, help="JSON 配置文件路径（默认使用脚本同级目录 check_config.json）")
     parser.add_argument("--i18n", default=None, help="国际版图片目录路径（与 --mainland 配对，或使用 --config）")
@@ -2768,9 +2811,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     log_step(f"OCR 图片清单: {ocr_candidate_file}")
     _require_pillow_for_report(output_path)
     report_written = False
+    report_service_started = False
 
     def write_cumulative_report(current_findings: list[Finding], current_counts: dict[str, int]) -> None:
-        nonlocal report_written
+        nonlocal report_written, report_service_started
         log_step(
             f"生成累计 HTML 报告: {output_path} findings={len(current_findings)} "
             f"i18n={current_counts['i18n_count']} mainland={current_counts['mainland_count']}"
@@ -2786,6 +2830,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             ocr_cache_name=Path(args.ocr_cache_db).name,
         )
         report_written = True
+        if invoked_from_cli and not args.serve_report and not report_service_started:
+            report_service_started = True
+            start_report_service_once(
+                output_path,
+                Path(OCR_CACHE_FILE),
+                cache_db_path=Path(args.ocr_cache_db),
+                port=args.serve_port,
+            )
 
     findings, counts = collect_findings(args, report_callback=write_cumulative_report)
     _write_ocr_candidate_list()

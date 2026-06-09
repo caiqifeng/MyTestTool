@@ -533,6 +533,51 @@ class CheckI18nImagesTest(unittest.TestCase):
 
         self.assertEqual(captured["ocr_workers"], 1)
 
+    def test_real_cli_starts_report_service_once_after_first_report(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "i18n").mkdir()
+            (root / "ui").mkdir()
+            config = root / "check_config.json"
+            output = root / "ui_image_check_report.html"
+            db_path = root / ".ocr_cache.db"
+            config.write_text(
+                __import__("json").dumps(
+                    {
+                        "pairs": [
+                            {
+                                "name": "ui",
+                                "i18n": str(root / "i18n"),
+                                "mainland": str(root / "ui"),
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            counts = {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}
+
+            def fake_collect(_args, report_callback=None):
+                report_callback([], counts)
+                report_callback([], counts)
+                return [], counts
+
+            with patch("sys.argv", ["check_i18n_images.py"]), patch(
+                "check_i18n_images.default_config_path", return_value=config
+            ), patch("check_i18n_images.default_output_path", return_value=output), patch(
+                "check_i18n_images.default_ocr_cache_db_path", return_value=db_path
+            ), patch("check_i18n_images.collect_findings", side_effect=fake_collect), patch(
+                "check_i18n_images._require_pillow_for_report"
+            ), patch("check_i18n_images.write_html_report"), patch(
+                "check_i18n_images.start_report_service_once", return_value=True
+            ) as start_service:
+                result = main(None)
+
+            self.assertEqual(result, 0)
+            start_service.assert_called_once()
+            self.assertEqual(start_service.call_args.args[0], output)
+            self.assertEqual(start_service.call_args.kwargs["cache_db_path"], db_path)
+
     def test_main_logs_version_and_current_time_before_running(self):
         fixed_now = dt.datetime(2026, 6, 4, 16, 1, 28, tzinfo=dt.timezone(dt.timedelta(hours=8)))
         stderr = io.StringIO()
@@ -1340,6 +1385,41 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertEqual(findings[0].issue, "mainland_new_with_text")
             self.assertEqual(findings[0].operation, "ignore")
             self.assertEqual(findings[0].mainland_md5, md5)
+
+    def test_sqlite_ocr_cache_hit_with_only_ascii_text_is_no_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "ocr_cache.db"
+            image_path = Path(td) / "source.tga"
+            image_path.write_bytes(b"fake image")
+            image = ImageFile(
+                "SampleOnly/source.tga",
+                str(image_path),
+                dt.datetime(2026, 1, 1, tzinfo=UTC),
+                "ui",
+            )
+            md5 = __import__("hashlib").md5(b"fake image").hexdigest()
+            json_path = Path(td) / "ocr_cache.json"
+            json_path.write_text(
+                __import__("json").dumps(
+                    {
+                        "SampleOnly/source.tga": {
+                            "md5": md5,
+                            "has_text": True,
+                            "test_str": "Season_2026 123",
+                        }
+                    },
+                    ensure_ascii=False,
+                ),
+                encoding="utf-8",
+            )
+            migrate_ocr_json_to_sqlite(json_path, db_path)
+
+            with patch("check_i18n_images.run_ocr", side_effect=AssertionError("OCR should not run")):
+                detector = sqlite_ocr_text_detector_factory(db_path)
+                findings, stats = compare_category("ui", {}, {"SampleOnly/source.tga": image}, None, detector)
+
+            self.assertEqual(findings[0].issue, "mainland_new_no_text")
+            self.assertEqual(stats["new_no_text"], 1)
 
     def test_sqlite_ocr_cache_hit_progress_reports_unchanged_file(self):
         with tempfile.TemporaryDirectory() as td:
