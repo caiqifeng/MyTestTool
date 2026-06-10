@@ -3,6 +3,9 @@ import sqlite3
 import urllib.error
 import urllib.request
 import os
+import contextlib
+import importlib
+import io
 import tempfile
 import threading
 import time
@@ -626,3 +629,81 @@ class ReportServiceWebTest(unittest.TestCase):
                 server.shutdown()
                 server.server_close()
                 thread.join(timeout=5)
+
+
+class ReportServiceEntrypointTest(unittest.TestCase):
+    def test_parse_args_uses_default_config_and_no_browser_flag(self):
+        report_service = importlib.import_module("report_service")
+
+        args = report_service.parse_args(["--no-browser"])
+
+        self.assertEqual(args.config, "report_service_config.json")
+        self.assertTrue(args.no_browser)
+
+    def test_build_service_components_loads_config_and_constructs_components(self):
+        report_service = importlib.import_module("report_service")
+        with tempfile.TemporaryDirectory() as td:
+            config_path = Path(td) / "service.json"
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.port = 0
+            config.reports_dir = str(Path(td) / "reports")
+            save_config(config_path, config)
+
+            loaded, runner, scheduler, server = report_service.build_service_components(config_path)
+
+            try:
+                self.assertEqual(loaded.reports_dir, config.reports_dir)
+                self.assertIsNotNone(runner)
+                self.assertIsNotNone(scheduler)
+                self.assertIsNotNone(server)
+            finally:
+                server.server_close()
+
+    def test_build_service_components_rejects_invalid_config(self):
+        report_service = importlib.import_module("report_service")
+        with tempfile.TemporaryDirectory() as td:
+            config_path = Path(td) / "service.json"
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.daily_run_time = "99:99"
+            save_config(config_path, config)
+
+            with self.assertRaises(ValueError):
+                report_service.build_service_components(config_path)
+
+    def test_main_stops_scheduler_and_closes_server_on_keyboard_interrupt(self):
+        report_service = importlib.import_module("report_service")
+        config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+        config.host = "127.0.0.1"
+        config.port = 12345
+        scheduler = mock.Mock()
+        server = mock.Mock()
+        server.server_address = ("127.0.0.1", 12345)
+        server.serve_forever.side_effect = KeyboardInterrupt
+
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout), mock.patch.object(
+            report_service,
+            "build_service_components",
+            return_value=(config, mock.Mock(), scheduler, server),
+        ), mock.patch.object(report_service.webbrowser, "open"):
+            exit_code = report_service.main(["--no-browser"])
+
+        self.assertEqual(exit_code, 0)
+        scheduler.start.assert_called_once()
+        server.serve_forever.assert_called_once()
+        scheduler.stop.assert_called_once()
+        server.server_close.assert_called_once()
+
+    def test_main_returns_nonzero_when_config_is_invalid(self):
+        report_service = importlib.import_module("report_service")
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout), mock.patch.object(
+            report_service,
+            "build_service_components",
+            side_effect=ValueError("Service config has errors:\n- bad"),
+        ) as build_components:
+            exit_code = report_service.main(["--no-browser"])
+
+        self.assertEqual(exit_code, 2)
+        self.assertIn("Service config has errors", stdout.getvalue())
+        build_components.assert_called_once()

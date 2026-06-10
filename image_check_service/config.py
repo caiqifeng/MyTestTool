@@ -63,8 +63,8 @@ def validate_config(config: ServiceConfig) -> list[str]:
         errors.append("ocr_archive_retention_days must be a positive integer")
     if not config.reports_dir.strip():
         errors.append("reports_dir must not be empty")
-    if config.port <= 0 or config.port > 65535:
-        errors.append("port must be between 1 and 65535")
+    if config.port < 0 or config.port > 65535:
+        errors.append("port must be between 0 and 65535")
     return errors
 
 
