@@ -36,6 +36,7 @@ IMAGE_EXTENSIONS = {".dds", ".tga"}
 STATE_FILE = ".check_i18n_images_state"
 OCR_CACHE_FILE = ".ocr_cache.json"
 OCR_CACHE_DB_FILE = ".ocr_cache.db"
+OCR_ARCHIVE_RETENTION_DAYS = 30
 OCR_OPERATION_IGNORE = "ignore"
 DEFAULT_THUMBNAIL_ISSUES = {
     "__has_detail__",
@@ -851,6 +852,39 @@ def init_ocr_cache_db(db_path: Path) -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS ocr_cache_archive (
+                relative_path TEXT NOT NULL,
+                md5 TEXT NOT NULL,
+                has_text INTEGER,
+                has_cn INTEGER,
+                test_str TEXT,
+                operation TEXT,
+                updated_at TEXT NOT NULL,
+                archived_at TEXT NOT NULL,
+                archived_at_epoch INTEGER NOT NULL,
+                PRIMARY KEY(relative_path, md5, archived_at)
+            )
+            """
+        )
+        archive_columns = {row[1] for row in conn.execute("PRAGMA table_info(ocr_cache_archive)").fetchall()}
+        if "archived_at_epoch" not in archive_columns:
+            conn.execute("ALTER TABLE ocr_cache_archive ADD COLUMN archived_at_epoch INTEGER NOT NULL DEFAULT 0")
+        for rowid, archived_at in conn.execute(
+            "SELECT rowid, archived_at FROM ocr_cache_archive WHERE archived_at_epoch=0"
+        ).fetchall():
+            epoch = _archive_epoch(str(archived_at))
+            if epoch is None:
+                continue
+            conn.execute(
+                "UPDATE ocr_cache_archive SET archived_at_epoch=? WHERE rowid=?",
+                (epoch, rowid),
+            )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_ocr_cache_archive_archived_at_epoch "
+            "ON ocr_cache_archive(archived_at_epoch)"
+        )
         conn.commit()
     finally:
         conn.close()
@@ -858,6 +892,77 @@ def init_ocr_cache_db(db_path: Path) -> None:
 
 def _now_text() -> str:
     return dt.datetime.now(BEIJING_TZ).strftime("%Y-%m-%d %H:%M:%S %z")
+
+
+def _archive_epoch(value: str | dt.datetime) -> int | None:
+    if isinstance(value, dt.datetime):
+        archived = value if value.tzinfo is not None else value.replace(tzinfo=BEIJING_TZ)
+        return int(archived.timestamp())
+    try:
+        archived = dt.datetime.strptime(str(value), "%Y-%m-%d %H:%M:%S %z")
+    except ValueError:
+        return None
+    return int(archived.timestamp())
+
+
+def archive_stale_ocr_entry(
+    db_path: Path,
+    relative_path: str,
+    new_md5: str,
+    now_text: str | None = None,
+) -> bool:
+    init_ocr_cache_db(db_path)
+    archived_at = now_text or _now_text()
+    archived_at_epoch = _archive_epoch(archived_at)
+    if archived_at_epoch is None:
+        archived_at_epoch = int(dt.datetime.now(BEIJING_TZ).timestamp())
+    conn = sqlite3.connect(db_path)
+    try:
+        row = conn.execute(
+            """
+            SELECT relative_path, md5, has_text, has_cn, test_str, operation, updated_at
+            FROM ocr_cache
+            WHERE relative_path=? AND md5<>?
+            """,
+            (relative_path, new_md5),
+        ).fetchone()
+        if row is None:
+            return False
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO ocr_cache_archive(
+                relative_path, md5, has_text, has_cn, test_str, operation, updated_at, archived_at, archived_at_epoch
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (*row, archived_at, archived_at_epoch),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def cleanup_ocr_cache_archive(
+    db_path: Path,
+    retention_days: int = OCR_ARCHIVE_RETENTION_DAYS,
+    now: dt.datetime | None = None,
+) -> int:
+    init_ocr_cache_db(db_path)
+    current = now or dt.datetime.now(BEIJING_TZ)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=BEIJING_TZ)
+    cutoff_epoch = int((current - dt.timedelta(days=retention_days)).timestamp())
+    conn = sqlite3.connect(db_path)
+    try:
+        cursor = conn.execute(
+            "DELETE FROM ocr_cache_archive WHERE archived_at_epoch < ?",
+            (cutoff_epoch,),
+        )
+        conn.commit()
+        return int(cursor.rowcount if cursor.rowcount is not None else 0)
+    finally:
+        conn.close()
 
 
 def migrate_ocr_json_to_sqlite(json_path: Path, db_path: Path) -> int:
@@ -930,6 +1035,7 @@ def update_ocr_cache_operation_sqlite(
 ) -> None:
     init_ocr_cache_db(db_path)
     now_text = _now_text()
+    archive_stale_ocr_entry(db_path, relative_path, file_md5, now_text=now_text)
     conn = sqlite3.connect(db_path)
     try:
         conn.execute(
@@ -998,6 +1104,7 @@ def sqlite_ocr_text_detector_factory(
         operation = entry.get("operation") if entry is not None else None
         now_text = _now_text()
         with db_lock:
+            archive_stale_ocr_entry(db_path, image.relative_path, file_md5, now_text=now_text)
             conn = sqlite3.connect(db_path)
             try:
                 conn.execute(
@@ -2945,6 +3052,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         write_cumulative_report(findings, counts)
     log_step(f"检查完成: findings={len(findings)} output={args.output}")
     print(f"检查完成: {len(findings)} 项，输出: {args.output}")
+    deleted_archives = cleanup_ocr_cache_archive(
+        Path(args.ocr_cache_db),
+        retention_days=OCR_ARCHIVE_RETENTION_DAYS,
+    )
+    if deleted_archives:
+        log_step(f"OCR 归档清理完成: deleted={deleted_archives}")
     if args.serve_report:
         return serve_report(
             output_path,

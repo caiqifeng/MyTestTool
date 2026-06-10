@@ -1,6 +1,7 @@
 import datetime as dt
 import io
 import os
+import sqlite3
 import tempfile
 import time
 import unittest
@@ -8,18 +9,22 @@ from pathlib import Path
 from unittest.mock import patch
 
 from check_i18n_images import (
+    BEIJING_TZ,
     DEFAULT_THUMBNAIL_ISSUES,
     Finding,
     ImageFile,
     _filter_whitelisted_files,
     _load_config_pairs,
+    archive_stale_ocr_entry,
     apply_max_file_sample,
     compare_category,
+    cleanup_ocr_cache_archive,
     default_config_path,
     default_ocr_cache_db_path,
     default_output_path,
     enrich_findings_with_translation,
     format_progress_line,
+    init_ocr_cache_db,
     migrate_ocr_json_to_sqlite,
     ocr_text_detector_factory,
     main,
@@ -1352,8 +1357,6 @@ class CheckI18nImagesTest(unittest.TestCase):
             count = migrate_ocr_json_to_sqlite(json_path, db_path)
 
             self.assertEqual(count, 1)
-            import sqlite3
-
             conn = sqlite3.connect(db_path)
             try:
                 row = conn.execute(
@@ -1389,8 +1392,6 @@ class CheckI18nImagesTest(unittest.TestCase):
 
             migrate_ocr_json_to_sqlite(json_path, db_path)
 
-            import sqlite3
-
             conn = sqlite3.connect(db_path)
             try:
                 columns = [row[1] for row in conn.execute("PRAGMA table_info(ocr_cache)").fetchall()]
@@ -1403,6 +1404,145 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("has_cn", columns)
             self.assertEqual(rows["SampleOnly/chinese.tga"], (1, 1))
             self.assertEqual(rows["SampleOnly/ascii.tga"], (1, 0))
+
+    def test_sqlite_cache_archives_old_md5_when_same_path_changes(self):
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "cache.db"
+            init_ocr_cache_db(db)
+            conn = sqlite3.connect(db)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO ocr_cache(relative_path, md5, has_text, has_cn, test_str, operation, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("ui/a.tga", "old-md5", 1, 1, cn(r"\u65e7\u56fe"), "ignore", "2026-06-01 00:00:00 +0800"),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            archive_stale_ocr_entry(db, "ui/a.tga", "new-md5", now_text="2026-06-10 00:00:00 +0800")
+
+            conn = sqlite3.connect(db)
+            try:
+                archived = conn.execute(
+                    "SELECT relative_path, md5, test_str, operation, archived_at, archived_at_epoch FROM ocr_cache_archive"
+                ).fetchone()
+            finally:
+                conn.close()
+
+            self.assertEqual(
+                archived,
+                (
+                    "ui/a.tga",
+                    "old-md5",
+                    cn(r"\u65e7\u56fe"),
+                    "ignore",
+                    "2026-06-10 00:00:00 +0800",
+                    int(dt.datetime(2026, 6, 10, tzinfo=BEIJING_TZ).timestamp()),
+                ),
+            )
+
+    def test_sqlite_cache_does_not_archive_same_md5_or_missing_old_record(self):
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "cache.db"
+            init_ocr_cache_db(db)
+            conn = sqlite3.connect(db)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO ocr_cache(relative_path, md5, has_text, has_cn, test_str, operation, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("ui/a.tga", "same-md5", 1, 1, "same", None, "2026-06-01 00:00:00 +0800"),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            same_md5_archived = archive_stale_ocr_entry(db, "ui/a.tga", "same-md5")
+            missing_archived = archive_stale_ocr_entry(db, "ui/missing.tga", "new-md5")
+
+            conn = sqlite3.connect(db)
+            try:
+                archive_count = conn.execute("SELECT COUNT(*) FROM ocr_cache_archive").fetchone()[0]
+            finally:
+                conn.close()
+
+            self.assertFalse(same_md5_archived)
+            self.assertFalse(missing_archived)
+            self.assertEqual(archive_count, 0)
+
+    def test_cleanup_ocr_archive_deletes_records_older_than_retention(self):
+        with tempfile.TemporaryDirectory() as td:
+            db = Path(td) / "cache.db"
+            init_ocr_cache_db(db)
+            old_text = "2026-06-09 00:00:00 +0800"
+            new_text = "2026-01-01 00:00:00 +0800"
+            conn = sqlite3.connect(db)
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO ocr_cache_archive(
+                        relative_path, md5, has_text, has_cn, test_str, operation, updated_at, archived_at, archived_at_epoch
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("old.tga", "old", 1, 1, "old", None, old_text, old_text, 1),
+                )
+                conn.execute(
+                    """
+                    INSERT INTO ocr_cache_archive(
+                        relative_path, md5, has_text, has_cn, test_str, operation, updated_at, archived_at, archived_at_epoch
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    ("new.tga", "new", 1, 1, "new", None, new_text, new_text, int(dt.datetime(2026, 6, 9, tzinfo=BEIJING_TZ).timestamp())),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
+            deleted = cleanup_ocr_cache_archive(db, retention_days=30, now=dt.datetime(2026, 6, 10, tzinfo=BEIJING_TZ))
+
+            conn = sqlite3.connect(db)
+            try:
+                remaining = conn.execute("SELECT relative_path FROM ocr_cache_archive ORDER BY relative_path").fetchall()
+            finally:
+                conn.close()
+            self.assertEqual(deleted, 1)
+            self.assertEqual(remaining, [("new.tga",)])
+
+    def test_main_calls_cleanup_ocr_archive(self):
+        with tempfile.TemporaryDirectory() as td:
+            output = Path(td) / "out.html"
+            db_path = Path(td) / ".ocr_cache.db"
+            counts = {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}
+
+            with patch(
+                "check_i18n_images.default_ocr_cache_db_path", return_value=db_path
+            ), patch(
+                "check_i18n_images.collect_findings", return_value=([], counts)
+            ), patch(
+                "check_i18n_images._require_pillow_for_report"
+            ), patch(
+                "check_i18n_images.write_html_report"
+            ), patch(
+                "check_i18n_images.cleanup_ocr_cache_archive", return_value=0
+            ) as cleanup:
+                result = main([
+                    "--i18n",
+                    "missing-i18n",
+                    "--mainland",
+                    "missing-mainland",
+                    "--output",
+                    str(output),
+                    "--no-ocr",
+                ])
+
+            self.assertEqual(result, 0)
+            cleanup.assert_called_once_with(db_path, retention_days=30)
 
     def test_sqlite_ocr_cache_hit_exposes_ignore_operation_for_same_md5(self):
         with tempfile.TemporaryDirectory() as td:
