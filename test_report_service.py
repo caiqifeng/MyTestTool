@@ -1,4 +1,7 @@
 import json
+import sqlite3
+import urllib.error
+import urllib.request
 import os
 import tempfile
 import threading
@@ -7,6 +10,8 @@ import unittest
 import datetime as dt
 from pathlib import Path
 from unittest import mock
+
+import check_i18n_images
 
 from image_check_service.config import (
     DEFAULT_SERVICE_CONFIG,
@@ -24,6 +29,7 @@ from image_check_service.history import (
 from image_check_service.models import RunMetadata, ServiceConfig
 from image_check_service.runner import ReportRunner
 from image_check_service.scheduler import DailyScheduler, next_daily_run
+from image_check_service.web import build_console_html, create_server, status_payload
 
 
 class ReportServiceConfigTest(unittest.TestCase):
@@ -429,3 +435,194 @@ class ReportServiceSchedulerTest(unittest.TestCase):
 
         self.assertGreaterEqual(calls, 2)
         self.assertIn("scheduled failure", errors)
+
+
+class ReportServiceWebTest(unittest.TestCase):
+    def _request_json(self, url: str, method: str = "GET", data: dict[str, object] | None = None):
+        body = None if data is None else json.dumps(data).encode("utf-8")
+        request = urllib.request.Request(
+            url,
+            data=body,
+            method=method,
+            headers={"Content-Type": "application/json"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                payload = response.read().decode("utf-8")
+                return response.status, json.loads(payload)
+        except urllib.error.HTTPError as exc:
+            payload = exc.read().decode("utf-8")
+            return exc.code, json.loads(payload)
+
+    def test_status_payload_includes_latest_and_config_errors(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(Path(td) / "reports")
+            payload = status_payload(
+                config,
+                active_run_id=None,
+                next_run_text="2026-06-11 02:00:00",
+                config_errors=["bad"],
+            )
+
+            self.assertEqual(payload["status"], "idle")
+            self.assertEqual(payload["next_scheduled_run"], "2026-06-11 02:00:00")
+            self.assertEqual(payload["config_errors"], ["bad"])
+            self.assertIn("latest_success_run_id", payload)
+
+    def test_console_html_contains_required_controls(self):
+        html = build_console_html()
+
+        self.assertIn("I18n Image Check Service", html)
+        self.assertIn("Run Now", html)
+        self.assertIn("/api/status", html)
+        self.assertIn("/api/runs", html)
+        self.assertIn("daily_run_time", html)
+
+    def test_http_status_and_manual_run(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.host = "127.0.0.1"
+            config.port = 0
+            config.reports_dir = str(root / "reports")
+            config_path = root / "service.json"
+
+            def fake_check(output_path: Path, log_path: Path) -> dict[str, int]:
+                output_path.write_text("<html>ok</html>", encoding="utf-8")
+                log_path.write_text("ok", encoding="utf-8")
+                return {"total": 1}
+
+            runner = ReportRunner(config, check_callable=fake_check)
+            with mock.patch("image_check_service.runner.check_i18n_images.cleanup_ocr_cache_archive"):
+                server = create_server(config, config_path, runner, lambda: "2026-06-11 02:00:00")
+                config.port = server.server_address[1]
+                thread = threading.Thread(target=server.serve_forever, daemon=True)
+                thread.start()
+                base_url = f"http://127.0.0.1:{server.server_address[1]}"
+                try:
+                    status, payload = self._request_json(f"{base_url}/api/status")
+                    self.assertEqual(status, 200)
+                    self.assertEqual(payload["status"], "idle")
+
+                    status, payload = self._request_json(f"{base_url}/api/runs", method="POST")
+                    self.assertEqual(status, 202)
+                    self.assertTrue(payload["ok"])
+
+                    status, payload = self._request_json(f"{base_url}/api/status")
+                    self.assertEqual(status, 200)
+                    self.assertEqual(payload["latest_success_run_id"], payload["successful_runs"][0]["run_id"])
+                finally:
+                    server.shutdown()
+                    server.server_close()
+                    thread.join(timeout=5)
+
+    def test_http_config_rejects_invalid_without_mutating_current_config(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.host = "127.0.0.1"
+            config.port = 0
+            config.reports_dir = str(root / "reports")
+            config_path = root / "service.json"
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            server = create_server(config, config_path, runner, lambda: None)
+            config.port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                status, payload = self._request_json(
+                    f"{base_url}/api/config",
+                    method="POST",
+                    data={"daily_run_time": "99:99"},
+                )
+
+                self.assertEqual(status, 400)
+                self.assertFalse(payload["ok"])
+                self.assertEqual(config.daily_run_time, "02:00")
+                self.assertFalse(config_path.exists())
+
+                status, payload = self._request_json(
+                    f"{base_url}/api/config",
+                    method="POST",
+                    data={"daily_run_time": "03:30", "history_success_limit": 7},
+                )
+
+                self.assertEqual(status, 200)
+                self.assertTrue(payload["ok"])
+                self.assertEqual(config.daily_run_time, "03:30")
+                self.assertEqual(config.history_success_limit, 7)
+                self.assertTrue(config_path.exists())
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_http_ocr_operation_accepts_report_payload_and_writes_sqlite_cache(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.host = "127.0.0.1"
+            config.port = 0
+            config.reports_dir = str(root / "reports")
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            server = create_server(config, root / "service.json", runner, lambda: None)
+            config.port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                with mock.patch("image_check_service.web.check_i18n_images.OCR_CACHE_DB_FILE", str(root / ".ocr_cache.db")):
+                    status, payload = self._request_json(
+                        f"{base_url}/api/ocr-cache/operation",
+                        method="POST",
+                        data={"relativePath": "a/b.png", "md5": "abc", "operation": "ignore"},
+                    )
+
+                self.assertEqual(status, 200)
+                self.assertTrue(payload["ok"])
+                conn = sqlite3.connect(root / ".ocr_cache.db")
+                try:
+                    row = conn.execute(
+                        "SELECT md5, operation FROM ocr_cache WHERE relative_path=?",
+                        ("a/b.png",),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                self.assertEqual(row, ("abc", "ignore"))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_http_reports_serves_files_and_rejects_traversal(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            reports_dir = root / "reports"
+            report = reports_dir / "runs" / "run1" / "ui_image_check_report.html"
+            report.parent.mkdir(parents=True)
+            report.write_text("<html>report</html>", encoding="utf-8")
+            (root / "secret.txt").write_text("secret", encoding="utf-8")
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.host = "127.0.0.1"
+            config.port = 0
+            config.reports_dir = str(reports_dir)
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            server = create_server(config, root / "service.json", runner, lambda: None)
+            config.port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                with urllib.request.urlopen(f"{base_url}/reports/runs/run1/ui_image_check_report.html", timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertIn("report", response.read().decode("utf-8"))
+
+                with self.assertRaises(urllib.error.HTTPError) as ctx:
+                    urllib.request.urlopen(f"{base_url}/reports/../secret.txt", timeout=5)
+                self.assertEqual(ctx.exception.code, 404)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
