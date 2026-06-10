@@ -1313,6 +1313,17 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertEqual(data["SampleOnly/source.tga"]["md5"], "abc123")
             self.assertEqual(data["SampleOnly/source.tga"]["operation"], "ignore")
 
+    def test_update_ocr_cache_operation_allows_clearing_ignore_marker(self):
+        with tempfile.TemporaryDirectory() as td:
+            cache_path = Path(td) / "ocr_cache.json"
+            update_ocr_cache_operation(cache_path, "SampleOnly/source.tga", "abc123", "ignore")
+
+            update_ocr_cache_operation(cache_path, "SampleOnly/source.tga", "abc123", "")
+
+            data = __import__("json").loads(cache_path.read_text(encoding="utf-8"))
+            self.assertEqual(data["SampleOnly/source.tga"]["md5"], "abc123")
+            self.assertEqual(data["SampleOnly/source.tga"]["operation"], "")
+
     def test_html_report_uses_sqlite_cache_name_when_configured(self):
         with tempfile.TemporaryDirectory() as td:
             out = Path(td) / "report.html"
@@ -1328,7 +1339,7 @@ class CheckI18nImagesTest(unittest.TestCase):
 
             content = out.read_text(encoding="utf-8")
             self.assertIn("const OCR_CACHE_FILE_NAME = '.ocr_cache.db';", content)
-            self.assertIn("file://", content)
+            self.assertIn("请确认当前页面通过本地报告服务或管理服务的 HTTP 地址打开", content)
             self.assertNotIn("readOcrCache", content)
             self.assertNotIn("writeOcrCache", content)
 
@@ -1565,6 +1576,23 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertEqual(findings[0].issue, "mainland_new_with_text")
             self.assertEqual(findings[0].operation, "ignore")
             self.assertEqual(findings[0].mainland_md5, md5)
+
+    def test_update_ocr_cache_operation_sqlite_allows_clearing_ignore_marker(self):
+        with tempfile.TemporaryDirectory() as td:
+            db_path = Path(td) / "ocr_cache.db"
+            update_ocr_cache_operation_sqlite(db_path, "SampleOnly/source.tga", "abc123", "ignore")
+
+            update_ocr_cache_operation_sqlite(db_path, "SampleOnly/source.tga", "abc123", "")
+
+            conn = sqlite3.connect(db_path)
+            try:
+                row = conn.execute(
+                    "SELECT md5, operation FROM ocr_cache WHERE relative_path=?",
+                    ("SampleOnly/source.tga",),
+                ).fetchone()
+            finally:
+                conn.close()
+            self.assertEqual(row, ("abc123", ""))
 
     def test_sqlite_ocr_cache_hit_with_only_ascii_text_is_no_text(self):
         with tempfile.TemporaryDirectory() as td:
@@ -2080,7 +2108,9 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertNotIn(f"<th onclick=\"sortTable(9)\">{cn(r'\u8bc6\u522b\u6587\u5b57')}", header_row)
             self.assertIn(cn(r"\u5df2\u5ffd\u7565"), content)
             self.assertIn("operationStatus", content)
-            self.assertIn("ignoreFinding", content)
+            self.assertIn("toggleIgnoreFinding", content)
+            self.assertIn(cn(r"\u53d6\u6d88\u5ffd\u7565"), content)
+            self.assertIn("operationApiCandidates", content)
             self.assertNotIn("entry.operation = OPERATION_IGNORE", content)
             self.assertNotIn("readOcrCache", content)
             self.assertNotIn("writeOcrCache", content)
@@ -2146,7 +2176,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn('"className": "mainland-missing"', content)
             self.assertIn('"canIgnore": false', content)
             self.assertIn('"missing detail", ""]', content)
-            self.assertNotIn('onclick=\\"ignoreFinding(1)\\"', content)
+            self.assertNotIn('onclick=\\"toggleIgnoreFinding(1)\\"', content)
             self.assertNotIn('>忽略</button>', content)
 
     def test_write_html_report_does_not_show_ignore_button_for_changed_files(self):
@@ -2180,7 +2210,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn('"className": "mainland-changed"', content)
             self.assertIn('"canIgnore": false', content)
             self.assertIn('"changed detail", ""]', content)
-            self.assertNotIn('onclick=\\"ignoreFinding(1)\\"', content)
+            self.assertNotIn('onclick=\\"toggleIgnoreFinding(1)\\"', content)
 
     def test_write_html_report_groups_details_by_pair_type_tabs_without_category_column(self):
         try:

@@ -64,6 +64,7 @@ TEXT_DETAIL = "\u8bf4\u660e"
 TEXT_OPERATION = "\u64cd\u4f5c"
 TEXT_IGNORE = "\u5ffd\u7565"
 TEXT_IGNORED = "\u5df2\u5ffd\u7565"
+TEXT_CLEAR_IGNORE = "\u53d6\u6d88\u5ffd\u7565"
 TEXT_I18N = "\u56fd\u9645\u7248"
 TEXT_MAINLAND = "\u9646\u7248"
 TEXT_NONE = "\u65e0"
@@ -1907,16 +1908,16 @@ def write_html_report(
         i18n_dt = format_dt(finding.i18n_modified_at)
         operation = finding.operation or ""
         can_ignore = finding.issue == "mainland_new_with_text" and bool(finding.mainland_md5)
-        operation_label = TEXT_IGNORED if operation == OCR_OPERATION_IGNORE else TEXT_IGNORE
+        operation_label = TEXT_CLEAR_IGNORE if operation == OCR_OPERATION_IGNORE else TEXT_IGNORE
         operation_class = "ignored" if operation == OCR_OPERATION_IGNORE else ""
         if can_ignore:
             operation_cell = (
                 f'<td><button class="operation-button {operation_class}" type="button" '
-                f'onclick="ignoreFinding({index})">{html.escape(operation_label)}</button></td>'
+                f'onclick="toggleIgnoreFinding({index})">{html.escape(operation_label)}</button></td>'
             )
         else:
             operation_cell = "<td></td>"
-        operation_filter_label = operation_label if can_ignore else ""
+        operation_filter_label = TEXT_IGNORED if can_ignore and operation == OCR_OPERATION_IGNORE else (TEXT_IGNORE if can_ignore else "")
         rows.append({
             "rowIndex": index,
             "className": issue_class,
@@ -2158,7 +2159,7 @@ tr.mainland-new-with-text[title],tr.mainland-new-with-chars[title] {{ cursor:hel
 .thumb-button img {{ max-width:166px; max-height:108px; object-fit:contain; }}
 .operation-button {{ border:1px solid #cbd5e1; background:white; color:#334155; border-radius:5px; padding:6px 10px; font-size:13px; cursor:pointer; white-space:nowrap; }}
 .operation-button:hover {{ border-color:#2563eb; color:#1d4ed8; }}
-.operation-button.ignored {{ border-color:#94a3b8; background:#e2e8f0; color:#475569; cursor:default; }}
+.operation-button.ignored {{ border-color:#94a3b8; background:#e2e8f0; color:#475569; cursor:pointer; }}
 .overlay {{ position:fixed; inset:0; background:rgba(15,23,42,.82); display:none; align-items:center; justify-content:center; padding:32px; z-index:20; }}
 .overlay.open {{ display:flex; }}
 .preview {{ max-width:96vw; max-height:92vh; background:#fff; border-radius:8px; padding:12px; }}
@@ -2341,7 +2342,8 @@ function operationStatus(operation) {{
 function buildOperationCell(row) {{
   if (!row.canIgnore) return '<td></td>';
   const ignored = row.operation === OPERATION_IGNORE;
-  return `<td><button class="operation-button${{ignored ? ' ignored' : ''}}" type="button" onclick="ignoreFinding(${{row.rowIndex}})">${{ignored ? '{TEXT_IGNORED}' : '{TEXT_IGNORE}'}}</button></td>`;
+  const label = ignored ? '{TEXT_CLEAR_IGNORE}' : '{TEXT_IGNORE}';
+  return `<td><button class="operation-button${{ignored ? ' ignored' : ''}}" type="button" onclick="toggleIgnoreFinding(${{row.rowIndex}})">${{label}}</button></td>`;
 }}
 function updateRowOperation(row, operation) {{
   if (!row.canIgnore) {{
@@ -2357,33 +2359,48 @@ function updateRowOperation(row, operation) {{
 function findRowByIndex(rowIndex) {{
   return allRows.find(row => Number(row.rowIndex) === Number(rowIndex));
 }}
-async function writeIgnoreOperation(row) {{
-  const response = await fetch(OCR_CACHE_OPERATION_API, {{
-    method: 'POST',
-    headers: {{ 'Content-Type': 'application/json' }},
-    body: JSON.stringify({{
-      relativePath: row.relativePath,
-      md5: row.mainlandMd5,
-      operation: OPERATION_IGNORE,
-    }}),
-  }});
-  if (!response.ok) {{
-    throw new Error(`本地报告服务写入失败：${{response.status}}`);
-  }}
+function operationApiCandidates() {{
+  const relative = 'api/ocr-cache/operation';
+  return Array.from(new Set([relative, OCR_CACHE_OPERATION_API]));
 }}
-async function ignoreFinding(rowIndex) {{
+async function writeIgnoreOperation(row, operation) {{
+  let lastError = null;
+  for (const apiUrl of operationApiCandidates()) {{
+    try {{
+      const response = await fetch(apiUrl, {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{
+          relativePath: row.relativePath,
+          md5: row.mainlandMd5,
+          operation,
+        }}),
+      }});
+      if (!response.ok) {{
+        lastError = new Error(`本地报告服务写入失败：${{response.status}}`);
+        continue;
+      }}
+      return;
+    }} catch (error) {{
+      lastError = error;
+    }}
+  }}
+  throw lastError || new Error('本地报告服务写入失败');
+}}
+async function toggleIgnoreFinding(rowIndex) {{
   const row = findRowByIndex(rowIndex);
-  if (!row || !row.canIgnore || row.operation === OPERATION_IGNORE) return;
+  if (!row || !row.canIgnore) return;
   if (!row.relativePath || !row.mainlandMd5) {{
     alert('缺少缓存键或 md5，无法写入忽略标识。');
     return;
   }}
+  const nextOperation = row.operation === OPERATION_IGNORE ? '' : OPERATION_IGNORE;
   try {{
-    await writeIgnoreOperation(row);
-    updateRowOperation(row, OPERATION_IGNORE);
+    await writeIgnoreOperation(row, nextOperation);
+    updateRowOperation(row, nextOperation);
     filterTable();
   }} catch (error) {{
-    alert(`自动写入 ${{OCR_CACHE_FILE_NAME}} 失败：请不要用 file:// 直接打开，请用 --serve-report 启动的本地报告服务页面。${{error && error.message ? ' ' + error.message : ''}}`);
+    alert(`自动写入 ${{OCR_CACHE_FILE_NAME}} 失败：请确认当前页面通过本地报告服务或管理服务的 HTTP 地址打开，并且服务进程仍在运行。${{error && error.message ? ' ' + error.message : ''}}`);
   }}
 }}
 function htmlEscape(value) {{
@@ -2484,7 +2501,7 @@ def serve_report(
             super().__init__(*args, directory=str(root_dir), **kwargs)
 
         def do_POST(self) -> None:
-            if self.path.split("?", 1)[0] != "/api/ocr-cache/operation":
+            if not self.path.split("?", 1)[0].endswith("/api/ocr-cache/operation"):
                 self.send_error(404)
                 return
             try:

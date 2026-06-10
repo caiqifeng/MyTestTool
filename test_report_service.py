@@ -599,6 +599,43 @@ class ReportServiceWebTest(unittest.TestCase):
                 server.server_close()
                 thread.join(timeout=5)
 
+    def test_http_ocr_operation_accepts_nested_report_path_payload(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.host = "127.0.0.1"
+            config.port = 0
+            config.reports_dir = str(root / "reports")
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            server = create_server(config, root / "service.json", runner, lambda: None)
+            config.port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                with mock.patch("image_check_service.web.check_i18n_images.OCR_CACHE_DB_FILE", str(root / ".ocr_cache.db")):
+                    status, payload = self._request_json(
+                        f"{base_url}/reports/runs/run1/api/ocr-cache/operation",
+                        method="POST",
+                        data={"relativePath": "a/b.png", "md5": "abc", "operation": ""},
+                    )
+
+                self.assertEqual(status, 200)
+                self.assertTrue(payload["ok"])
+                conn = sqlite3.connect(root / ".ocr_cache.db")
+                try:
+                    row = conn.execute(
+                        "SELECT md5, operation FROM ocr_cache WHERE relative_path=?",
+                        ("a/b.png",),
+                    ).fetchone()
+                finally:
+                    conn.close()
+                self.assertEqual(row, ("abc", ""))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
     def test_http_reports_serves_files_and_rejects_traversal(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

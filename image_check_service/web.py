@@ -195,7 +195,7 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
             if parsed.path == "/api/config":
                 self._handle_config_update()
                 return
-            if parsed.path == "/api/ocr-cache/operation":
+            if parsed.path.endswith("/api/ocr-cache/operation"):
                 self._handle_ocr_operation()
                 return
             self.send_error(HTTPStatus.NOT_FOUND)
@@ -229,7 +229,7 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
         data = self._read_json()
         relative_path = str(data.get("relative_path") or data.get("relativePath") or "").strip()
         file_md5 = str(data.get("md5") or "").strip()
-        operation = str(data.get("operation") or check_i18n_images.OCR_OPERATION_IGNORE)
+        operation = str(data["operation"]) if "operation" in data else check_i18n_images.OCR_OPERATION_IGNORE
         if not relative_path or not file_md5:
             self._send_json({"ok": False, "error": "relative_path and md5 are required"}, status=HTTPStatus.BAD_REQUEST)
             return
