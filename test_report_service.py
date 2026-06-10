@@ -1,8 +1,10 @@
 import json
 import os
 import tempfile
+import threading
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from image_check_service.config import (
     DEFAULT_SERVICE_CONFIG,
@@ -18,6 +20,7 @@ from image_check_service.history import (
     write_metadata,
 )
 from image_check_service.models import RunMetadata, ServiceConfig
+from image_check_service.runner import ReportRunner
 
 
 class ReportServiceConfigTest(unittest.TestCase):
@@ -160,3 +163,163 @@ class ReportServiceHistoryTest(unittest.TestCase):
 
             self.assertTrue(old_run_dir.exists())
             self.assertTrue((old_run_dir / "keep.txt").exists())
+
+
+class ReportServiceRunnerTest(unittest.TestCase):
+    def test_runner_success_updates_latest_and_writes_report(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(root / "reports")
+            config.check_config = str(root / "check_config.json")
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+
+            def fake_check(output_path: Path, log_path: Path) -> dict[str, int]:
+                output_path.write_text("<html>ok</html>", encoding="utf-8")
+                (output_path.parent / "ui_image_check_report_assets").mkdir()
+                log_path.write_text("ran", encoding="utf-8")
+                return {"i18n_count": 1, "mainland_count": 1}
+
+            with mock.patch("image_check_service.runner.check_i18n_images.cleanup_ocr_cache_archive") as cleanup:
+                metadata = ReportRunner(config, check_callable=fake_check).run_once("manual")
+
+            self.assertEqual(metadata.status, "success")
+            self.assertEqual(metadata.counts["i18n_count"], 1)
+            index = load_index(Path(config.reports_dir))
+            self.assertEqual(index["latest_success_run_id"], metadata.run_id)
+            self.assertTrue(Path(metadata.report_path).exists())
+            cleanup.assert_called_once()
+            self.assertEqual(cleanup.call_args.args[1], config.ocr_archive_retention_days)
+
+    def test_runner_failure_does_not_replace_previous_latest(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(root / "reports")
+            config.check_config = str(root / "check_config.json")
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+
+            def success(output_path: Path, log_path: Path) -> dict[str, int]:
+                output_path.write_text("<html>ok</html>", encoding="utf-8")
+                log_path.write_text("ok", encoding="utf-8")
+                return {}
+
+            with mock.patch("image_check_service.runner.check_i18n_images.cleanup_ocr_cache_archive"):
+                runner = ReportRunner(config, check_callable=success)
+                first = runner.run_once("manual")
+
+            def failure(output_path: Path, log_path: Path) -> dict[str, int]:
+                log_path.write_text("boom", encoding="utf-8")
+                raise RuntimeError("boom")
+
+            runner = ReportRunner(config, check_callable=failure)
+            second = runner.run_once("manual")
+
+            index = load_index(Path(config.reports_dir))
+            self.assertEqual(first.status, "success")
+            self.assertEqual(second.status, "failed")
+            self.assertEqual(index["latest_success_run_id"], first.run_id)
+            self.assertIn("boom", second.error_summary)
+
+    def test_runner_cleanup_failure_keeps_success_and_logs_warning(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(root / "reports")
+            config.check_config = str(root / "check_config.json")
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+
+            def success(output_path: Path, log_path: Path) -> dict[str, int]:
+                output_path.write_text("<html>ok</html>", encoding="utf-8")
+                log_path.write_text("ok", encoding="utf-8")
+                return {}
+
+            with mock.patch("image_check_service.runner.check_i18n_images.cleanup_ocr_cache_archive"):
+                first = ReportRunner(config, check_callable=success).run_once("manual")
+
+            with mock.patch(
+                "image_check_service.runner.check_i18n_images.cleanup_ocr_cache_archive",
+                side_effect=RuntimeError("cleanup failed"),
+            ):
+                second = ReportRunner(config, check_callable=success).run_once("manual")
+
+            index = load_index(Path(config.reports_dir))
+            self.assertEqual(first.status, "success")
+            self.assertEqual(second.status, "success")
+            self.assertEqual(index["latest_success_run_id"], second.run_id)
+            self.assertIn("cleanup failed", Path(second.log_path).read_text(encoding="utf-8"))
+
+    def test_runner_prevents_concurrent_runs_and_releases_active_id(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(Path(td) / "reports")
+            config.check_config = str(Path(td) / "check_config.json")
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+            started = threading.Event()
+            release = threading.Event()
+            result: list[RunMetadata] = []
+
+            def slow_check(output_path: Path, log_path: Path) -> dict[str, int]:
+                started.set()
+                release.wait(timeout=5)
+                output_path.write_text("<html>ok</html>", encoding="utf-8")
+                log_path.write_text("ok", encoding="utf-8")
+                return {}
+
+            runner = ReportRunner(config, check_callable=slow_check)
+            with mock.patch("image_check_service.runner.check_i18n_images.cleanup_ocr_cache_archive"):
+                thread = threading.Thread(target=lambda: result.append(runner.run_once("manual")))
+                thread.start()
+                self.assertTrue(started.wait(timeout=5))
+                active_id = runner.active_run_id
+                self.assertIsNotNone(active_id)
+
+                with self.assertRaises(RuntimeError) as ctx:
+                    runner.run_once("manual")
+
+                self.assertIn(str(active_id), str(ctx.exception))
+                release.set()
+                thread.join(timeout=5)
+
+            self.assertFalse(thread.is_alive())
+            self.assertIsNone(runner.active_run_id)
+            self.assertEqual(result[0].status, "success")
+
+    def test_runner_releases_active_id_after_check_failure(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(Path(td) / "reports")
+            config.check_config = str(Path(td) / "check_config.json")
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+
+            def failure(output_path: Path, log_path: Path) -> dict[str, int]:
+                raise RuntimeError("boom")
+
+            runner = ReportRunner(config, check_callable=failure)
+
+            metadata = runner.run_once("manual")
+
+            self.assertEqual(metadata.status, "failed")
+            self.assertIsNone(runner.active_run_id)
+
+    def test_default_checker_captures_stdout_and_stderr(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(Path(td) / "reports")
+            config.check_config = str(Path(td) / "check_config.json")
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+
+            def fake_main(args: list[str]) -> int:
+                print("stdout message")
+                print("stderr message", file=__import__("sys").stderr)
+                return 0
+
+            log_path = Path(td) / "run.log"
+            with mock.patch("image_check_service.runner.check_i18n_images.main", side_effect=fake_main):
+                counts = runner._run_existing_checker(Path(td) / "report.html", log_path)
+
+            log_text = log_path.read_text(encoding="utf-8")
+            self.assertEqual(counts, {})
+            self.assertIn("stdout message", log_text)
+            self.assertIn("stderr message", log_text)
