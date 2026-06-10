@@ -2174,6 +2174,9 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertEqual(positions, sorted(positions))
             self.assertNotIn(f"<th onclick=\"sortTable(9)\">{cn(r'\u8bc6\u522b\u6587\u5b57')}", header_row)
             self.assertIn(cn(r"\u5df2\u5ffd\u7565"), content)
+            self.assertIn(cn(r"\u5f85\u5904\u7406"), content)
+            self.assertIn(cn(r"\u6807\u8bb0\u4e3a\u5df2\u5ffd\u7565"), content)
+            self.assertNotIn(f"<option>{cn(r'\u5ffd\u7565')}</option>", content)
             self.assertIn("operationStatus", content)
             self.assertIn("toggleIgnoreFinding", content)
             self.assertIn(cn(r"\u53d6\u6d88\u5ffd\u7565"), content)
@@ -2211,7 +2214,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn("function dateInRange(value, start, end)", content)
             self.assertIn("collectDateRanges()", content)
 
-    def test_write_html_report_does_not_show_ignore_button_for_missing_files(self):
+    def test_write_html_report_allows_ignoring_missing_files(self):
         try:
             from PIL import Image
         except ImportError:
@@ -2241,12 +2244,12 @@ class CheckI18nImagesTest(unittest.TestCase):
             content = out.read_text(encoding="utf-8")
             self.assertIn(cn(r"\u64cd\u4f5c"), content)
             self.assertIn('"className": "mainland-missing"', content)
-            self.assertIn('"canIgnore": false', content)
-            self.assertIn('"missing detail", ""]', content)
-            self.assertNotIn('onclick=\\"toggleIgnoreFinding(1)\\"', content)
-            self.assertNotIn('>忽略</button>', content)
+            self.assertIn('"canIgnore": true', content)
+            self.assertIn('"missing detail", "待处理"]', content)
+            self.assertIn('onclick=\\"toggleIgnoreFinding(1)\\"', content)
+            self.assertIn(cn(r"\u6807\u8bb0\u4e3a\u5df2\u5ffd\u7565"), content)
 
-    def test_write_html_report_does_not_show_ignore_button_for_changed_files(self):
+    def test_write_html_report_allows_ignoring_changed_files(self):
         try:
             from PIL import Image
         except ImportError:
@@ -2275,9 +2278,9 @@ class CheckI18nImagesTest(unittest.TestCase):
 
             content = out.read_text(encoding="utf-8")
             self.assertIn('"className": "mainland-changed"', content)
-            self.assertIn('"canIgnore": false', content)
-            self.assertIn('"changed detail", ""]', content)
-            self.assertNotIn('onclick=\\"toggleIgnoreFinding(1)\\"', content)
+            self.assertIn('"canIgnore": true', content)
+            self.assertIn('"changed detail", "待处理"]', content)
+            self.assertIn('onclick=\\"toggleIgnoreFinding(1)\\"', content)
 
     def test_write_html_report_groups_details_by_pair_type_tabs_without_category_column(self):
         try:

@@ -38,6 +38,7 @@ OCR_CACHE_FILE = ".ocr_cache.json"
 OCR_CACHE_DB_FILE = ".ocr_cache.db"
 OCR_ARCHIVE_RETENTION_DAYS = 30
 OCR_OPERATION_IGNORE = "ignore"
+IGNORABLE_ISSUES = {"mainland_missing", "mainland_changed", "mainland_new_with_text"}
 DEFAULT_THUMBNAIL_ISSUES = {
     "__has_detail__",
 }
@@ -62,7 +63,8 @@ TEXT_I18N_MODIFIED = "\u56fd\u9645\u7248\u4fee\u6539\u65f6\u95f4"
 TEXT_MAINLAND_MODIFIED = "\u9646\u7248\u4fee\u6539\u65f6\u95f4"
 TEXT_DETAIL = "\u8bf4\u660e"
 TEXT_OPERATION = "\u64cd\u4f5c"
-TEXT_IGNORE = "\u5ffd\u7565"
+TEXT_PENDING = "\u5f85\u5904\u7406"
+TEXT_MARK_IGNORED = "\u6807\u8bb0\u4e3a\u5df2\u5ffd\u7565"
 TEXT_IGNORED = "\u5df2\u5ffd\u7565"
 TEXT_CLEAR_IGNORE = "\u53d6\u6d88\u5ffd\u7565"
 TEXT_I18N = "\u56fd\u9645\u7248"
@@ -1907,8 +1909,16 @@ def write_html_report(
         mainland_dt = format_dt(finding.mainland_modified_at)
         i18n_dt = format_dt(finding.i18n_modified_at)
         operation = finding.operation or ""
-        can_ignore = finding.issue == "mainland_new_with_text" and bool(finding.mainland_md5)
-        operation_label = TEXT_CLEAR_IGNORE if operation == OCR_OPERATION_IGNORE else TEXT_IGNORE
+        can_ignore = finding.issue in IGNORABLE_ISSUES
+        operation_md5 = finding.mainland_md5 or ""
+        if can_ignore and not operation_md5:
+            operation_source = finding.mainland_path or finding.i18n_path
+            if operation_source:
+                try:
+                    operation_md5 = _file_md5(operation_source)
+                except OSError:
+                    operation_md5 = ""
+        operation_label = TEXT_CLEAR_IGNORE if operation == OCR_OPERATION_IGNORE else TEXT_MARK_IGNORED
         operation_class = "ignored" if operation == OCR_OPERATION_IGNORE else ""
         if can_ignore:
             operation_cell = (
@@ -1917,7 +1927,7 @@ def write_html_report(
             )
         else:
             operation_cell = "<td></td>"
-        operation_filter_label = TEXT_IGNORED if can_ignore and operation == OCR_OPERATION_IGNORE else (TEXT_IGNORE if can_ignore else "")
+        operation_filter_label = TEXT_IGNORED if can_ignore and operation == OCR_OPERATION_IGNORE else (TEXT_PENDING if can_ignore else "")
         rows.append({
             "rowIndex": index,
             "className": issue_class,
@@ -1927,7 +1937,7 @@ def write_html_report(
             "operation": operation,
             "canIgnore": can_ignore,
             "relativePath": finding.relative_path,
-            "mainlandMd5": finding.mainland_md5 or "",
+            "mainlandMd5": operation_md5,
             "cells": [
                 f'<td class="row-index">{index}</td>',
                 f'<td><span class="issue-badge {issue_class}">{html.escape(issue_label)}</span></td>',
@@ -2207,7 +2217,7 @@ tr.mainland-new-with-text[title],tr.mainland-new-with-chars[title] {{ cursor:hel
           <th><div class="date-range"><input type="date" data-date-col="5" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="5" data-date-bound="end" onchange="filterTable()"></div></th>
           <th><div class="date-range"><input type="date" data-date-col="6" data-date-bound="start" onchange="filterTable()"><span>\u81f3</span><input type="date" data-date-col="6" data-date-bound="end" onchange="filterTable()"></div></th>
           <th><input type="text" data-filter-col="7" oninput="filterTable()" placeholder="\u7b5b\u9009..."></th>
-          <th><select data-filter-col="8" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_IGNORE}</option><option>{TEXT_IGNORED}</option></select></th>
+          <th><select data-filter-col="8" onchange="filterTable()"><option value="">\u5168\u90e8</option><option>{TEXT_PENDING}</option><option>{TEXT_IGNORED}</option></select></th>
         </tr>
       </thead>
       <tbody></tbody>
@@ -2337,12 +2347,12 @@ function gotoPage(page) {{
   renderPage(page);
 }}
 function operationStatus(operation) {{
-  return operation === OPERATION_IGNORE ? '{TEXT_IGNORED}' : '{TEXT_IGNORE}';
+  return operation === OPERATION_IGNORE ? '{TEXT_IGNORED}' : '{TEXT_PENDING}';
 }}
 function buildOperationCell(row) {{
   if (!row.canIgnore) return '<td></td>';
   const ignored = row.operation === OPERATION_IGNORE;
-  const label = ignored ? '{TEXT_CLEAR_IGNORE}' : '{TEXT_IGNORE}';
+  const label = ignored ? '{TEXT_CLEAR_IGNORE}' : '{TEXT_MARK_IGNORED}';
   return `<td><button class="operation-button${{ignored ? ' ignored' : ''}}" type="button" onclick="toggleIgnoreFinding(${{row.rowIndex}})">${{label}}</button></td>`;
 }}
 function updateRowOperation(row, operation) {{
