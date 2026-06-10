@@ -2,7 +2,9 @@ import json
 import os
 import tempfile
 import threading
+import time
 import unittest
+import datetime as dt
 from pathlib import Path
 from unittest import mock
 
@@ -21,6 +23,7 @@ from image_check_service.history import (
 )
 from image_check_service.models import RunMetadata, ServiceConfig
 from image_check_service.runner import ReportRunner
+from image_check_service.scheduler import DailyScheduler, next_daily_run
 
 
 class ReportServiceConfigTest(unittest.TestCase):
@@ -323,3 +326,106 @@ class ReportServiceRunnerTest(unittest.TestCase):
             self.assertEqual(counts, {})
             self.assertIn("stdout message", log_text)
             self.assertIn("stderr message", log_text)
+
+
+class ReportServiceSchedulerTest(unittest.TestCase):
+    def test_next_daily_run_returns_today_when_time_is_future(self):
+        now = dt.datetime(2026, 6, 10, 1, 30)
+
+        result = next_daily_run("02:00", now)
+
+        self.assertEqual(result, dt.datetime(2026, 6, 10, 2, 0))
+
+    def test_next_daily_run_returns_tomorrow_when_time_has_passed(self):
+        now = dt.datetime(2026, 6, 10, 3, 0)
+
+        result = next_daily_run("02:00", now)
+
+        self.assertEqual(result, dt.datetime(2026, 6, 11, 2, 0))
+
+    def test_next_daily_run_returns_tomorrow_when_time_equals_now(self):
+        now = dt.datetime(2026, 6, 10, 2, 0)
+
+        result = next_daily_run("02:00", now)
+
+        self.assertEqual(result, dt.datetime(2026, 6, 11, 2, 0))
+
+    def test_scheduler_start_is_idempotent_and_stop_returns(self):
+        scheduler = DailyScheduler(
+            get_daily_run_time=lambda: "23:59",
+            run_scheduled=lambda: None,
+            poll_seconds=0.01,
+        )
+
+        scheduler.start()
+        first_thread = scheduler._thread
+        scheduler.start()
+
+        self.assertIs(scheduler._thread, first_thread)
+        self.assertIsNotNone(scheduler.next_run)
+        scheduler.stop()
+        self.assertFalse(first_thread.is_alive())
+
+    def test_scheduler_stop_interrupts_long_poll_sleep(self):
+        scheduler = DailyScheduler(
+            get_daily_run_time=lambda: "23:59",
+            run_scheduled=lambda: None,
+            poll_seconds=5.0,
+        )
+
+        scheduler.start()
+        self.assertIsNotNone(scheduler._thread)
+        scheduler.stop()
+
+        self.assertFalse(scheduler._thread.is_alive())
+
+    def test_scheduler_runs_when_due(self):
+        called = threading.Event()
+        current = dt.datetime(2026, 6, 10, 2, 0)
+        now_values = [current, dt.datetime(2026, 6, 10, 2, 1)]
+        scheduler = DailyScheduler(
+            get_daily_run_time=lambda: "02:01",
+            run_scheduled=lambda: called.set(),
+            poll_seconds=0.01,
+            now_provider=lambda: now_values.pop(0) if now_values else dt.datetime(2026, 6, 10, 2, 1),
+        )
+
+        scheduler.start()
+        self.assertTrue(called.wait(timeout=2))
+        scheduler.stop()
+
+    def test_scheduler_survives_run_and_error_handler_exceptions(self):
+        calls = 0
+        errors: list[str] = []
+        now_values = [
+            dt.datetime(2026, 6, 10, 2, 0),
+            dt.datetime(2026, 6, 10, 2, 1),
+            dt.datetime(2026, 6, 11, 2, 0),
+            dt.datetime(2026, 6, 11, 2, 1),
+        ]
+
+        def run_scheduled() -> None:
+            nonlocal calls
+            calls += 1
+            raise RuntimeError("scheduled failure")
+
+        def error_handler(exc: BaseException, formatted: str) -> None:
+            errors.append(str(exc))
+            raise RuntimeError("handler failure")
+
+        scheduler = DailyScheduler(
+            get_daily_run_time=lambda: "02:01",
+            run_scheduled=run_scheduled,
+            poll_seconds=0.01,
+            error_handler=error_handler,
+            now_provider=lambda: now_values.pop(0) if now_values else dt.datetime(2026, 6, 11, 2, 1),
+        )
+
+        scheduler.start()
+        deadline = dt.datetime.now() + dt.timedelta(seconds=2)
+        while calls < 2 and dt.datetime.now() < deadline:
+            time.sleep(0.01)
+        scheduler.stop()
+
+        self.assertGreaterEqual(calls, 2)
+        self.assertIn("scheduled failure", errors)
