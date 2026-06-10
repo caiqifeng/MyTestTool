@@ -534,11 +534,12 @@ class CheckI18nImagesTest(unittest.TestCase):
                 "--output",
                 "out.html",
                 "--no-ocr",
+                "--no-serve-report",
             ])
 
         self.assertEqual(captured["ocr_workers"], 1)
 
-    def test_real_cli_starts_report_service_once_after_first_report(self):
+    def test_real_cli_serves_report_after_file_check_by_default(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "i18n").mkdir()
@@ -574,14 +575,75 @@ class CheckI18nImagesTest(unittest.TestCase):
             ), patch("check_i18n_images.collect_findings", side_effect=fake_collect), patch(
                 "check_i18n_images._require_pillow_for_report"
             ), patch("check_i18n_images.write_html_report"), patch(
-                "check_i18n_images.start_report_service_once", return_value=True
-            ) as start_service:
+                "check_i18n_images.serve_report", return_value=0
+            ) as serve:
                 result = main(None)
 
             self.assertEqual(result, 0)
-            start_service.assert_called_once()
-            self.assertEqual(start_service.call_args.args[0], output)
-            self.assertEqual(start_service.call_args.kwargs["cache_db_path"], db_path)
+            serve.assert_called_once()
+            self.assertEqual(serve.call_args.args[0], output)
+            self.assertEqual(serve.call_args.kwargs["cache_db_path"], db_path)
+            self.assertEqual(serve.call_args.kwargs["host"], "0.0.0.0")
+            self.assertEqual(serve.call_args.kwargs["port"], 9080)
+
+    def test_main_defaults_to_serving_report_for_programmatic_cli_args(self):
+        with patch(
+            "check_i18n_images.collect_findings",
+            return_value=([], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}),
+        ), patch("check_i18n_images._require_pillow_for_report"), patch(
+            "check_i18n_images.write_html_report"
+        ), patch("check_i18n_images.serve_report", return_value=0) as serve:
+            result = main([
+                "--i18n",
+                "missing-i18n",
+                "--mainland",
+                "missing-mainland",
+                "--output",
+                "out.html",
+                "--no-ocr",
+            ])
+
+        self.assertEqual(result, 0)
+        serve.assert_called_once()
+        self.assertEqual(serve.call_args.kwargs["host"], "0.0.0.0")
+        self.assertEqual(serve.call_args.kwargs["port"], 9080)
+
+    def test_main_can_disable_default_report_service(self):
+        with patch(
+            "check_i18n_images.collect_findings",
+            return_value=([], {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}),
+        ), patch("check_i18n_images._require_pillow_for_report"), patch(
+            "check_i18n_images.write_html_report"
+        ), patch("check_i18n_images.serve_report") as serve:
+            result = main([
+                "--i18n",
+                "missing-i18n",
+                "--mainland",
+                "missing-mainland",
+                "--output",
+                "out.html",
+                "--no-ocr",
+                "--no-serve-report",
+            ])
+
+        self.assertEqual(result, 0)
+        serve.assert_not_called()
+
+    def test_main_report_server_only_skips_file_check_scan(self):
+        with patch("check_i18n_images.collect_findings") as collect, patch(
+            "check_i18n_images._require_pillow_for_report"
+        ) as require_pillow, patch("check_i18n_images.write_html_report") as write_report, patch(
+            "check_i18n_images.serve_report", return_value=0
+        ) as serve:
+            result = main(["--report-server-only", "--output", "out.html"])
+
+        self.assertEqual(result, 0)
+        collect.assert_not_called()
+        require_pillow.assert_not_called()
+        write_report.assert_not_called()
+        serve.assert_called_once()
+        self.assertEqual(serve.call_args.args[0], Path("out.html"))
+        self.assertEqual(serve.call_args.kwargs["host"], "0.0.0.0")
 
     def test_main_logs_version_and_current_time_before_running(self):
         fixed_now = dt.datetime(2026, 6, 4, 16, 1, 28, tzinfo=dt.timezone(dt.timedelta(hours=8)))
@@ -604,6 +666,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                 "--output",
                 "out.html",
                 "--no-ocr",
+                "--no-serve-report",
             ])
 
         self.assertIn("version = 1.0.2，time = 2026-06-04 16:01:28 +08:00", stderr.getvalue())
@@ -632,6 +695,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                         "--output",
                         "out.html",
                         "--no-ocr",
+                        "--no-serve-report",
                     ])
 
                 log_text = Path("Log/20260604_160128.log").read_text(encoding="utf-8")
@@ -660,6 +724,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                 "--output",
                 "out.html",
                 "--no-ocr",
+                "--no-serve-report",
             ])
 
         self.assertEqual(captured["ocr_workers"], 1)
@@ -694,7 +759,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                 with patch("check_i18n_images._require_pillow_for_report"), patch(
                     "check_i18n_images.write_html_report"
                 ):
-                    main(["--config", str(config), "--output", str(root / "out.html"), "--no-ocr"])
+                    main(["--config", str(config), "--output", str(root / "out.html"), "--no-ocr", "--no-serve-report"])
             finally:
                 os.chdir(old_cwd)
 
@@ -737,7 +802,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             ), patch("check_i18n_images.default_ocr_cache_db_path", return_value=cache_db), patch(
                 "check_i18n_images._require_pillow_for_report"
             ), patch("check_i18n_images.write_html_report") as write_report:
-                main([])
+                main(["--no-serve-report"])
 
         self.assertEqual(write_report.call_args.args[0], output)
         self.assertEqual(write_report.call_args.kwargs["ocr_cache_name"], ".ocr_cache.db")
@@ -792,7 +857,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                 ), patch("check_i18n_images.default_ocr_cache_db_path", return_value=cache_db), patch(
                     "check_i18n_images._require_pillow_for_report"
                 ), patch("check_i18n_images.write_html_report"):
-                    main(["--no-ocr"])
+                    main(["--no-ocr", "--no-serve-report"])
                 log_file = next((root / "Log").glob("*.log"))
                 log_text = log_file.read_text(encoding="utf-8")
             finally:
@@ -863,7 +928,7 @@ class CheckI18nImagesTest(unittest.TestCase):
             ) as compare, patch("check_i18n_images._require_pillow_for_report"), patch(
                 "check_i18n_images.write_html_report"
             ) as write_report:
-                main(["--config", str(config), "--output", str(root / "out.html"), "--no-ocr"])
+                main(["--config", str(config), "--output", str(root / "out.html"), "--no-ocr", "--no-serve-report"])
 
         self.assertEqual(write_report.call_count, 2)
         self.assertEqual(compare.call_args_list[0].args[0], "UI")
@@ -1343,7 +1408,8 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertNotIn("readOcrCache", content)
             self.assertNotIn("writeOcrCache", content)
 
-    def test_serve_report_defaults_to_port_9080(self):
+    def test_serve_report_defaults_to_lan_host_and_port_9080(self):
+        self.assertEqual(serve_report.__defaults__[-2], "0.0.0.0")
         self.assertEqual(serve_report.__defaults__[-1], 9080)
 
     def test_migrate_ocr_json_to_sqlite_preserves_text_and_operation(self):
@@ -1550,6 +1616,7 @@ class CheckI18nImagesTest(unittest.TestCase):
                     "--output",
                     str(output),
                     "--no-ocr",
+                    "--no-serve-report",
                 ])
 
             self.assertEqual(result, 0)

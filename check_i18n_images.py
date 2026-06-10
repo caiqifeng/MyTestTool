@@ -2488,7 +2488,7 @@ def serve_report(
     report_path: Path,
     cache_path: Path,
     cache_db_path: Path | None = None,
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = 9080,
 ) -> int:
     report_path = report_path.resolve()
@@ -2545,7 +2545,8 @@ def serve_report(
         allow_reuse_address = True
 
     with ReusableTCPServer((host, port), ReportHandler) as httpd:
-        url = f"http://{host}:{httpd.server_address[1]}/{report_path.name}"
+        display_host = "127.0.0.1" if host == "0.0.0.0" else host
+        url = f"http://{display_host}:{httpd.server_address[1]}/{report_path.name}"
         print(f"报告服务已启动: {url}")
         print(f"OCR 缓存: {cache_db_path or cache_path}")
         try:
@@ -2566,7 +2567,7 @@ def start_report_service_once(
     report_path: Path,
     cache_path: Path,
     cache_db_path: Path | None = None,
-    host: str = "127.0.0.1",
+    host: str = "0.0.0.0",
     port: int = 9080,
 ) -> bool:
     service_key = (host, port)
@@ -2986,19 +2987,48 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--serve-report",
         action="store_true",
-        help="生成报告后启动本地服务打开页面，使 HTML 可自动写回 OCR 缓存",
+        default=True,
+        help="生成报告后启动报告服务打开页面，使 HTML 可自动写回 OCR 缓存（默认启用）",
+    )
+    parser.add_argument(
+        "--no-serve-report",
+        dest="serve_report",
+        action="store_false",
+        help="生成报告后不启动报告服务",
+    )
+    parser.add_argument(
+        "--report-server-only",
+        action="store_true",
+        help="只启动报告服务，不执行文件检查遍历",
+    )
+    parser.add_argument(
+        "--serve-host",
+        default="0.0.0.0",
+        help="报告服务监听地址，默认 0.0.0.0，允许局域网通过本机 IP 访问",
     )
     parser.add_argument(
         "--serve-port",
         type=int,
         default=9080,
-        help="--serve-report 使用的本地端口，默认 9080",
+        help="报告服务端口，默认 9080",
     )
     args = parser.parse_args(argv)
 
     if args.output is None:
         args.output = str(default_output_path())
     args.ocr_cache_db = str(default_ocr_cache_db_path())
+    output_path = Path(args.output)
+    if output_path.suffix.lower() not in {".html", ".htm"}:
+        parser.error("输出文件只支持 .html / .htm")
+
+    if args.report_server_only:
+        return serve_report(
+            output_path,
+            Path(OCR_CACHE_FILE),
+            cache_db_path=Path(args.ocr_cache_db),
+            host=args.serve_host,
+            port=args.serve_port,
+        )
 
     if not args.config and not args.i18n and not args.mainland:
         args.config = str(default_config_path())
@@ -3011,10 +3041,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         args.config_pairs = _load_config_pairs(args.config) if args.config else None
     except Exception as exc:
         parser.error(f"配置文件读取异常: {args.config}: {exc}")
-
-    output_path = Path(args.output)
-    if output_path.suffix.lower() not in {".html", ".htm"}:
-        parser.error("输出文件只支持 .html / .htm")
 
     config_path_errors = validate_config_pair_paths(args.config_pairs or [])
     if config_path_errors:
@@ -3051,14 +3077,6 @@ def main(argv: Sequence[str] | None = None) -> int:
             ocr_cache_name=Path(args.ocr_cache_db).name,
         )
         report_written = True
-        if invoked_from_cli and not args.serve_report and not report_service_started:
-            report_service_started = True
-            start_report_service_once(
-                output_path,
-                Path(OCR_CACHE_FILE),
-                cache_db_path=Path(args.ocr_cache_db),
-                port=args.serve_port,
-            )
 
     findings, counts = collect_findings(args, report_callback=write_cumulative_report)
     _write_ocr_candidate_list()
@@ -3080,6 +3098,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_path,
             Path(OCR_CACHE_FILE),
             cache_db_path=Path(args.ocr_cache_db),
+            host=args.serve_host,
             port=args.serve_port,
         )
     return 0
