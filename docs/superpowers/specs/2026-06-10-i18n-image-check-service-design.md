@@ -342,3 +342,17 @@ Add tests for:
 - OCR cache entries for changed MD5 values are archived before replacement.
 - OCR archive entries older than 30 days are physically deleted.
 - No real source image files are deleted by the service.
+
+## Implementation Notes
+
+- The service entrypoint is `report_service.py`.
+- Runtime service configuration is created at `report_service_config.json` when missing.
+- `port=0` is supported for smoke tests and temporary automatic port allocation; the actual bound port is kept in memory and is not persisted automatically.
+- Service-owned reports are stored under the configured `reports_dir`, with each run isolated under `reports/runs/<run_id>/`.
+- The latest current report is represented by `reports/index.json` and always points to the latest successful run.
+- Failed runs are retained separately in the same index and do not replace the latest successful report.
+- The service cleanup only deletes directories under the configured service `reports/runs` root and rejects symlinked or out-of-root run cleanup.
+- OCR stale-MD5 archival is implemented in `.ocr_cache.db` through `ocr_cache_archive`.
+- OCR archive retention cleanup deletes archive records older than the configured retention window; active current-MD5 cache records are preserved.
+- The management console exposes status, manual run, config update, run history, report file serving, and OCR ignore-operation APIs.
+- Verification completed with `python -m unittest test_report_service -v`, `python -m unittest test_check_i18n_images -v`, and a short-lived `report_service.py --no-browser` smoke test against `/api/status`.
