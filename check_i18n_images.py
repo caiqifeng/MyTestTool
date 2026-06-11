@@ -2210,7 +2210,7 @@ def _build_summary_table(
         )
     return f"""
     <section class="report-shell">
-      <div class="hero-panel">
+      <div class="hero-panel report-header-band">
         <div>
           <p class="eyebrow">Image Localization Audit</p>
           <h1>{html.escape(report_title)}</h1>
@@ -2218,13 +2218,25 @@ def _build_summary_table(
         </div>
         <div class="run-result"><span>{TEXT_RUN_RESULT}</span><strong>{total_abnormal}</strong><small>\u5f02\u5e38\u9879</small></div>
       </div>
-      <div class="issue-breakdown">
-        <p><strong>\u4e00\u3001\u5171\u68c0\u67e5\u56fe\u7247</strong></p>
-        <table class="summary-table"><thead><tr><th>\u6307\u6807</th><th>\u6570\u91cf</th></tr></thead><tbody>{checked_rows}</tbody></table>
-        <p class="summary-heading"><strong>\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171 {normal_synced + (new_with_chars or len(new_with_chars_findings)) + (new_no_text or len(new_without_text))} \u5f20</strong></p>
-        <table class="summary-table"><thead><tr><th>\u6b63\u5e38\u7c7b\u578b</th><th>\u6570\u91cf</th><th>\u8bf4\u660e</th></tr></thead><tbody>{normal_rows}</tbody></table>
-        <p class="summary-heading"><strong>\u4e09\u3001\u5f02\u5e38\u56fe\u7247\uff1a\u5171 <span class="abnormal-count">{total_abnormal}</span> \u5f20</strong></p>
-        <table class="summary-table"><thead><tr><th>\u95ee\u9898\u7c7b\u578b</th><th>\u6570\u91cf</th><th>\u8bf4\u660e</th></tr></thead><tbody>{abnormal_rows}</tbody></table>
+      <div class="report-kpi-strip">
+        <div class="metric-card"><span>\u56fd\u9645\u7248\u56fe\u7247</span><strong>{i18n_count}</strong><small>\u5f20</small></div>
+        <div class="metric-card"><span>\u9646\u7248\u56fe\u7247</span><strong>{mainland_count}</strong><small>\u5f20</small></div>
+        <div class="metric-card"><span>\u6b63\u5e38\u56fe\u7247</span><strong>{normal_synced + (new_with_chars or len(new_with_chars_findings)) + (new_no_text or len(new_without_text))}</strong><small>\u5f20</small></div>
+        <div class="metric-card danger"><span>\u5f85\u5904\u7406\u56fe\u7247</span><strong>{total_abnormal}</strong><small>\u5f20</small></div>
+      </div>
+      <div class="issue-breakdown summary-section-grid">
+        <div class="summary-block">
+          <p><strong>\u4e00\u3001\u5171\u68c0\u67e5\u56fe\u7247</strong></p>
+          <table class="summary-table"><thead><tr><th>\u6307\u6807</th><th>\u6570\u91cf</th></tr></thead><tbody>{checked_rows}</tbody></table>
+        </div>
+        <div class="summary-block">
+          <p class="summary-heading"><strong>\u4e8c\u3001\u6b63\u5e38\u56fe\u7247\uff1a\u5171 {normal_synced + (new_with_chars or len(new_with_chars_findings)) + (new_no_text or len(new_without_text))} \u5f20</strong></p>
+          <table class="summary-table"><thead><tr><th>\u6b63\u5e38\u7c7b\u578b</th><th>\u6570\u91cf</th><th>\u8bf4\u660e</th></tr></thead><tbody>{normal_rows}</tbody></table>
+        </div>
+        <div class="summary-block">
+          <p class="summary-heading"><strong>\u4e09\u3001\u5f02\u5e38\u56fe\u7247\uff1a\u5171 <span class="abnormal-count">{total_abnormal}</span> \u5f20</strong></p>
+          <table class="summary-table"><thead><tr><th>\u95ee\u9898\u7c7b\u578b</th><th>\u6570\u91cf</th><th>\u8bf4\u660e</th></tr></thead><tbody>{abnormal_rows}</tbody></table>
+        </div>
       </div>
     </section>
     """
@@ -2346,6 +2358,7 @@ body {{ margin:0; font-family:"Microsoft YaHei", "Segoe UI", Arial, sans-serif; 
 main {{ max-width:1680px; margin:0 auto; padding:28px; }}
 .report-shell {{ display:grid; gap:18px; }}
 .hero-panel {{ display:flex; justify-content:space-between; gap:24px; align-items:stretch; background:linear-gradient(135deg,#102033,#243b55); color:white; border-radius:8px; padding:26px 30px; box-shadow:0 14px 30px rgba(15,23,42,.14); }}
+.report-header-band {{ min-height:112px; }}
 .hero-panel h1 {{ margin:4px 0 8px; font-size:30px; letter-spacing:0; }}
 .eyebrow {{ margin:0; color:#c6d3e1; font-size:12px; text-transform:uppercase; letter-spacing:.08em; }}
 .subtitle {{ margin:0; color:#d9e3ef; font-size:14px; }}
@@ -2357,7 +2370,12 @@ main {{ max-width:1680px; margin:0 auto; padding:28px; }}
 .metric-card span {{ display:block; color:var(--muted); font-size:13px; }}
 .metric-card strong {{ display:block; margin-top:4px; font-size:28px; }}
 .metric-card small {{ display:block; margin-top:6px; color:var(--muted); line-height:1.4; }}
+.metric-card.danger strong {{ color:#d93025; }}
+.report-kpi-strip {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }}
 .issue-breakdown {{ padding:16px 18px; }}
+.summary-section-grid {{ display:grid; gap:14px; }}
+.summary-block {{ border:1px solid #e8edf4; border-radius:6px; overflow:hidden; }}
+.summary-block p {{ padding:12px 12px 0; }}
 .issue-breakdown p {{ margin:6px 0; font-size:15px; line-height:1.8; }}
 .summary-heading {{ margin-top:18px !important; }}
 .abnormal-count {{ color:#d93025; font-weight:700; }}
@@ -2367,6 +2385,7 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .summary-table th {{ background:#f0f4f8; color:#334155; font-weight:600; }}
 .detail-panel {{ overflow:hidden; }}
 .detail-toolbar {{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line); }}
+.detail-filterbar {{ background:#f8fafc; }}
 .detail-toolbar p {{ margin:0; color:var(--muted); font-size:13px; }}
 .export-button {{ flex:0 0 auto; border:1px solid #2563eb; background:#2563eb; color:white; border-radius:5px; padding:8px 14px; font-size:13px; cursor:pointer; }}
 .export-button:hover {{ background:#1d4ed8; }}
@@ -2411,7 +2430,9 @@ tr.mainland-new-with-text[title],tr.mainland-new-with-chars[title] {{ cursor:hel
 {summary_table}
 <section class="detail-panel">
   <div class="detail-toolbar"><div><h2>{TEXT_REPORT_DETAIL}</h2><p>详情仅展示需处理的异常图片；{TEXT_NEW_NO_TEXT_ISSUE}列表已写入本次日志。</p></div><button class="export-button" type="button" onclick="exportFilteredRows()">\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c</button></div>
-  <div class="detail-tabs" role="tablist">{tab_buttons}</div>
+  <div class="detail-filterbar">
+    <div class="detail-tabs" role="tablist">{tab_buttons}</div>
+  </div>
   <div class="table-wrap">
     <table id="detailTable">
       <colgroup>

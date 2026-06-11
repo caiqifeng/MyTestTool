@@ -2110,6 +2110,11 @@ class CheckI18nImagesTest(unittest.TestCase):
 
             content = out.read_text(encoding="utf-8")
             self.assertIn("summary-table", content)
+            self.assertIn("report-header-band", content)
+            self.assertIn("report-kpi-strip", content)
+            self.assertIn("summary-section-grid", content)
+            self.assertIn("summary-block", content)
+            self.assertIn("detail-filterbar", content)
             self.assertIn(cn(r"\u62a5\u544a\u8be6\u60c5"), content)
             self.assertIn(cn(r"\u7591\u4f3c\u5e9f\u9664\u6587\u4ef6"), content)
             self.assertIn("summary-table", content)
