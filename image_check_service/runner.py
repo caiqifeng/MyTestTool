@@ -15,6 +15,23 @@ from .models import RunMetadata, ServiceConfig
 
 CheckCallable = Callable[[Path, Path], dict[str, int]]
 
+ADVANCED_VALUE_ARGS = {
+    "i18n": "--i18n",
+    "mainland": "--mainland",
+    "since": "--since",
+    "max_files": "--max-files",
+    "max_image_px": "--max-image-px",
+    "serve_host": "--serve-host",
+    "serve_port": "--serve-port",
+}
+ADVANCED_FLAG_ARGS = {
+    "no_ocr": "--no-ocr",
+    "assume_new_has_text": "--assume-new-has-text",
+    "serve_report": "--serve-report",
+    "no_serve_report": "--no-serve-report",
+    "report_server_only": "--report-server-only",
+}
+
 
 def make_run_id(now: dt.datetime | None = None) -> str:
     return (now or dt.datetime.now()).strftime("%Y%m%d_%H%M%S_%f")
@@ -129,6 +146,7 @@ class ReportRunner:
             "--output",
             str(output_path),
         ]
+        args.extend(self._advanced_cli_args())
         log_path.parent.mkdir(parents=True, exist_ok=True)
         log_path.write_text("", encoding="utf-8")
         live_log = _LiveLogWriter(log_path)
@@ -137,3 +155,16 @@ class ReportRunner:
         if exit_code != 0:
             raise RuntimeError(f"check_i18n_images exited with {exit_code}")
         return {}
+
+    def _advanced_cli_args(self) -> list[str]:
+        advanced = self.config.advanced_args or {}
+        args: list[str] = []
+        for key, flag in ADVANCED_VALUE_ARGS.items():
+            value = advanced.get(key)
+            if value is None or str(value).strip() == "":
+                continue
+            args.extend([flag, str(value)])
+        for key, flag in ADVANCED_FLAG_ARGS.items():
+            if advanced.get(key) is True:
+                args.append(flag)
+        return args

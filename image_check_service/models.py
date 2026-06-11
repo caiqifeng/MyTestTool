@@ -10,6 +10,7 @@ class ServiceConfig:
     port: int
     check_config: str
     ocr_workers: int
+    advanced_args: dict[str, Any]
     daily_run_time: str
     schedule_enabled: bool
     schedule_weekdays: list[int]

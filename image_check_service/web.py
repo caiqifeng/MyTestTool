@@ -117,12 +117,23 @@ th { background:#f7f9fc; color:#6d7d93; font-weight:700; }
 .settings-grid { display:grid; grid-template-columns:260px 1fr; gap:14px; align-items:center; max-width:720px; }
 label { color:#526176; font-size:13px; font-weight:700; }
 input { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; padding:6px 9px; font:inherit; }
-.param-grid { display:grid; grid-template-columns:180px 1fr; gap:12px; align-items:center; max-width:760px; }
+select { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; padding:6px 9px; font:inherit; background:#fff; }
+.param-grid { display:grid; grid-template-columns:180px 1fr; gap:12px; align-items:center; }
 .param-help { margin:4px 0 0; color:var(--muted); font-size:12px; }
-.schedule-toggle { display:inline-flex; border:1px solid #cfd8e6; border-radius:5px; overflow:hidden; background:#f8fbff; }
-.schedule-toggle button { width:58px; height:32px; border:0; border-right:1px solid #cfd8e6; background:transparent; color:#66758a; font-weight:700; cursor:pointer; }
-.schedule-toggle button:last-child { border-right:0; }
-.schedule-toggle button.active { background:var(--blue); color:#fff; }
+.advanced-params { max-width:860px; margin:12px 0 14px; border:1px solid #dbe4f0; border-radius:6px; background:#fbfdff; overflow:hidden; }
+.advanced-toggle { width:100%; height:42px; border:0; background:#f7faff; color:#334155; display:flex; align-items:center; justify-content:space-between; padding:0 14px; font-weight:700; cursor:pointer; }
+.advanced-toggle span { color:var(--muted); font-weight:600; font-size:12px; }
+.advanced-body { display:none; padding:14px; border-top:1px solid #e4ebf4; }
+.advanced-params.open .advanced-body { display:block; }
+.advanced-params.open .advanced-toggle span::after { content:"收起"; }
+.advanced-params:not(.open) .advanced-toggle span::after { content:"展开"; }
+.schedule-switch { display:inline-grid; grid-template-columns:1fr 1fr; position:relative; width:132px; height:34px; padding:3px; border-radius:999px; background:#e8eef6; border:1px solid #d3deec; vertical-align:middle; }
+.schedule-switch::before { content:""; position:absolute; top:3px; bottom:3px; width:61px; border-radius:999px; background:#fff; box-shadow:0 1px 4px rgba(15,23,42,.16); transition:left .16s ease; }
+.schedule-switch[data-enabled="true"]::before { left:3px; }
+.schedule-switch[data-enabled="false"]::before { left:66px; }
+.schedule-switch button { position:relative; z-index:1; border:0; background:transparent; color:#64748b; font-weight:800; cursor:pointer; }
+.schedule-switch button.active { color:var(--blue); }
+.schedule-state { margin-left:10px; color:var(--muted); font-size:13px; font-weight:700; }
 .weekday-row { display:flex; gap:8px; flex-wrap:wrap; }
 .weekday-button { min-width:46px; height:30px; border:1px solid #cfd8e6; background:#f8fbff; color:#66758a; border-radius:5px; font-weight:700; cursor:pointer; }
 .weekday-button.active { border-color:var(--blue); background:var(--blue); color:#fff; }
@@ -169,9 +180,27 @@ input { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; pa
       </div>
       <div class="panel panel-pad">
         <div class="page-head"><div><h2 class="page-title">立即运行</h2><p class="page-subtitle">启动全量美术资源扫描，生成最新报告。</p></div><span id="statusText" class="status-pill"><span class="status-dot"></span>加载中</span></div>
-        <div class="param-grid">
-          <label for="task_check_config">--config</label><div><input id="task_check_config" data-config-field="check_config" value="check_config.json"><p class="param-help">JSON 配置文件路径，默认使用脚本同级目录 check_config.json</p></div>
-          <label for="task_ocr_workers">--ocr-workers</label><div><input id="task_ocr_workers" data-config-field="ocr_workers" type="number" min="1" value="1"><p class="param-help">OCR 并发线程数，默认 1</p></div>
+        <div class="advanced-params" data-advanced-panel>
+          <button class="advanced-toggle" type="button" onclick="toggleAdvancedParams(this)">高级运行参数：默认参数运行<span></span></button>
+          <div class="advanced-body">
+            <div class="param-grid">
+              <label for="task_check_config">--config</label><div><input id="task_check_config" data-config-field="check_config" value="check_config.json"><p class="param-help">JSON 配置文件路径，默认使用脚本同级目录 check_config.json</p></div>
+              <label for="task_i18n">--i18n</label><div><input id="task_i18n" data-advanced-field="i18n"><p class="param-help">国际版图片目录路径（与 --mainland 配对，或使用 --config）</p></div>
+              <label for="task_mainland">--mainland</label><div><input id="task_mainland" data-advanced-field="mainland"><p class="param-help">陆版图片目录路径（与 --i18n 配对，或使用 --config）</p></div>
+              <label for="task_output">--output</label><div><input id="task_output" data-advanced-field="output"><p class="param-help">输出文件路径；管理服务运行时默认写入历史运行目录</p></div>
+              <label for="task_since">--since</label><div><input id="task_since" data-advanced-field="since" placeholder="2026-05-27T00:00:00+08:00"><p class="param-help">只检查此时间后的陆版新增图片</p></div>
+              <label for="task_no_ocr">--no-ocr</label><select id="task_no_ocr" data-advanced-field="no_ocr" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+              <label for="task_ocr_workers">--ocr-workers</label><div><input id="task_ocr_workers" data-config-field="ocr_workers" type="number" min="1" value="1"><p class="param-help">OCR 并发线程数，默认 1</p></div>
+              <label for="task_max_files">--max-files</label><input id="task_max_files" data-advanced-field="max_files" data-advanced-type="number" type="number" min="1">
+              <label for="task_assume_new_has_text">--assume-new-has-text</label><select id="task_assume_new_has_text" data-advanced-field="assume_new_has_text" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+              <label for="task_max_image_px">--max-image-px</label><input id="task_max_image_px" data-advanced-field="max_image_px" data-advanced-type="number" type="number" min="1" placeholder="720">
+              <label for="task_serve_report">--serve-report</label><select id="task_serve_report" data-advanced-field="serve_report" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+              <label for="task_no_serve_report">--no-serve-report</label><select id="task_no_serve_report" data-advanced-field="no_serve_report" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+              <label for="task_report_server_only">--report-server-only</label><select id="task_report_server_only" data-advanced-field="report_server_only" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+              <label for="task_serve_host">--serve-host</label><input id="task_serve_host" data-advanced-field="serve_host" placeholder="0.0.0.0">
+              <label for="task_serve_port">--serve-port</label><input id="task_serve_port" data-advanced-field="serve_port" data-advanced-type="number" type="number" min="1" placeholder="9080">
+            </div>
+          </div>
         </div>
         <p><button class="button secondary" onclick="saveConfig()">保存执行参数</button></p>
         <button id="runNow" class="button" onclick="runNow()">立即运行扫描</button>
@@ -197,13 +226,33 @@ input { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; pa
       <div class="page-head"><div><h1 class="page-title">定时设置</h1><p class="page-subtitle">配置自动扫描任务的执行计划。</p></div></div>
       <div class="panel panel-pad">
         <div class="settings-grid">
-          <label>启用定时任务</label><div class="schedule-toggle" id="schedule_enabled" data-enabled="true">
+          <label>启用定时任务</label><div><div class="schedule-switch" id="schedule_enabled" data-enabled="true">
             <button type="button" data-schedule-value="true" onclick="setScheduleEnabled(true)">开</button>
             <button type="button" data-schedule-value="false" onclick="setScheduleEnabled(false)">关</button>
-          </div>
+          </div><span id="scheduleStateText" class="schedule-state">当前：已启用</span></div>
           <label for="daily_run_time">每日执行时刻</label><input id="daily_run_time" name="daily_run_time" value="02:00">
-          <label for="settings_check_config">--config</label><div><input id="settings_check_config" data-config-field="check_config" value="check_config.json"><p class="param-help">JSON 配置文件路径，默认使用脚本同级目录 check_config.json</p></div>
-          <label for="settings_ocr_workers">--ocr-workers</label><div><input id="settings_ocr_workers" data-config-field="ocr_workers" type="number" min="1" value="1"><p class="param-help">OCR 并发线程数，默认 1</p></div>
+          <label>运行参数</label><div class="advanced-params" data-advanced-panel>
+            <button class="advanced-toggle" type="button" onclick="toggleAdvancedParams(this)">高级运行参数：默认参数运行<span></span></button>
+            <div class="advanced-body">
+              <div class="param-grid">
+                <label for="settings_check_config">--config</label><div><input id="settings_check_config" data-config-field="check_config" value="check_config.json"><p class="param-help">JSON 配置文件路径，默认使用脚本同级目录 check_config.json</p></div>
+                <label for="settings_i18n">--i18n</label><input id="settings_i18n" data-advanced-field="i18n">
+                <label for="settings_mainland">--mainland</label><input id="settings_mainland" data-advanced-field="mainland">
+                <label for="settings_output">--output</label><input id="settings_output" data-advanced-field="output">
+                <label for="settings_since">--since</label><input id="settings_since" data-advanced-field="since" placeholder="2026-05-27T00:00:00+08:00">
+                <label for="settings_no_ocr">--no-ocr</label><select id="settings_no_ocr" data-advanced-field="no_ocr" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+                <label for="settings_ocr_workers">--ocr-workers</label><input id="settings_ocr_workers" data-config-field="ocr_workers" type="number" min="1" value="1">
+                <label for="settings_max_files">--max-files</label><input id="settings_max_files" data-advanced-field="max_files" data-advanced-type="number" type="number" min="1">
+                <label for="settings_assume_new_has_text">--assume-new-has-text</label><select id="settings_assume_new_has_text" data-advanced-field="assume_new_has_text" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+                <label for="settings_max_image_px">--max-image-px</label><input id="settings_max_image_px" data-advanced-field="max_image_px" data-advanced-type="number" type="number" min="1" placeholder="720">
+                <label for="settings_serve_report">--serve-report</label><select id="settings_serve_report" data-advanced-field="serve_report" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+                <label for="settings_no_serve_report">--no-serve-report</label><select id="settings_no_serve_report" data-advanced-field="no_serve_report" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+                <label for="settings_report_server_only">--report-server-only</label><select id="settings_report_server_only" data-advanced-field="report_server_only" data-advanced-type="bool"><option value="">默认</option><option value="true">启用</option></select>
+                <label for="settings_serve_host">--serve-host</label><input id="settings_serve_host" data-advanced-field="serve_host" placeholder="0.0.0.0">
+                <label for="settings_serve_port">--serve-port</label><input id="settings_serve_port" data-advanced-field="serve_port" data-advanced-type="number" type="number" min="1" placeholder="9080">
+              </div>
+            </div>
+          </div>
           <label>执行日期</label><div class="weekday-row" id="schedule_weekdays">
             <button class="weekday-button" type="button" data-weekday="0" onclick="toggleWeekday(0)">周一</button>
             <button class="weekday-button" type="button" data-weekday="1" onclick="toggleWeekday(1)">周二</button>
@@ -348,6 +397,7 @@ function setScheduleEnabled(enabled) {
   toggle.querySelectorAll('button').forEach(button => {
     button.classList.toggle('active', button.dataset.scheduleValue === String(enabled));
   });
+  document.getElementById('scheduleStateText').textContent = enabled ? '当前：已启用' : '当前：已停用';
   renderCronPreview(document.getElementById('daily_run_time').value);
 }
 function scheduleEnabled() {
@@ -360,10 +410,55 @@ function setExecutionParams(config) {
   document.querySelectorAll('[data-config-field="ocr_workers"]').forEach(input => {
     input.value = Number(config.ocr_workers || 1);
   });
+  setAdvancedArgs(config.advanced_args || {});
+  updateAdvancedSummary();
 }
 function syncExecutionParam(field, value) {
   document.querySelectorAll(`[data-config-field="${field}"]`).forEach(input => {
     if (String(input.value) !== String(value)) input.value = value;
+  });
+}
+function toggleAdvancedParams(button) {
+  button.closest('[data-advanced-panel]').classList.toggle('open');
+}
+function setAdvancedArgs(values) {
+  document.querySelectorAll('[data-advanced-field]').forEach(input => {
+    const key = input.dataset.advancedField;
+    const value = values[key];
+    if (input.dataset.advancedType === 'bool') {
+      input.value = value === true ? 'true' : '';
+    } else {
+      input.value = value === undefined || value === null ? '' : value;
+    }
+  });
+}
+function collectAdvancedArgs() {
+  const result = {};
+  document.querySelectorAll('#view-settings [data-advanced-field]').forEach(input => {
+    const key = input.dataset.advancedField;
+    if (Object.prototype.hasOwnProperty.call(result, key)) return;
+    if (input.dataset.advancedType === 'bool') {
+      if (input.value === 'true') result[key] = true;
+    } else if (input.dataset.advancedType === 'number') {
+      if (String(input.value).trim()) result[key] = Number(input.value);
+    } else if (String(input.value).trim()) {
+      result[key] = input.value.trim();
+    }
+  });
+  return result;
+}
+function syncAdvancedParam(field, value) {
+  document.querySelectorAll(`[data-advanced-field="${field}"]`).forEach(input => {
+    if (String(input.value) !== String(value)) input.value = value;
+  });
+  updateAdvancedSummary();
+}
+function updateAdvancedSummary() {
+  const advanced = collectAdvancedArgs();
+  const customCount = Object.keys(advanced).length;
+  const text = customCount ? `高级运行参数：已设置 ${customCount} 项` : '高级运行参数：默认参数运行';
+  document.querySelectorAll('.advanced-toggle').forEach(button => {
+    button.firstChild.nodeValue = text;
   });
 }
 function renderCronPreview(value) {
@@ -432,6 +527,7 @@ async function saveConfig() {
       schedule_enabled: scheduleEnabled(),
       check_config: document.getElementById('settings_check_config').value,
       ocr_workers: Number(document.getElementById('settings_ocr_workers').value),
+      advanced_args: collectAdvancedArgs(),
       schedule_weekdays: selectedWeekdays(),
       history_success_limit: Number(document.getElementById('history_success_limit').value),
       history_failed_limit: Number(document.getElementById('history_failed_limit').value),
@@ -446,6 +542,10 @@ document.querySelectorAll('[data-config-field="check_config"]').forEach(input =>
 });
 document.querySelectorAll('[data-config-field="ocr_workers"]').forEach(input => {
   input.addEventListener('input', event => syncExecutionParam('ocr_workers', event.target.value));
+});
+document.querySelectorAll('[data-advanced-field]').forEach(input => {
+  input.addEventListener('input', event => syncAdvancedParam(event.target.dataset.advancedField, event.target.value));
+  input.addEventListener('change', event => syncAdvancedParam(event.target.dataset.advancedField, event.target.value));
 });
 async function refreshLoop() {
   try {
@@ -535,6 +635,11 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
                 candidate.ocr_workers = int(data["ocr_workers"])
             except (TypeError, ValueError) as exc:
                 raise ValueError("ocr_workers must be an integer") from exc
+        if "advanced_args" in data:
+            raw_advanced = data["advanced_args"]
+            if not isinstance(raw_advanced, dict):
+                raise ValueError("advanced_args must be an object")
+            candidate.advanced_args = dict(raw_advanced)
         if "daily_run_time" in data:
             candidate.daily_run_time = str(data["daily_run_time"])
         if "schedule_enabled" in data:
@@ -563,6 +668,7 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
         self.config.schedule_weekdays = candidate.schedule_weekdays
         self.config.check_config = candidate.check_config
         self.config.ocr_workers = candidate.ocr_workers
+        self.config.advanced_args = candidate.advanced_args
         self.config.history_success_limit = candidate.history_success_limit
         self.config.history_failed_limit = candidate.history_failed_limit
         self.config.ocr_archive_retention_days = candidate.ocr_archive_retention_days

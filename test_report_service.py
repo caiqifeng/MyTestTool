@@ -47,6 +47,7 @@ class ReportServiceConfigTest(unittest.TestCase):
             self.assertTrue(config.schedule_enabled)
             self.assertEqual(config.schedule_weekdays, [0, 1, 2, 3, 4])
             self.assertEqual(config.ocr_workers, 1)
+            self.assertEqual(config.advanced_args, {})
             self.assertEqual(config.history_success_limit, 5)
             self.assertTrue(path.exists())
             raw = json.loads(path.read_text(encoding="utf-8"))
@@ -54,6 +55,7 @@ class ReportServiceConfigTest(unittest.TestCase):
             self.assertTrue(raw["schedule_enabled"])
             self.assertEqual(raw["schedule_weekdays"], [0, 1, 2, 3, 4])
             self.assertEqual(raw["ocr_workers"], 1)
+            self.assertEqual(raw["advanced_args"], {})
 
     def test_validate_config_rejects_bad_time_and_non_positive_retention(self):
         config = ServiceConfig(
@@ -68,6 +70,7 @@ class ReportServiceConfigTest(unittest.TestCase):
             ocr_archive_retention_days=0,
             reports_dir="reports",
             ocr_workers=0,
+            advanced_args={"serve_port": 0},
         )
 
         errors = validate_config(config)
@@ -77,6 +80,7 @@ class ReportServiceConfigTest(unittest.TestCase):
         self.assertIn("history_failed_limit must be a positive integer", errors)
         self.assertIn("ocr_archive_retention_days must be a positive integer", errors)
         self.assertIn("ocr_workers must be a positive integer", errors)
+        self.assertIn("advanced_args.serve_port must be a positive integer", errors)
         self.assertIn("schedule_weekdays must include at least one weekday", errors)
 
     def test_validate_config_rejects_weekdays_outside_monday_to_sunday(self):
@@ -411,6 +415,55 @@ class ReportServiceRunnerTest(unittest.TestCase):
             self.assertIn("--ocr-workers", captured_args)
             self.assertEqual(captured_args[captured_args.index("--ocr-workers") + 1], "3")
 
+    def test_default_checker_passes_only_enabled_advanced_args(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(Path(td) / "reports")
+            config.check_config = str(Path(td) / "custom_check.json")
+            config.ocr_workers = 2
+            config.advanced_args = {
+                "i18n": "E:/i18n",
+                "mainland": "E:/mainland",
+                "output": "",
+                "since": "2026-05-27T00:00:00+08:00",
+                "no_ocr": True,
+                "max_files": 30,
+                "assume_new_has_text": False,
+                "max_image_px": 640,
+                "serve_report": False,
+                "no_serve_report": True,
+                "report_server_only": False,
+                "serve_host": "0.0.0.0",
+                "serve_port": 9081,
+            }
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            captured_args: list[str] = []
+
+            def fake_main(args: list[str]) -> int:
+                captured_args.extend(args)
+                return 0
+
+            with mock.patch("image_check_service.runner.check_i18n_images.main", side_effect=fake_main):
+                runner._run_existing_checker(Path(td) / "report.html", Path(td) / "run.log")
+
+            self.assertIn("--i18n", captured_args)
+            self.assertEqual(captured_args[captured_args.index("--i18n") + 1], "E:/i18n")
+            self.assertIn("--mainland", captured_args)
+            self.assertIn("--since", captured_args)
+            self.assertIn("--no-ocr", captured_args)
+            self.assertIn("--max-files", captured_args)
+            self.assertEqual(captured_args[captured_args.index("--max-files") + 1], "30")
+            self.assertIn("--max-image-px", captured_args)
+            self.assertEqual(captured_args[captured_args.index("--max-image-px") + 1], "640")
+            self.assertIn("--no-serve-report", captured_args)
+            self.assertIn("--serve-host", captured_args)
+            self.assertIn("--serve-port", captured_args)
+            self.assertNotIn("--assume-new-has-text", captured_args)
+            self.assertNotIn("--report-server-only", captured_args)
+            self.assertNotIn("--serve-report", captured_args)
+            self.assertNotIn("", captured_args)
+
     def test_default_checker_streams_stdout_to_log_while_running(self):
         with tempfile.TemporaryDirectory() as td:
             config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
@@ -644,13 +697,31 @@ class ReportServiceWebTest(unittest.TestCase):
         self.assertIn("activeRunId", html)
         self.assertIn("activeRunLog", html)
         self.assertIn("schedule_enabled", html)
-        self.assertIn("schedule-toggle", html)
         self.assertIn("setScheduleEnabled", html)
         self.assertNotIn('type="checkbox"', html)
+        self.assertIn("schedule-switch", html)
+        self.assertIn("当前：已启用", html)
+        self.assertIn("当前：已停用", html)
+        self.assertIn("advanced-params", html)
+        self.assertIn("高级运行参数：默认参数运行", html)
+        self.assertIn("toggleAdvancedParams", html)
         self.assertIn("check_config", html)
         self.assertIn("ocr_workers", html)
         self.assertIn("--config", html)
+        self.assertIn("--i18n", html)
+        self.assertIn("--mainland", html)
+        self.assertIn("--output", html)
+        self.assertIn("--since", html)
+        self.assertIn("--no-ocr", html)
         self.assertIn("--ocr-workers", html)
+        self.assertIn("--max-files", html)
+        self.assertIn("--assume-new-has-text", html)
+        self.assertIn("--max-image-px", html)
+        self.assertIn("--serve-report", html)
+        self.assertIn("--no-serve-report", html)
+        self.assertIn("--report-server-only", html)
+        self.assertIn("--serve-host", html)
+        self.assertIn("--serve-port", html)
         self.assertIn("schedule_weekdays", html)
         self.assertIn("runNow", html)
         self.assertIn("daily_run_time", html)
@@ -753,6 +824,12 @@ class ReportServiceWebTest(unittest.TestCase):
                         "schedule_weekdays": [1, 3, 5],
                         "check_config": "custom_check.json",
                         "ocr_workers": 4,
+                        "advanced_args": {
+                            "i18n": "E:/i18n",
+                            "mainland": "E:/mainland",
+                            "no_ocr": True,
+                            "max_files": 20,
+                        },
                     },
                 )
 
@@ -764,12 +841,16 @@ class ReportServiceWebTest(unittest.TestCase):
                 self.assertEqual(config.schedule_weekdays, [1, 3, 5])
                 self.assertEqual(config.check_config, "custom_check.json")
                 self.assertEqual(config.ocr_workers, 4)
+                self.assertEqual(config.advanced_args["i18n"], "E:/i18n")
+                self.assertTrue(config.advanced_args["no_ocr"])
+                self.assertEqual(config.advanced_args["max_files"], 20)
                 self.assertTrue(config_path.exists())
                 saved = json.loads(config_path.read_text(encoding="utf-8"))
                 self.assertFalse(saved["schedule_enabled"])
                 self.assertEqual(saved["schedule_weekdays"], [1, 3, 5])
                 self.assertEqual(saved["check_config"], "custom_check.json")
                 self.assertEqual(saved["ocr_workers"], 4)
+                self.assertEqual(saved["advanced_args"]["mainland"], "E:/mainland")
             finally:
                 server.shutdown()
                 server.server_close()

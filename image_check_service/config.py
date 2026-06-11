@@ -14,6 +14,7 @@ DEFAULT_SERVICE_CONFIG = {
     "port": 9080,
     "check_config": "check_config.json",
     "ocr_workers": 1,
+    "advanced_args": {},
     "daily_run_time": "02:00",
     "schedule_enabled": True,
     "schedule_weekdays": [0, 1, 2, 3, 4],
@@ -32,6 +33,7 @@ def _coerce_config(data: dict[str, object]) -> ServiceConfig:
         port=int(merged["port"]),
         check_config=str(merged["check_config"]),
         ocr_workers=int(merged["ocr_workers"]),
+        advanced_args=dict(merged.get("advanced_args") or {}),
         daily_run_time=str(merged["daily_run_time"]),
         schedule_enabled=bool(merged["schedule_enabled"]),
         schedule_weekdays=[int(value) for value in (merged["schedule_weekdays"] or [])],
@@ -69,6 +71,16 @@ def validate_config(config: ServiceConfig) -> list[str]:
         errors.append("ocr_archive_retention_days must be a positive integer")
     if config.ocr_workers <= 0:
         errors.append("ocr_workers must be a positive integer")
+    advanced_args = config.advanced_args or {}
+    for key in ("max_files", "max_image_px", "serve_port"):
+        if key in advanced_args and str(advanced_args[key]).strip():
+            try:
+                value = int(advanced_args[key])
+            except (TypeError, ValueError):
+                errors.append(f"advanced_args.{key} must be a positive integer")
+                continue
+            if value <= 0:
+                errors.append(f"advanced_args.{key} must be a positive integer")
     if not config.reports_dir.strip():
         errors.append("reports_dir must not be empty")
     if config.port < 0 or config.port > 65535:
