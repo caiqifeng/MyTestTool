@@ -20,12 +20,14 @@ def status_payload(
     config: ServiceConfig,
     active_run_id: str | None,
     next_run_text: str | None,
+    active_run: dict[str, object] | None = None,
     config_errors: list[str] | None = None,
 ) -> dict[str, object]:
     index = load_index(Path(config.reports_dir))
     return {
         "status": "running" if active_run_id else "idle",
         "active_run_id": active_run_id,
+        "active_run": active_run,
         "next_scheduled_run": next_run_text,
         "latest_success_run_id": index.get("latest_success_run_id"),
         "successful_runs": index.get("successful_runs", []),
@@ -99,6 +101,11 @@ input[type="checkbox"] { width:auto; height:auto; }
 .trend-bar { height:12px; border-radius:3px; background:var(--blue); }
 .trend-bar.warn { background:var(--orange); }
 .trend-bar.fail { background:var(--red); }
+.run-detail-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; margin-top:14px; }
+.run-detail { background:#f7f9fc; border:1px solid #e4ebf4; border-radius:5px; padding:10px 12px; }
+.run-detail span { display:block; color:var(--muted); font-size:12px; }
+.run-detail strong { display:block; margin-top:4px; font-size:13px; word-break:break-all; }
+.log-view { margin-top:14px; min-height:180px; max-height:360px; overflow:auto; background:#111827; color:#d1e7ff; border-radius:5px; padding:12px; font:12px/1.55 Consolas,monospace; white-space:pre-wrap; }
 .cron { margin-top:14px; background:#172134; color:#6dd3ff; border-radius:5px; padding:14px 16px; font-family:Consolas,monospace; }
 .toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
 .toolbar-actions { display:flex; gap:8px; align-items:center; }
@@ -143,6 +150,12 @@ input[type="checkbox"] { width:auto; height:auto; }
         <div class="page-head"><div><h2 class="page-title">立即运行</h2><p class="page-subtitle">启动全量美术资源扫描，生成最新报告。</p></div><span id="statusText" class="status-pill"><span class="status-dot"></span>加载中</span></div>
         <button id="runNow" class="button" onclick="runNow()">立即运行扫描</button>
         <p id="nextRun" class="page-subtitle"></p>
+        <div class="run-detail-grid">
+          <div class="run-detail"><span>当前运行 ID</span><strong id="activeRunId">-</strong></div>
+          <div class="run-detail"><span>触发方式</span><strong id="activeRunTrigger">-</strong></div>
+          <div class="run-detail"><span>开始时间</span><strong id="activeRunStarted">-</strong></div>
+        </div>
+        <pre id="activeRunLog" class="log-view">暂无运行日志</pre>
       </div>
       <div class="panel">
         <div class="toolbar"><strong>近期执行记录</strong></div>
@@ -260,6 +273,23 @@ function renderHistoryTrend(items) {
     return `<div class="trend-item"><div class="trend-bar ${cls}" style="height:${height}px"></div><span>${datePart(run.started_at).slice(5)}</span><strong>${run.status === 'success' ? issues : '失败'}</strong></div>`;
   }).join('');
 }
+async function renderActiveRun(activeRun) {
+  document.getElementById('activeRunId').textContent = activeRun && activeRun.run_id ? activeRun.run_id : '-';
+  document.getElementById('activeRunTrigger').textContent = activeRun && activeRun.trigger ? activeRun.trigger : '-';
+  document.getElementById('activeRunStarted').textContent = activeRun && activeRun.started_at ? activeRun.started_at : '-';
+  const logBox = document.getElementById('activeRunLog');
+  if (!activeRun || !activeRun.run_id) {
+    logBox.textContent = '暂无运行日志';
+    return;
+  }
+  try {
+    const payload = await fetchJson(`/reports/runs/${encodeURIComponent(activeRun.run_id)}/api/log`);
+    logBox.textContent = payload.log || '暂无运行日志';
+    logBox.scrollTop = logBox.scrollHeight;
+  } catch (error) {
+    logBox.textContent = '日志暂不可用';
+  }
+}
 function selectedWeekdays() {
   return Array.from(document.querySelectorAll('.weekday-button.active')).map(button => Number(button.dataset.weekday));
 }
@@ -323,6 +353,7 @@ async function refresh() {
   renderRuns(allRuns.slice(0, 5));
   renderHistory(allRuns);
   renderHistoryTrend(allRuns);
+  await renderActiveRun(data.active_run);
 }
 async function runNow() {
   document.getElementById('runNow').disabled = true;
@@ -349,8 +380,15 @@ async function saveConfig() {
 }
 document.getElementById('daily_run_time').addEventListener('input', event => renderCronPreview(event.target.value));
 document.getElementById('schedule_enabled').addEventListener('change', () => renderCronPreview(document.getElementById('daily_run_time').value));
-refresh();
-setInterval(refresh, 5000);
+async function refreshLoop() {
+  try {
+    await refresh();
+  } finally {
+    const running = document.getElementById('serviceState').textContent === '运行中';
+    setTimeout(refreshLoop, running ? 2000 : 5000);
+  }
+}
+refreshLoop();
 </script>
 </body>
 </html>"""
@@ -368,7 +406,15 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
             self._send_text(build_console_html(), "text/html; charset=utf-8")
             return
         if parsed.path == "/api/status":
-            self._send_json(status_payload(self.config, self.runner.active_run_id, self.get_next_run_text()))
+            self._send_json(status_payload(
+                self.config,
+                self.runner.active_run_id,
+                self.get_next_run_text(),
+                active_run=self.runner.active_run_snapshot(),
+            ))
+            return
+        if parsed.path.startswith("/reports/runs/") and parsed.path.endswith("/api/log"):
+            self._serve_run_log(parsed.path)
             return
         if parsed.path == "/api/runs":
             self._send_json(load_index(Path(self.config.reports_dir)))
@@ -463,6 +509,20 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
             return
         content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         self._send_bytes(target.read_bytes(), content_type)
+
+    def _serve_run_log(self, request_path: str) -> None:
+        parts = urllib.parse.unquote(request_path).strip("/").split("/")
+        if len(parts) != 5:
+            self._send_json({"ok": False, "error": "invalid run log path"}, status=HTTPStatus.NOT_FOUND)
+            return
+        run_id = parts[2]
+        reports_root = Path(self.config.reports_dir).resolve()
+        target = (reports_root / "runs" / run_id / "run.log").resolve()
+        if reports_root not in target.parents or not target.is_file():
+            self._send_json({"ok": False, "error": "run log not found"}, status=HTTPStatus.NOT_FOUND)
+            return
+        text = target.read_text(encoding="utf-8", errors="replace")
+        self._send_json({"ok": True, "run_id": run_id, "log": text[-20000:]})
 
     def _read_json(self) -> dict[str, object]:
         length = int(self.headers.get("Content-Length", "0"))

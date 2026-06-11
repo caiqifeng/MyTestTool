@@ -312,6 +312,41 @@ class ReportServiceRunnerTest(unittest.TestCase):
             self.assertIsNone(runner.active_run_id)
             self.assertEqual(result[0].status, "success")
 
+    def test_runner_exposes_active_run_snapshot_while_running(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(Path(td) / "reports")
+            config.check_config = str(Path(td) / "check_config.json")
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+            started = threading.Event()
+            release = threading.Event()
+
+            def slow_check(output_path: Path, log_path: Path) -> dict[str, int]:
+                log_path.write_text("step 1\n", encoding="utf-8")
+                started.set()
+                release.wait(timeout=5)
+                output_path.write_text("<html>ok</html>", encoding="utf-8")
+                return {"findings": 1}
+
+            runner = ReportRunner(config, check_callable=slow_check)
+            with mock.patch("image_check_service.runner.check_i18n_images.cleanup_ocr_cache_archive"):
+                thread = threading.Thread(target=lambda: runner.run_once("manual"))
+                thread.start()
+                self.assertTrue(started.wait(timeout=5))
+
+                snapshot = runner.active_run_snapshot()
+
+                self.assertIsNotNone(snapshot)
+                self.assertEqual(snapshot["status"], "running")
+                self.assertEqual(snapshot["trigger"], "manual")
+                self.assertTrue(Path(str(snapshot["log_path"])).exists())
+                self.assertIn("step 1", Path(str(snapshot["log_path"])).read_text(encoding="utf-8"))
+                release.set()
+                thread.join(timeout=5)
+
+            self.assertFalse(thread.is_alive())
+            self.assertIsNone(runner.active_run_snapshot())
+
     def test_runner_releases_active_id_after_check_failure(self):
         with tempfile.TemporaryDirectory() as td:
             config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
@@ -515,6 +550,8 @@ class ReportServiceWebTest(unittest.TestCase):
         self.assertIn("latestReportFrame", html)
         self.assertIn("historyRows", html)
         self.assertIn("historyTrend", html)
+        self.assertIn("activeRunId", html)
+        self.assertIn("activeRunLog", html)
         self.assertIn("schedule_enabled", html)
         self.assertIn("schedule_weekdays", html)
         self.assertIn("runNow", html)
@@ -713,6 +750,34 @@ class ReportServiceWebTest(unittest.TestCase):
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
                     urllib.request.urlopen(f"{base_url}/reports/../secret.txt", timeout=5)
                 self.assertEqual(ctx.exception.code, 404)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_http_run_log_endpoint_serves_recent_log_text(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            reports_dir = root / "reports"
+            log_path = reports_dir / "runs" / "run1" / "run.log"
+            log_path.parent.mkdir(parents=True)
+            log_path.write_text("line 1\nline 2\n", encoding="utf-8")
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.host = "127.0.0.1"
+            config.port = 0
+            config.reports_dir = str(reports_dir)
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            server = create_server(config, root / "service.json", runner, lambda: None)
+            config.port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                status, payload = self._request_json(f"{base_url}/reports/runs/run1/api/log")
+
+                self.assertEqual(status, 200)
+                self.assertEqual(payload["run_id"], "run1")
+                self.assertIn("line 2", payload["log"])
             finally:
                 server.shutdown()
                 server.server_close()

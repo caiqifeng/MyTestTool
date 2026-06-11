@@ -31,10 +31,15 @@ class ReportRunner:
         self.check_callable = check_callable or self._run_existing_checker
         self._lock = threading.Lock()
         self._active_run_id: str | None = None
+        self._active_metadata: RunMetadata | None = None
 
     @property
     def active_run_id(self) -> str | None:
         return self._active_run_id
+
+    def active_run_snapshot(self) -> dict[str, object] | None:
+        with self._lock:
+            return self._active_metadata.to_dict() if self._active_metadata is not None else None
 
     def run_once(self, trigger: str) -> RunMetadata:
         with self._lock:
@@ -47,6 +52,7 @@ class ReportRunner:
         finally:
             with self._lock:
                 self._active_run_id = None
+                self._active_metadata = None
 
     def _run_locked(self, run_id: str, trigger: str) -> RunMetadata:
         reports_dir = Path(self.config.reports_dir)
@@ -62,6 +68,8 @@ class ReportRunner:
             report_path=str(report_path),
             log_path=str(log_path),
         )
+        with self._lock:
+            self._active_metadata = metadata
         write_metadata(run_dir, metadata)
 
         try:
