@@ -13,6 +13,7 @@ DEFAULT_SERVICE_CONFIG = {
     "host": "127.0.0.1",
     "port": 9080,
     "check_config": "check_config.json",
+    "ocr_workers": 1,
     "daily_run_time": "02:00",
     "schedule_enabled": True,
     "schedule_weekdays": [0, 1, 2, 3, 4],
@@ -30,6 +31,7 @@ def _coerce_config(data: dict[str, object]) -> ServiceConfig:
         host=str(merged["host"]),
         port=int(merged["port"]),
         check_config=str(merged["check_config"]),
+        ocr_workers=int(merged["ocr_workers"]),
         daily_run_time=str(merged["daily_run_time"]),
         schedule_enabled=bool(merged["schedule_enabled"]),
         schedule_weekdays=[int(value) for value in (merged["schedule_weekdays"] or [])],
@@ -65,6 +67,8 @@ def validate_config(config: ServiceConfig) -> list[str]:
         errors.append("history_failed_limit must be a positive integer")
     if config.ocr_archive_retention_days <= 0:
         errors.append("ocr_archive_retention_days must be a positive integer")
+    if config.ocr_workers <= 0:
+        errors.append("ocr_workers must be a positive integer")
     if not config.reports_dir.strip():
         errors.append("reports_dir must not be empty")
     if config.port < 0 or config.port > 65535:

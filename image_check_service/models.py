@@ -9,6 +9,7 @@ class ServiceConfig:
     host: str
     port: int
     check_config: str
+    ocr_workers: int
     daily_run_time: str
     schedule_enabled: bool
     schedule_weekdays: list[int]

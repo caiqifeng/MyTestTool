@@ -117,7 +117,12 @@ th { background:#f7f9fc; color:#6d7d93; font-weight:700; }
 .settings-grid { display:grid; grid-template-columns:260px 1fr; gap:14px; align-items:center; max-width:720px; }
 label { color:#526176; font-size:13px; font-weight:700; }
 input { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; padding:6px 9px; font:inherit; }
-input[type="checkbox"] { width:auto; height:auto; }
+.param-grid { display:grid; grid-template-columns:180px 1fr; gap:12px; align-items:center; max-width:760px; }
+.param-help { margin:4px 0 0; color:var(--muted); font-size:12px; }
+.schedule-toggle { display:inline-flex; border:1px solid #cfd8e6; border-radius:5px; overflow:hidden; background:#f8fbff; }
+.schedule-toggle button { width:58px; height:32px; border:0; border-right:1px solid #cfd8e6; background:transparent; color:#66758a; font-weight:700; cursor:pointer; }
+.schedule-toggle button:last-child { border-right:0; }
+.schedule-toggle button.active { background:var(--blue); color:#fff; }
 .weekday-row { display:flex; gap:8px; flex-wrap:wrap; }
 .weekday-button { min-width:46px; height:30px; border:1px solid #cfd8e6; background:#f8fbff; color:#66758a; border-radius:5px; font-weight:700; cursor:pointer; }
 .weekday-button.active { border-color:var(--blue); background:var(--blue); color:#fff; }
@@ -164,6 +169,11 @@ input[type="checkbox"] { width:auto; height:auto; }
       </div>
       <div class="panel panel-pad">
         <div class="page-head"><div><h2 class="page-title">立即运行</h2><p class="page-subtitle">启动全量美术资源扫描，生成最新报告。</p></div><span id="statusText" class="status-pill"><span class="status-dot"></span>加载中</span></div>
+        <div class="param-grid">
+          <label for="task_check_config">--config</label><div><input id="task_check_config" data-config-field="check_config" value="check_config.json"><p class="param-help">JSON 配置文件路径，默认使用脚本同级目录 check_config.json</p></div>
+          <label for="task_ocr_workers">--ocr-workers</label><div><input id="task_ocr_workers" data-config-field="ocr_workers" type="number" min="1" value="1"><p class="param-help">OCR 并发线程数，默认 1</p></div>
+        </div>
+        <p><button class="button secondary" onclick="saveConfig()">保存执行参数</button></p>
         <button id="runNow" class="button" onclick="runNow()">立即运行扫描</button>
         <p id="nextRun" class="page-subtitle"></p>
         <div class="run-detail-grid">
@@ -187,8 +197,13 @@ input[type="checkbox"] { width:auto; height:auto; }
       <div class="page-head"><div><h1 class="page-title">定时设置</h1><p class="page-subtitle">配置自动扫描任务的执行计划。</p></div></div>
       <div class="panel panel-pad">
         <div class="settings-grid">
-          <label for="schedule_enabled">启用定时任务</label><div><input id="schedule_enabled" name="schedule_enabled" type="checkbox"></div>
+          <label>启用定时任务</label><div class="schedule-toggle" id="schedule_enabled" data-enabled="true">
+            <button type="button" data-schedule-value="true" onclick="setScheduleEnabled(true)">开</button>
+            <button type="button" data-schedule-value="false" onclick="setScheduleEnabled(false)">关</button>
+          </div>
           <label for="daily_run_time">每日执行时刻</label><input id="daily_run_time" name="daily_run_time" value="02:00">
+          <label for="settings_check_config">--config</label><div><input id="settings_check_config" data-config-field="check_config" value="check_config.json"><p class="param-help">JSON 配置文件路径，默认使用脚本同级目录 check_config.json</p></div>
+          <label for="settings_ocr_workers">--ocr-workers</label><div><input id="settings_ocr_workers" data-config-field="ocr_workers" type="number" min="1" value="1"><p class="param-help">OCR 并发线程数，默认 1</p></div>
           <label>执行日期</label><div class="weekday-row" id="schedule_weekdays">
             <button class="weekday-button" type="button" data-weekday="0" onclick="toggleWeekday(0)">周一</button>
             <button class="weekday-button" type="button" data-weekday="1" onclick="toggleWeekday(1)">周二</button>
@@ -327,10 +342,34 @@ function toggleWeekday(day) {
   if (button) button.classList.toggle('active');
   renderCronPreview(document.getElementById('daily_run_time').value);
 }
+function setScheduleEnabled(enabled) {
+  const toggle = document.getElementById('schedule_enabled');
+  toggle.dataset.enabled = enabled ? 'true' : 'false';
+  toggle.querySelectorAll('button').forEach(button => {
+    button.classList.toggle('active', button.dataset.scheduleValue === String(enabled));
+  });
+  renderCronPreview(document.getElementById('daily_run_time').value);
+}
+function scheduleEnabled() {
+  return document.getElementById('schedule_enabled').dataset.enabled === 'true';
+}
+function setExecutionParams(config) {
+  document.querySelectorAll('[data-config-field="check_config"]').forEach(input => {
+    input.value = config.check_config || 'check_config.json';
+  });
+  document.querySelectorAll('[data-config-field="ocr_workers"]').forEach(input => {
+    input.value = Number(config.ocr_workers || 1);
+  });
+}
+function syncExecutionParam(field, value) {
+  document.querySelectorAll(`[data-config-field="${field}"]`).forEach(input => {
+    if (String(input.value) !== String(value)) input.value = value;
+  });
+}
 function renderCronPreview(value) {
   const parts = String(value || '02:00').split(':');
   const weekdays = selectedWeekdays();
-  document.getElementById('cronPreview').textContent = document.getElementById('schedule_enabled').checked
+  document.getElementById('cronPreview').textContent = scheduleEnabled()
     ? `${parts[1] || '00'} ${parts[0] || '02'} * * ${weekdays.length ? weekdays.join(',') : '-'}`
     : '定时任务已停用';
 }
@@ -343,7 +382,8 @@ async function refresh() {
   document.getElementById('nextRun').textContent = `下次定时执行：${data.next_scheduled_run || '-'}`;
   document.getElementById('runNow').disabled = data.status === 'running';
   document.getElementById('daily_run_time').value = data.config.daily_run_time;
-  document.getElementById('schedule_enabled').checked = Boolean(data.config.schedule_enabled);
+  setScheduleEnabled(Boolean(data.config.schedule_enabled));
+  setExecutionParams(data.config);
   setWeekdays(data.config.schedule_weekdays || []);
   document.getElementById('history_success_limit').value = data.config.history_success_limit;
   document.getElementById('history_failed_limit').value = data.config.history_failed_limit;
@@ -389,7 +429,9 @@ async function saveConfig() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       daily_run_time: document.getElementById('daily_run_time').value,
-      schedule_enabled: document.getElementById('schedule_enabled').checked,
+      schedule_enabled: scheduleEnabled(),
+      check_config: document.getElementById('settings_check_config').value,
+      ocr_workers: Number(document.getElementById('settings_ocr_workers').value),
       schedule_weekdays: selectedWeekdays(),
       history_success_limit: Number(document.getElementById('history_success_limit').value),
       history_failed_limit: Number(document.getElementById('history_failed_limit').value),
@@ -399,7 +441,12 @@ async function saveConfig() {
   await refresh();
 }
 document.getElementById('daily_run_time').addEventListener('input', event => renderCronPreview(event.target.value));
-document.getElementById('schedule_enabled').addEventListener('change', () => renderCronPreview(document.getElementById('daily_run_time').value));
+document.querySelectorAll('[data-config-field="check_config"]').forEach(input => {
+  input.addEventListener('input', event => syncExecutionParam('check_config', event.target.value));
+});
+document.querySelectorAll('[data-config-field="ocr_workers"]').forEach(input => {
+  input.addEventListener('input', event => syncExecutionParam('ocr_workers', event.target.value));
+});
 async function refreshLoop() {
   try {
     await refresh();
@@ -481,6 +528,13 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
     def _handle_config_update(self) -> None:
         data = self._read_json()
         candidate = ServiceConfig(**self.config.to_dict())
+        if "check_config" in data:
+            candidate.check_config = str(data["check_config"])
+        if "ocr_workers" in data:
+            try:
+                candidate.ocr_workers = int(data["ocr_workers"])
+            except (TypeError, ValueError) as exc:
+                raise ValueError("ocr_workers must be an integer") from exc
         if "daily_run_time" in data:
             candidate.daily_run_time = str(data["daily_run_time"])
         if "schedule_enabled" in data:
@@ -507,6 +561,8 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
         self.config.daily_run_time = candidate.daily_run_time
         self.config.schedule_enabled = candidate.schedule_enabled
         self.config.schedule_weekdays = candidate.schedule_weekdays
+        self.config.check_config = candidate.check_config
+        self.config.ocr_workers = candidate.ocr_workers
         self.config.history_success_limit = candidate.history_success_limit
         self.config.history_failed_limit = candidate.history_failed_limit
         self.config.ocr_archive_retention_days = candidate.ocr_archive_retention_days

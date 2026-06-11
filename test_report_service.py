@@ -46,12 +46,14 @@ class ReportServiceConfigTest(unittest.TestCase):
             self.assertEqual(config.daily_run_time, "02:00")
             self.assertTrue(config.schedule_enabled)
             self.assertEqual(config.schedule_weekdays, [0, 1, 2, 3, 4])
+            self.assertEqual(config.ocr_workers, 1)
             self.assertEqual(config.history_success_limit, 5)
             self.assertTrue(path.exists())
             raw = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(raw["reports_dir"], "reports")
             self.assertTrue(raw["schedule_enabled"])
             self.assertEqual(raw["schedule_weekdays"], [0, 1, 2, 3, 4])
+            self.assertEqual(raw["ocr_workers"], 1)
 
     def test_validate_config_rejects_bad_time_and_non_positive_retention(self):
         config = ServiceConfig(
@@ -65,6 +67,7 @@ class ReportServiceConfigTest(unittest.TestCase):
             history_failed_limit=-1,
             ocr_archive_retention_days=0,
             reports_dir="reports",
+            ocr_workers=0,
         )
 
         errors = validate_config(config)
@@ -73,6 +76,7 @@ class ReportServiceConfigTest(unittest.TestCase):
         self.assertIn("history_success_limit must be a positive integer", errors)
         self.assertIn("history_failed_limit must be a positive integer", errors)
         self.assertIn("ocr_archive_retention_days must be a positive integer", errors)
+        self.assertIn("ocr_workers must be a positive integer", errors)
         self.assertIn("schedule_weekdays must include at least one weekday", errors)
 
     def test_validate_config_rejects_weekdays_outside_monday_to_sunday(self):
@@ -386,6 +390,27 @@ class ReportServiceRunnerTest(unittest.TestCase):
             self.assertIn("stdout message", log_text)
             self.assertIn("stderr message", log_text)
 
+    def test_default_checker_passes_config_and_ocr_workers_to_check_script(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(Path(td) / "reports")
+            config.check_config = str(Path(td) / "custom_check.json")
+            config.ocr_workers = 3
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            captured_args: list[str] = []
+
+            def fake_main(args: list[str]) -> int:
+                captured_args.extend(args)
+                return 0
+
+            with mock.patch("image_check_service.runner.check_i18n_images.main", side_effect=fake_main):
+                runner._run_existing_checker(Path(td) / "report.html", Path(td) / "run.log")
+
+            self.assertEqual(captured_args[:2], ["--config", str(Path(td) / "custom_check.json")])
+            self.assertIn("--ocr-workers", captured_args)
+            self.assertEqual(captured_args[captured_args.index("--ocr-workers") + 1], "3")
+
     def test_default_checker_streams_stdout_to_log_while_running(self):
         with tempfile.TemporaryDirectory() as td:
             config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
@@ -619,6 +644,13 @@ class ReportServiceWebTest(unittest.TestCase):
         self.assertIn("activeRunId", html)
         self.assertIn("activeRunLog", html)
         self.assertIn("schedule_enabled", html)
+        self.assertIn("schedule-toggle", html)
+        self.assertIn("setScheduleEnabled", html)
+        self.assertNotIn('type="checkbox"', html)
+        self.assertIn("check_config", html)
+        self.assertIn("ocr_workers", html)
+        self.assertIn("--config", html)
+        self.assertIn("--ocr-workers", html)
         self.assertIn("schedule_weekdays", html)
         self.assertIn("runNow", html)
         self.assertIn("daily_run_time", html)
@@ -719,6 +751,8 @@ class ReportServiceWebTest(unittest.TestCase):
                         "history_success_limit": 7,
                         "schedule_enabled": False,
                         "schedule_weekdays": [1, 3, 5],
+                        "check_config": "custom_check.json",
+                        "ocr_workers": 4,
                     },
                 )
 
@@ -728,10 +762,14 @@ class ReportServiceWebTest(unittest.TestCase):
                 self.assertEqual(config.history_success_limit, 7)
                 self.assertFalse(config.schedule_enabled)
                 self.assertEqual(config.schedule_weekdays, [1, 3, 5])
+                self.assertEqual(config.check_config, "custom_check.json")
+                self.assertEqual(config.ocr_workers, 4)
                 self.assertTrue(config_path.exists())
                 saved = json.loads(config_path.read_text(encoding="utf-8"))
                 self.assertFalse(saved["schedule_enabled"])
                 self.assertEqual(saved["schedule_weekdays"], [1, 3, 5])
+                self.assertEqual(saved["check_config"], "custom_check.json")
+                self.assertEqual(saved["ocr_workers"], 4)
             finally:
                 server.shutdown()
                 server.server_close()

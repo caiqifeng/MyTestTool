@@ -124,6 +124,8 @@ class ReportRunner:
         args = [
             "--config",
             self.config.check_config,
+            "--ocr-workers",
+            str(self.config.ocr_workers),
             "--output",
             str(output_path),
         ]
