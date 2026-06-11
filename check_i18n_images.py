@@ -1830,6 +1830,137 @@ def build_report_title(now: dt.datetime | None = None) -> str:
     return f"\u300a{TEXT_PROJECT_NAME}\u300b{TEXT_REPORT_TITLE}\uff08{current:%Y.%m.%d}\uff09"
 
 
+def _history_root_for_report(report_path: Path) -> Path:
+    return report_path.parent / "reports" / "history"
+
+
+_REAL_DATETIME = dt.datetime
+
+
+def _readonly_operation_script() -> str:
+    return f"""
+function operationStatus(operation) {{
+  return operation === OPERATION_IGNORE ? '{TEXT_IGNORED}' : '{TEXT_PENDING}';
+}}
+function buildOperationCell(row) {{
+  if (!row.canIgnore) return '<td></td>';
+  return `<td>${{operationStatus(row.operation)}}</td>`;
+}}
+function updateRowOperation(row, operation) {{
+  if (!row.canIgnore) {{
+    row.operation = '';
+    row.filterValues[8] = '';
+    row.cells[8] = '<td></td>';
+    return;
+  }}
+  row.operation = operation;
+  row.filterValues[8] = operationStatus(operation);
+  row.cells[8] = buildOperationCell(row);
+}}
+"""
+
+
+def make_html_report_readonly(content: str) -> str:
+    content = content.replace("const OCR_CACHE_OPERATION_API = '/api/ocr-cache/operation';\n", "")
+    rows_start_marker = "const allRows = "
+    rows_end_marker = ";\nconst FILTER_COLUMNS"
+    rows_start = content.find(rows_start_marker)
+    rows_end = content.find(rows_end_marker, rows_start)
+    if rows_start != -1 and rows_end != -1:
+        rows_json = content[rows_start + len(rows_start_marker):rows_end]
+        try:
+            rows = json.loads(rows_json)
+        except json.JSONDecodeError:
+            rows = None
+        if isinstance(rows, list):
+            for row in rows:
+                if not isinstance(row, dict) or not row.get("canIgnore"):
+                    continue
+                status = TEXT_IGNORED if row.get("operation") == OCR_OPERATION_IGNORE else TEXT_PENDING
+                cells = row.get("cells")
+                if isinstance(cells, list) and len(cells) > 8:
+                    cells[8] = f"<td>{html.escape(status)}</td>"
+                filter_values = row.get("filterValues")
+                if isinstance(filter_values, list) and len(filter_values) > 8:
+                    filter_values[8] = status
+            readonly_rows_json = json.dumps(rows, ensure_ascii=False)
+            content = content[:rows_start + len(rows_start_marker)] + readonly_rows_json + content[rows_end:]
+    start = content.find("function operationStatus(operation) {")
+    end = content.find("function htmlEscape(value) {", start)
+    if start != -1 and end != -1:
+        content = content[:start] + _readonly_operation_script() + content[end:]
+    return content
+
+
+def _write_history_index(history_root: Path) -> None:
+    items: list[dict[str, object]] = []
+    if history_root.exists():
+        for run_dir in sorted((p for p in history_root.iterdir() if p.is_dir()), reverse=True):
+            report = run_dir / "ui_image_check_report.html"
+            if report.exists():
+                items.append({
+                    "run_id": run_dir.name,
+                    "report": f"{run_dir.name}/ui_image_check_report.html",
+                })
+    history_root.mkdir(parents=True, exist_ok=True)
+    (history_root / "index.json").write_text(
+        json.dumps({"items": items}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    links = "\n".join(
+        f'<li><a href="{html.escape(str(item["report"]))}">{html.escape(str(item["run_id"]))}</a></li>'
+        for item in items
+    )
+    (history_root / "index.html").write_text(
+        (
+            "<!doctype html><html lang=\"zh-CN\"><head><meta charset=\"utf-8\">"
+            "<title>历史报告</title></head><body><h1>历史报告</h1>"
+            f"<ul>{links}</ul></body></html>"
+        ),
+        encoding="utf-8",
+    )
+
+
+def cleanup_report_history(history_root: Path, retention_days: int = 7, now: dt.datetime | None = None) -> None:
+    if not history_root.exists():
+        return
+    current = now or dt.datetime.now(BEIJING_TZ)
+    cutoff = current - dt.timedelta(days=retention_days)
+    for run_dir in history_root.iterdir():
+        if not run_dir.is_dir():
+            continue
+        try:
+            run_time = _REAL_DATETIME.strptime(run_dir.name, "%Y-%m-%d_%H%M%S").replace(tzinfo=BEIJING_TZ)
+        except ValueError:
+            continue
+        if run_time < cutoff:
+            shutil.rmtree(run_dir)
+
+
+def archive_existing_html_report(
+    report_path: Path,
+    now: dt.datetime | None = None,
+    retention_days: int = 7,
+) -> Path | None:
+    if not report_path.exists():
+        return None
+    current = now or dt.datetime.now(BEIJING_TZ)
+    history_root = _history_root_for_report(report_path)
+    run_dir = history_root / current.strftime("%Y-%m-%d_%H%M%S")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    archived_report = make_html_report_readonly(report_path.read_text(encoding="utf-8"))
+    (run_dir / "ui_image_check_report.html").write_text(archived_report, encoding="utf-8")
+    assets_dir = report_path.parent / f"{report_path.stem}_assets"
+    if assets_dir.exists():
+        target_assets = run_dir / assets_dir.name
+        if target_assets.exists():
+            shutil.rmtree(target_assets)
+        shutil.copytree(assets_dir, target_assets)
+    cleanup_report_history(history_root, retention_days=retention_days, now=current)
+    _write_history_index(history_root)
+    return run_dir
+
+
 def write_html_report(
     path: Path,
     findings: Sequence[Finding],
@@ -1840,6 +1971,7 @@ def write_html_report(
     new_with_chars: int = 0,
     max_image_px: int | None = None,
     ocr_cache_name: str = OCR_CACHE_DB_FILE,
+    readonly: bool = False,
 ) -> None:
     assets_dir = path.parent / f"{path.stem}_assets"
     if assets_dir.exists():
@@ -1920,7 +2052,9 @@ def write_html_report(
                     operation_md5 = ""
         operation_label = TEXT_CLEAR_IGNORE if operation == OCR_OPERATION_IGNORE else TEXT_MARK_IGNORED
         operation_class = "ignored" if operation == OCR_OPERATION_IGNORE else ""
-        if can_ignore:
+        if readonly and can_ignore:
+            operation_cell = f"<td>{html.escape(TEXT_IGNORED if operation == OCR_OPERATION_IGNORE else TEXT_PENDING)}</td>"
+        elif can_ignore:
             operation_cell = (
                 f'<td><button class="operation-button {operation_class}" type="button" '
                 f'onclick="toggleIgnoreFinding({index})">{html.escape(operation_label)}</button></td>'
@@ -1983,6 +2117,7 @@ def write_html_report(
         detail_types[0],
         report_title,
         ocr_cache_name,
+        readonly,
     )
     path.write_text(doc, encoding="utf-8")
 
@@ -2103,9 +2238,102 @@ def _html_template(
     default_tab_type: str = TEXT_NONE,
     report_title: str = TEXT_REPORT_TITLE,
     ocr_cache_name: str = OCR_CACHE_DB_FILE,
+    readonly: bool = False,
 ) -> str:
     rows_json = json.dumps(rows, ensure_ascii=False)
     default_tab_json = json.dumps(default_tab_type, ensure_ascii=False)
+    cache_api_constant = "" if readonly else "const OCR_CACHE_OPERATION_API = '/api/ocr-cache/operation';"
+    if readonly:
+        operation_script = f"""
+function operationStatus(operation) {{
+  return operation === OPERATION_IGNORE ? '{TEXT_IGNORED}' : '{TEXT_PENDING}';
+}}
+function buildOperationCell(row) {{
+  if (!row.canIgnore) return '<td></td>';
+  return `<td>${{operationStatus(row.operation)}}</td>`;
+}}
+function updateRowOperation(row, operation) {{
+  if (!row.canIgnore) {{
+    row.operation = '';
+    row.filterValues[8] = '';
+    row.cells[8] = '<td></td>';
+    return;
+  }}
+  row.operation = operation;
+  row.filterValues[8] = operationStatus(operation);
+  row.cells[8] = buildOperationCell(row);
+}}
+"""
+    else:
+        operation_script = f"""
+function operationStatus(operation) {{
+  return operation === OPERATION_IGNORE ? '{TEXT_IGNORED}' : '{TEXT_PENDING}';
+}}
+function buildOperationCell(row) {{
+  if (!row.canIgnore) return '<td></td>';
+  const ignored = row.operation === OPERATION_IGNORE;
+  const label = ignored ? '{TEXT_CLEAR_IGNORE}' : '{TEXT_MARK_IGNORED}';
+  return `<td><button class="operation-button${{ignored ? ' ignored' : ''}}" type="button" onclick="toggleIgnoreFinding(${{row.rowIndex}})">${{label}}</button></td>`;
+}}
+function updateRowOperation(row, operation) {{
+  if (!row.canIgnore) {{
+    row.operation = '';
+    row.filterValues[8] = '';
+    row.cells[8] = '<td></td>';
+    return;
+  }}
+  row.operation = operation;
+  row.filterValues[8] = operationStatus(operation);
+  row.cells[8] = buildOperationCell(row);
+}}
+function findRowByIndex(rowIndex) {{
+  return allRows.find(row => Number(row.rowIndex) === Number(rowIndex));
+}}
+function operationApiCandidates() {{
+  const relative = 'api/ocr-cache/operation';
+  return Array.from(new Set([relative, OCR_CACHE_OPERATION_API]));
+}}
+async function writeIgnoreOperation(row, operation) {{
+  let lastError = null;
+  for (const apiUrl of operationApiCandidates()) {{
+    try {{
+      const response = await fetch(apiUrl, {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify({{
+          relativePath: row.relativePath,
+          md5: row.mainlandMd5,
+          operation,
+        }}),
+      }});
+      if (!response.ok) {{
+        lastError = new Error(`本地报告服务写入失败：${{response.status}}`);
+        continue;
+      }}
+      return;
+    }} catch (error) {{
+      lastError = error;
+    }}
+  }}
+  throw lastError || new Error('本地报告服务写入失败');
+}}
+async function toggleIgnoreFinding(rowIndex) {{
+  const row = findRowByIndex(rowIndex);
+  if (!row || !row.canIgnore) return;
+  if (!row.relativePath || !row.mainlandMd5) {{
+    alert('缺少缓存键或 md5，无法写入忽略标识。');
+    return;
+  }}
+  const nextOperation = row.operation === OPERATION_IGNORE ? '' : OPERATION_IGNORE;
+  try {{
+    await writeIgnoreOperation(row, nextOperation);
+    updateRowOperation(row, nextOperation);
+    filterTable();
+  }} catch (error) {{
+    alert(`自动写入 ${{OCR_CACHE_FILE_NAME}} 失败：请确认当前页面通过本地报告服务或管理服务的 HTTP 地址打开，并且服务进程仍在运行。${{error && error.message ? ' ' + error.message : ''}}`);
+  }}
+}}
+"""
     return f"""<!doctype html>
 <html lang="zh-CN">
 <head>
@@ -2240,7 +2468,7 @@ const allRows = {rows_json};
 const FILTER_COLUMNS = [0, 1, 2, 7, 8];
 const OCR_CACHE_FILE_NAME = '{html.escape(ocr_cache_name)}';
 const OPERATION_IGNORE = '{OCR_OPERATION_IGNORE}';
-const OCR_CACHE_OPERATION_API = '/api/ocr-cache/operation';
+{cache_api_constant}
 let activeTabType = {default_tab_json};
 let filteredRows = allRows.filter(row => row.pairType === activeTabType);
 let currentPage = 1;
@@ -2346,73 +2574,7 @@ function renderPage(page) {{
 function gotoPage(page) {{
   renderPage(page);
 }}
-function operationStatus(operation) {{
-  return operation === OPERATION_IGNORE ? '{TEXT_IGNORED}' : '{TEXT_PENDING}';
-}}
-function buildOperationCell(row) {{
-  if (!row.canIgnore) return '<td></td>';
-  const ignored = row.operation === OPERATION_IGNORE;
-  const label = ignored ? '{TEXT_CLEAR_IGNORE}' : '{TEXT_MARK_IGNORED}';
-  return `<td><button class="operation-button${{ignored ? ' ignored' : ''}}" type="button" onclick="toggleIgnoreFinding(${{row.rowIndex}})">${{label}}</button></td>`;
-}}
-function updateRowOperation(row, operation) {{
-  if (!row.canIgnore) {{
-    row.operation = '';
-    row.filterValues[8] = '';
-    row.cells[8] = '<td></td>';
-    return;
-  }}
-  row.operation = operation;
-  row.filterValues[8] = operationStatus(operation);
-  row.cells[8] = buildOperationCell(row);
-}}
-function findRowByIndex(rowIndex) {{
-  return allRows.find(row => Number(row.rowIndex) === Number(rowIndex));
-}}
-function operationApiCandidates() {{
-  const relative = 'api/ocr-cache/operation';
-  return Array.from(new Set([relative, OCR_CACHE_OPERATION_API]));
-}}
-async function writeIgnoreOperation(row, operation) {{
-  let lastError = null;
-  for (const apiUrl of operationApiCandidates()) {{
-    try {{
-      const response = await fetch(apiUrl, {{
-        method: 'POST',
-        headers: {{ 'Content-Type': 'application/json' }},
-        body: JSON.stringify({{
-          relativePath: row.relativePath,
-          md5: row.mainlandMd5,
-          operation,
-        }}),
-      }});
-      if (!response.ok) {{
-        lastError = new Error(`本地报告服务写入失败：${{response.status}}`);
-        continue;
-      }}
-      return;
-    }} catch (error) {{
-      lastError = error;
-    }}
-  }}
-  throw lastError || new Error('本地报告服务写入失败');
-}}
-async function toggleIgnoreFinding(rowIndex) {{
-  const row = findRowByIndex(rowIndex);
-  if (!row || !row.canIgnore) return;
-  if (!row.relativePath || !row.mainlandMd5) {{
-    alert('缺少缓存键或 md5，无法写入忽略标识。');
-    return;
-  }}
-  const nextOperation = row.operation === OPERATION_IGNORE ? '' : OPERATION_IGNORE;
-  try {{
-    await writeIgnoreOperation(row, nextOperation);
-    updateRowOperation(row, nextOperation);
-    filterTable();
-  }} catch (error) {{
-    alert(`自动写入 ${{OCR_CACHE_FILE_NAME}} 失败：请确认当前页面通过本地报告服务或管理服务的 HTTP 地址打开，并且服务进程仍在运行。${{error && error.message ? ' ' + error.message : ''}}`);
-  }}
-}}
+{operation_script}
 function htmlEscape(value) {{
   return String(value || '')
     .replace(/&/g, '&amp;')
@@ -3068,13 +3230,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     _require_pillow_for_report(output_path)
     report_written = False
     report_service_started = False
+    report_archived = False
 
     def write_cumulative_report(current_findings: list[Finding], current_counts: dict[str, int]) -> None:
-        nonlocal report_written, report_service_started
+        nonlocal report_written, report_service_started, report_archived
         log_step(
             f"生成累计 HTML 报告: {output_path} findings={len(current_findings)} "
             f"i18n={current_counts['i18n_count']} mainland={current_counts['mainland_count']}"
         )
+        if not report_archived:
+            archived = archive_existing_html_report(output_path)
+            if archived is not None:
+                log_step(f"历史报告已归档: {archived}")
+            report_archived = True
         write_html_report(
             output_path,
             current_findings,

@@ -8,6 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+import check_i18n_images
 from check_i18n_images import (
     BEIJING_TZ,
     DEFAULT_THUMBNAIL_ISSUES,
@@ -1408,6 +1409,124 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertNotIn("readOcrCache", content)
             self.assertNotIn("writeOcrCache", content)
 
+    def test_archive_existing_html_report_copies_report_and_assets(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            report = root / "ui_image_check_report.html"
+            assets = root / "ui_image_check_report_assets"
+            report.write_text("old report", encoding="utf-8")
+            assets.mkdir()
+            (assets / "thumb.png").write_bytes(b"png")
+            now = dt.datetime(2026, 6, 11, 9, 30, 12, tzinfo=BEIJING_TZ)
+
+            archived = check_i18n_images.archive_existing_html_report(report, now=now)
+
+            self.assertEqual(archived, root / "reports" / "history" / "2026-06-11_093012")
+            self.assertEqual((archived / "ui_image_check_report.html").read_text(encoding="utf-8"), "old report")
+            self.assertEqual((archived / "ui_image_check_report_assets" / "thumb.png").read_bytes(), b"png")
+
+    def test_archive_existing_html_report_makes_report_readonly(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            report = root / "ui_image_check_report.html"
+            write_html_report(
+                report,
+                [
+                    Finding(
+                        "ui",
+                        "mainland_new_with_text",
+                        "SampleOnly/text.tga",
+                        "",
+                        "",
+                        None,
+                        dt.datetime(2026, 1, 2, tzinfo=UTC),
+                        "text detail",
+                        operation="ignore",
+                        mainland_md5="abc",
+                    )
+                ],
+            )
+
+            archived = check_i18n_images.archive_existing_html_report(
+                report,
+                now=dt.datetime(2026, 6, 11, 9, 30, 12, tzinfo=BEIJING_TZ),
+            )
+
+            content = (archived / "ui_image_check_report.html").read_text(encoding="utf-8")
+            self.assertIn("已忽略", content)
+            self.assertNotIn("toggleIgnoreFinding", content)
+            self.assertNotIn("OCR_CACHE_OPERATION_API", content)
+            self.assertNotIn("标记为已忽略", content)
+            self.assertNotIn("取消忽略", content)
+
+    def test_archive_existing_html_report_retains_latest_seven_days(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            history = root / "reports" / "history"
+            history.mkdir(parents=True)
+            for name in ["2026-06-03_090000", "2026-06-04_090000", "2026-06-05_090000"]:
+                run_dir = history / name
+                run_dir.mkdir()
+                (run_dir / "ui_image_check_report.html").write_text(name, encoding="utf-8")
+            report = root / "ui_image_check_report.html"
+            report.write_text("latest", encoding="utf-8")
+
+            check_i18n_images.archive_existing_html_report(
+                report,
+                now=dt.datetime(2026, 6, 11, 9, 0, tzinfo=BEIJING_TZ),
+                retention_days=7,
+            )
+
+            self.assertFalse((history / "2026-06-03_090000").exists())
+            self.assertTrue((history / "2026-06-04_090000").exists())
+            self.assertTrue((history / "2026-06-11_090000").exists())
+
+    def test_archive_existing_html_report_writes_history_index(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            report = root / "ui_image_check_report.html"
+            report.write_text("old report", encoding="utf-8")
+
+            check_i18n_images.archive_existing_html_report(
+                report,
+                now=dt.datetime(2026, 6, 11, 9, 30, 12, tzinfo=BEIJING_TZ),
+            )
+
+            index = __import__("json").loads((root / "reports" / "history" / "index.json").read_text(encoding="utf-8"))
+            self.assertEqual(index["items"][0]["run_id"], "2026-06-11_093012")
+            self.assertEqual(index["items"][0]["report"], "2026-06-11_093012/ui_image_check_report.html")
+            index_html = (root / "reports" / "history" / "index.html").read_text(encoding="utf-8")
+            self.assertIn("2026-06-11_093012/ui_image_check_report.html", index_html)
+
+    def test_write_html_report_readonly_disables_cache_write_actions(self):
+        with tempfile.TemporaryDirectory() as td:
+            out = Path(td) / "report.html"
+            write_html_report(
+                out,
+                [
+                    Finding(
+                        "ui",
+                        "mainland_new_with_text",
+                        "SampleOnly/text.tga",
+                        "",
+                        "",
+                        None,
+                        dt.datetime(2026, 1, 2, tzinfo=UTC),
+                        "text detail",
+                        operation="ignore",
+                        mainland_md5="abc",
+                    )
+                ],
+                readonly=True,
+            )
+
+            content = out.read_text(encoding="utf-8")
+            self.assertIn("已忽略", content)
+            self.assertNotIn("toggleIgnoreFinding", content)
+            self.assertNotIn("OCR_CACHE_OPERATION_API", content)
+            self.assertNotIn("标记为已忽略", content)
+            self.assertNotIn("取消忽略", content)
+
     def test_serve_report_defaults_to_lan_host_and_port_9080(self):
         self.assertEqual(serve_report.__defaults__[-2], "0.0.0.0")
         self.assertEqual(serve_report.__defaults__[-1], 9080)
@@ -1621,6 +1740,38 @@ class CheckI18nImagesTest(unittest.TestCase):
 
             self.assertEqual(result, 0)
             cleanup.assert_called_once_with(db_path, retention_days=30)
+
+    def test_main_archives_existing_report_before_writing_latest(self):
+        with tempfile.TemporaryDirectory() as td:
+            output = Path(td) / "ui_image_check_report.html"
+            db_path = Path(td) / ".ocr_cache.db"
+            output.write_text("old report", encoding="utf-8")
+            counts = {"i18n_count": 0, "mainland_count": 0, "normal_synced": 0, "new_no_text": 0}
+
+            with patch(
+                "check_i18n_images.collect_findings",
+                return_value=([], counts),
+            ), patch(
+                "check_i18n_images._require_pillow_for_report"
+            ), patch(
+                "check_i18n_images.write_html_report"
+            ) as write_report, patch(
+                "check_i18n_images.archive_existing_html_report"
+            ) as archive:
+                result = main([
+                    "--i18n",
+                    "missing-i18n",
+                    "--mainland",
+                    "missing-mainland",
+                    "--output",
+                    str(output),
+                    "--no-ocr",
+                    "--no-serve-report",
+                ])
+
+            self.assertEqual(result, 0)
+            archive.assert_called_once_with(output)
+            write_report.assert_called_once()
 
     def test_sqlite_ocr_cache_hit_exposes_ignore_operation_for_same_md5(self):
         with tempfile.TemporaryDirectory() as td:
