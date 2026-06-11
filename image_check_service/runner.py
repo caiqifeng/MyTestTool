@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
-import io
 import threading
 import traceback
 from pathlib import Path
@@ -23,6 +22,24 @@ def make_run_id(now: dt.datetime | None = None) -> str:
 
 def _now_text() -> str:
     return dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S %z")
+
+
+class _LiveLogWriter:
+    def __init__(self, log_path: Path):
+        self.log_path = log_path
+        self._lock = threading.Lock()
+
+    def write(self, text: str) -> int:
+        if not text:
+            return 0
+        with self._lock:
+            with self.log_path.open("a", encoding="utf-8") as log:
+                log.write(text)
+                log.flush()
+        return len(text)
+
+    def flush(self) -> None:
+        return None
 
 
 class ReportRunner:
@@ -110,11 +127,11 @@ class ReportRunner:
             "--output",
             str(output_path),
         ]
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        log_path.write_text("", encoding="utf-8")
+        live_log = _LiveLogWriter(log_path)
+        with contextlib.redirect_stdout(live_log), contextlib.redirect_stderr(live_log):
             exit_code = check_i18n_images.main(args)
-        log_path.write_text(stdout.getvalue() + stderr.getvalue(), encoding="utf-8")
         if exit_code != 0:
             raise RuntimeError(f"check_i18n_images exited with {exit_code}")
         return {}

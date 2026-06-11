@@ -386,6 +386,36 @@ class ReportServiceRunnerTest(unittest.TestCase):
             self.assertIn("stdout message", log_text)
             self.assertIn("stderr message", log_text)
 
+    def test_default_checker_streams_stdout_to_log_while_running(self):
+        with tempfile.TemporaryDirectory() as td:
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(Path(td) / "reports")
+            config.check_config = str(Path(td) / "check_config.json")
+            Path(config.check_config).write_text("{}", encoding="utf-8")
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            printed = threading.Event()
+            release = threading.Event()
+
+            def fake_main(args: list[str]) -> int:
+                print("live progress line")
+                printed.set()
+                release.wait(timeout=5)
+                return 0
+
+            log_path = Path(td) / "run.log"
+            with mock.patch("image_check_service.runner.check_i18n_images.main", side_effect=fake_main):
+                thread = threading.Thread(target=lambda: runner._run_existing_checker(Path(td) / "report.html", log_path))
+                thread.start()
+                self.assertTrue(printed.wait(timeout=5))
+                try:
+                    log_text = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+                finally:
+                    release.set()
+                    thread.join(timeout=5)
+
+            self.assertFalse(thread.is_alive())
+            self.assertIn("live progress line", log_text)
+
 
 class ReportServiceSchedulerTest(unittest.TestCase):
     def test_next_daily_run_returns_today_when_time_is_future(self):
