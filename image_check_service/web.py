@@ -102,9 +102,16 @@ body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Aria
 .button { border:0; border-radius:5px; background:var(--blue); color:#fff; padding:9px 14px; font-weight:700; cursor:pointer; }
 .button:disabled { opacity:.55; cursor:not-allowed; }
 .button.secondary { background:#eef4ff; color:#235bc4; }
-.save-feedback { min-height:20px; margin:8px 0 12px; font-size:13px; font-weight:700; }
-.save-feedback.success { color:var(--green); }
-.save-feedback.error { color:var(--red); }
+.dialog-backdrop { position:fixed; inset:0; z-index:50; display:none; align-items:center; justify-content:center; background:rgba(15,23,42,.38); padding:24px; }
+.dialog-backdrop.open { display:flex; }
+.dialog { width:min(420px, 100%); border-radius:8px; background:#fff; box-shadow:0 18px 52px rgba(15,23,42,.24); overflow:hidden; }
+.dialog-head { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:16px 18px; border-bottom:1px solid var(--line); }
+.dialog-title { margin:0; font-size:17px; }
+.dialog-close { border:0; background:transparent; color:#7b8aa1; font-size:22px; line-height:1; cursor:pointer; }
+.dialog-body { padding:18px; color:#405069; font-size:14px; line-height:1.55; word-break:break-word; }
+.dialog.success .dialog-title { color:var(--green); }
+.dialog.error .dialog-title { color:var(--red); }
+.dialog-actions { display:flex; justify-content:flex-end; padding:0 18px 18px; }
 .latest-report-panel { height:100vh; border:0; border-radius:0; margin:0; display:flex; flex-direction:column; }
 .latest-frame { flex:1 1 auto; width:100%; min-height:0; border:0; background:#fff; }
 .empty { padding:30px; text-align:center; color:var(--muted); }
@@ -206,7 +213,6 @@ select { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; p
           </div>
         </div>
         <p><button class="button secondary" onclick="saveConfig()">保存执行参数</button></p>
-        <p id="taskSaveFeedback" class="save-feedback" data-save-feedback aria-live="polite"></p>
         <button id="runNow" class="button" onclick="runNow()">立即运行扫描</button>
         <p id="nextRun" class="page-subtitle"></p>
         <div class="run-detail-grid">
@@ -272,10 +278,19 @@ select { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; p
         </div>
         <div id="cronPreview" class="cron">-</div>
         <p><button class="button" onclick="saveConfig()">保存设置</button></p>
-        <p id="settingsSaveFeedback" class="save-feedback" data-save-feedback aria-live="polite"></p>
       </div>
     </section>
   </main>
+</div>
+<div id="saveFeedbackDialog" class="dialog-backdrop" role="dialog" aria-modal="true" aria-labelledby="saveFeedbackTitle" aria-describedby="saveFeedbackMessage">
+  <div id="saveFeedbackPanel" class="dialog">
+    <div class="dialog-head">
+      <h2 id="saveFeedbackTitle" class="dialog-title">保存成功</h2>
+      <button class="dialog-close" type="button" aria-label="关闭" onclick="closeSaveFeedback()">×</button>
+    </div>
+    <div id="saveFeedbackMessage" class="dialog-body"></div>
+    <div class="dialog-actions"><button class="button" type="button" onclick="closeSaveFeedback()">确定</button></div>
+  </div>
 </div>
 <script>
 const dirtyFields = new Set();
@@ -414,11 +429,16 @@ function setInputValueUnlessDirty(input, value) {
   input.value = value;
 }
 function showSaveFeedback(success, message) {
-  document.querySelectorAll('[data-save-feedback]').forEach(element => {
-    element.textContent = message;
-    element.classList.toggle('success', success);
-    element.classList.toggle('error', !success);
-  });
+  const dialog = document.getElementById('saveFeedbackDialog');
+  const panel = document.getElementById('saveFeedbackPanel');
+  document.getElementById('saveFeedbackTitle').textContent = success ? '保存成功' : '保存失败';
+  document.getElementById('saveFeedbackMessage').textContent = message;
+  panel.classList.toggle('success', success);
+  panel.classList.toggle('error', !success);
+  dialog.classList.add('open');
+}
+function closeSaveFeedback() {
+  document.getElementById('saveFeedbackDialog').classList.remove('open');
 }
 function setExecutionParams(config) {
   document.querySelectorAll('[data-config-field="check_config"]').forEach(input => {
