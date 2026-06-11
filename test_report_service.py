@@ -601,7 +601,11 @@ class ReportServiceWebTest(unittest.TestCase):
     def test_console_html_contains_required_controls(self):
         html = build_console_html()
 
-        self.assertIn("ART SCANNER", html)
+        self.assertIn("《剑网3》重制版", html)
+        self.assertIn("多语言翻译检查平台", html)
+        self.assertIn("/static/app-icon.png", html)
+        self.assertNotIn("ART SCANNER", html)
+        self.assertNotIn("美术资源巡检工具", html)
         self.assertIn("最新结果", html)
         self.assertIn("任务管理", html)
         self.assertIn("历史记录", html)
@@ -620,6 +624,28 @@ class ReportServiceWebTest(unittest.TestCase):
         self.assertIn("daily_run_time", html)
         self.assertIn("/api/status", html)
         self.assertIn("/api/runs", html)
+
+    def test_http_static_app_icon_serves_png(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.host = "127.0.0.1"
+            config.port = 0
+            config.reports_dir = str(root / "reports")
+            runner = ReportRunner(config, check_callable=lambda output_path, log_path: {})
+            server = create_server(config, root / "service.json", runner, lambda: None)
+            config.port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            try:
+                response = urllib.request.urlopen(f"http://127.0.0.1:{server.server_address[1]}/static/app-icon.png", timeout=5)
+                self.assertEqual(response.status, 200)
+                self.assertEqual(response.headers.get_content_type(), "image/png")
+                self.assertTrue(response.read().startswith(b"\x89PNG"))
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
 
     def test_http_status_and_manual_run(self):
         with tempfile.TemporaryDirectory() as td:

@@ -67,17 +67,17 @@ def build_console_html() -> str:
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ART SCANNER</title>
+<title>《剑网3》重制版 - 多语言翻译检查平台</title>
 <style>
 :root { --bg:#f3f6fb; --nav:#131a22; --nav-2:#1b2430; --brand:#08caa6; --text:#182235; --muted:#7b8aa1; --line:#dfe6ef; --panel:#fff; --blue:#2d6cdf; --green:#16a36a; --red:#e5484d; --orange:#f27a3d; }
 * { box-sizing:border-box; }
 body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--text); }
 .app { display:grid; grid-template-columns:188px 1fr; min-height:100vh; }
 .side { background:var(--nav); color:#d8e0ea; display:flex; flex-direction:column; border-right:1px solid #263241; }
-.brand { height:58px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid #263241; }
-.brand-mark { width:24px; height:24px; border-radius:4px; background:var(--brand); color:#09221d; display:grid; place-items:center; font-weight:800; }
-.brand strong { display:block; color:var(--brand); font-size:12px; letter-spacing:1px; }
-.brand span { display:block; color:#8fa0b5; font-size:10px; margin-top:2px; }
+.brand { height:58px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid #263241; }
+.brand-mark { width:32px; height:32px; flex:0 0 32px; display:block; object-fit:contain; }
+.brand strong { display:block; color:var(--brand); font-size:13px; line-height:1.2; letter-spacing:0; white-space:nowrap; }
+.brand span { display:block; color:#8fa0b5; font-size:10px; line-height:1.25; margin-top:2px; white-space:nowrap; }
 .nav { padding:14px 10px; display:grid; gap:6px; }
 .nav button { width:100%; height:36px; border:0; border-radius:4px; padding:0 12px; text-align:left; background:transparent; color:#c7d2df; font-weight:700; cursor:pointer; }
 .nav button.active { background:var(--brand); color:#081d19; }
@@ -138,7 +138,7 @@ input[type="checkbox"] { width:auto; height:auto; }
 <body>
 <div class="app">
   <aside class="side">
-    <div class="brand"><div class="brand-mark">A</div><div><strong>ART SCANNER</strong><span>美术资源巡检工具</span></div></div>
+    <div class="brand"><img class="brand-mark" src="/static/app-icon.png" alt=""><div><strong>《剑网3》重制版</strong><span>多语言翻译检查平台</span></div></div>
     <nav class="nav">
       <button class="active" data-view="latest" onclick="showView('latest')">最新结果</button>
       <button data-view="tasks" onclick="showView('tasks')">任务管理</button>
@@ -420,6 +420,7 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
     runner: ReportRunner
     get_next_run_text: Callable[[], str | None]
     static_root: Path
+    app_static_root: Path
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
@@ -437,6 +438,9 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
             return
         if parsed.path.startswith("/local/"):
             self._serve_local_file(parsed.path)
+            return
+        if parsed.path.startswith("/static/"):
+            self._serve_app_static_file(parsed.path)
             return
         if parsed.path.startswith("/reports/runs/") and parsed.path.endswith("/api/log"):
             self._serve_run_log(parsed.path)
@@ -547,6 +551,16 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
             content_type = "text/html; charset=utf-8"
         self._send_bytes(target.read_bytes(), content_type)
 
+    def _serve_app_static_file(self, request_path: str) -> None:
+        relative = urllib.parse.unquote(request_path.removeprefix("/static/")).replace("\\", "/")
+        static_root = self.app_static_root.resolve()
+        target = (static_root / relative).resolve()
+        if target == static_root or static_root not in target.parents or not target.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        self._send_bytes(target.read_bytes(), content_type)
+
     def _serve_run_log(self, request_path: str) -> None:
         parts = urllib.parse.unquote(request_path).strip("/").split("/")
         if len(parts) != 5:
@@ -603,4 +617,5 @@ def create_server(
     BoundHandler.runner = runner
     BoundHandler.get_next_run_text = staticmethod(get_next_run_text)
     BoundHandler.static_root = (static_root or Path.cwd()).resolve()
+    BoundHandler.app_static_root = (Path(__file__).resolve().parent / "static").resolve()
     return ThreadingHTTPServer((config.host, config.port), BoundHandler)
