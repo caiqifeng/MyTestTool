@@ -476,11 +476,18 @@ class ReportServiceWebTest(unittest.TestCase):
     def test_console_html_contains_required_controls(self):
         html = build_console_html()
 
-        self.assertIn("I18n Image Check Service", html)
-        self.assertIn("Run Now", html)
+        self.assertIn("ART SCANNER", html)
+        self.assertIn("最新结果", html)
+        self.assertIn("任务管理", html)
+        self.assertIn("历史记录", html)
+        self.assertIn("定时设置", html)
+        self.assertIn("latestReportFrame", html)
+        self.assertIn("historyRows", html)
+        self.assertIn("runNow", html)
+        self.assertIn("daily_run_time", html)
+        self.assertIn("打开最新报告", html)
         self.assertIn("/api/status", html)
         self.assertIn("/api/runs", html)
-        self.assertIn("daily_run_time", html)
 
     def test_http_status_and_manual_run(self):
         with tempfile.TemporaryDirectory() as td:

@@ -37,54 +37,128 @@ def status_payload(
 
 def build_console_html() -> str:
     return """<!doctype html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>I18n Image Check Service</title>
+<title>ART SCANNER</title>
 <style>
-body { font-family: Arial, sans-serif; margin: 24px; background: #f6f7f9; color: #20242a; }
-main { max-width: 1040px; margin: 0 auto; }
-section { background: white; border: 1px solid #d9dee7; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-button { padding: 8px 12px; cursor: pointer; }
-button:disabled { opacity: .55; cursor: not-allowed; }
-label { display: block; margin: 8px 0; }
-input { padding: 6px; }
-pre { white-space: pre-wrap; background: #f1f3f6; padding: 12px; }
-table { border-collapse: collapse; width: 100%; }
-td, th { border-bottom: 1px solid #e1e5ec; padding: 8px; text-align: left; }
+:root { --bg:#f3f6fb; --nav:#131a22; --nav-2:#1b2430; --brand:#08caa6; --text:#182235; --muted:#7b8aa1; --line:#dfe6ef; --panel:#fff; --blue:#2d6cdf; --green:#16a36a; --red:#e5484d; --orange:#f27a3d; }
+* { box-sizing:border-box; }
+body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--text); }
+.app { display:grid; grid-template-columns:188px 1fr; min-height:100vh; }
+.side { background:var(--nav); color:#d8e0ea; display:flex; flex-direction:column; border-right:1px solid #263241; }
+.brand { height:58px; display:flex; align-items:center; gap:10px; padding:0 16px; border-bottom:1px solid #263241; }
+.brand-mark { width:24px; height:24px; border-radius:4px; background:var(--brand); color:#09221d; display:grid; place-items:center; font-weight:800; }
+.brand strong { display:block; color:var(--brand); font-size:12px; letter-spacing:1px; }
+.brand span { display:block; color:#8fa0b5; font-size:10px; margin-top:2px; }
+.nav { padding:14px 10px; display:grid; gap:6px; }
+.nav button { width:100%; height:36px; border:0; border-radius:4px; padding:0 12px; text-align:left; background:transparent; color:#c7d2df; font-weight:700; cursor:pointer; }
+.nav button.active { background:var(--brand); color:#081d19; }
+.side-foot { margin-top:auto; padding:14px 18px; border-top:1px solid #263241; color:#738196; font-size:11px; }
+.content { min-width:0; padding:26px 28px 40px; }
+.view { display:none; }
+.view.active { display:block; }
+.page-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:18px; }
+.page-title { margin:0; font-size:22px; }
+.page-subtitle { margin:6px 0 0; color:var(--muted); font-size:13px; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:6px; margin-bottom:16px; overflow:hidden; }
+.panel-pad { padding:16px; }
+.metric-grid { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; margin-bottom:16px; }
+.metric { background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:14px 16px; }
+.metric span { display:block; color:var(--muted); font-size:12px; }
+.metric strong { display:block; margin-top:6px; font-size:30px; line-height:1; color:var(--blue); }
+.metric strong.warn { color:#f05a28; }
+.metric strong.ok { color:var(--green); }
+.status-pill { display:inline-flex; align-items:center; gap:6px; min-height:24px; padding:3px 10px; border-radius:999px; background:#eef2f7; color:#66758a; font-size:12px; font-weight:700; }
+.status-dot { width:6px; height:6px; border-radius:50%; background:#a8b3c3; }
+.status-running .status-dot { background:var(--blue); }
+.button { border:0; border-radius:5px; background:var(--blue); color:#fff; padding:9px 14px; font-weight:700; cursor:pointer; }
+.button:disabled { opacity:.55; cursor:not-allowed; }
+.button.secondary { background:#eef4ff; color:#235bc4; }
+.latest-frame { width:100%; height:calc(100vh - 198px); min-height:560px; border:0; background:#fff; }
+.empty { padding:30px; text-align:center; color:var(--muted); }
+table { width:100%; border-collapse:collapse; }
+th,td { border-bottom:1px solid #e9eef5; padding:11px 14px; text-align:left; font-size:13px; }
+th { background:#f7f9fc; color:#6d7d93; font-weight:700; }
+.tag { display:inline-flex; min-height:22px; align-items:center; border-radius:4px; padding:2px 8px; font-size:12px; font-weight:700; }
+.tag.success { background:#e8f8ef; color:var(--green); }
+.tag.failed { background:#ffeceb; color:var(--red); }
+.tag.manual { background:#eaf2ff; color:var(--blue); }
+.tag.schedule { background:#e8f8ef; color:var(--green); }
+.issue { color:#f05a28; font-weight:700; }
+.settings-grid { display:grid; grid-template-columns:260px 1fr; gap:14px; align-items:center; max-width:720px; }
+label { color:#526176; font-size:13px; font-weight:700; }
+input { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; padding:6px 9px; font:inherit; }
+.cron { margin-top:14px; background:#172134; color:#6dd3ff; border-radius:5px; padding:14px 16px; font-family:Consolas,monospace; }
+.toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
+.toolbar-actions { display:flex; gap:8px; align-items:center; }
 </style>
 </head>
 <body>
-<main>
-<h1>I18n Image Check Service</h1>
-<section>
-  <h2>Status</h2>
-  <p id="statusText">Loading...</p>
-  <p id="nextRun"></p>
-  <button id="runNow" onclick="runNow()">Run Now</button>
-  <p><a id="currentReport" href="#" style="display:none">Open Current Report</a></p>
-</section>
-<section>
-  <h2>Config</h2>
-  <label>Daily run time <input id="daily_run_time" name="daily_run_time" value="02:00"></label>
-  <label>Success history limit <input id="history_success_limit" name="history_success_limit" type="number" value="5"></label>
-  <label>Failed history limit <input id="history_failed_limit" name="history_failed_limit" type="number" value="5"></label>
-  <label>OCR archive retention days <input id="ocr_archive_retention_days" name="ocr_archive_retention_days" type="number" value="30"></label>
-  <button onclick="saveConfig()">Save Config</button>
-</section>
-<section>
-  <h2>Runs</h2>
-  <table>
-    <thead><tr><th>Run</th><th>Status</th><th>Trigger</th><th>Started</th><th>Report</th></tr></thead>
-    <tbody id="runs"></tbody>
-  </table>
-</section>
-<section>
-  <h2>Raw Status</h2>
-  <pre id="rawStatus"></pre>
-</section>
-</main>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><div class="brand-mark">A</div><div><strong>ART SCANNER</strong><span>美术资源巡检工具</span></div></div>
+    <nav class="nav">
+      <button class="active" data-view="latest" onclick="showView('latest')">最新结果</button>
+      <button data-view="tasks" onclick="showView('tasks')">任务管理</button>
+      <button data-view="history" onclick="showView('history')">历史记录</button>
+      <button data-view="settings" onclick="showView('settings')">定时设置</button>
+    </nav>
+    <div class="side-foot">v1.0.0 · 2026-06-11</div>
+  </aside>
+  <main class="content">
+    <section id="view-latest" class="view active">
+      <div class="page-head">
+        <div><h1 class="page-title">最新结果</h1><p class="page-subtitle">展示最近一次成功生成的检查报告。</p></div>
+        <div><span id="latestIssueCount" class="metric-count">-</span></div>
+      </div>
+      <div class="panel">
+        <div class="toolbar">
+          <strong>报告详情</strong>
+          <div class="toolbar-actions"><a id="currentReport" class="button secondary" href="#" target="_blank" style="display:none">打开最新报告</a></div>
+        </div>
+        <div id="latestEmpty" class="empty">暂无成功报告</div>
+        <iframe id="latestReportFrame" class="latest-frame" title="最新检查报告" style="display:none"></iframe>
+      </div>
+    </section>
+    <section id="view-tasks" class="view">
+      <div class="page-head"><div><h1 class="page-title">任务管理</h1><p class="page-subtitle">管理美术资源图片扫描任务，立即运行或查看执行记录。</p></div></div>
+      <div class="metric-grid">
+        <div class="metric"><span>最近扫描数</span><strong id="latestScanCount">-</strong></div>
+        <div class="metric"><span>最近问题数</span><strong id="latestProblemCount" class="warn">-</strong></div>
+        <div class="metric"><span>服务状态</span><strong id="serviceState" class="ok">-</strong></div>
+        <div class="metric"><span>历史执行次数</span><strong id="runTotal">-</strong></div>
+      </div>
+      <div class="panel panel-pad">
+        <div class="page-head"><div><h2 class="page-title">立即运行</h2><p class="page-subtitle">启动全量美术资源扫描，生成最新报告。</p></div><span id="statusText" class="status-pill"><span class="status-dot"></span>加载中</span></div>
+        <button id="runNow" class="button" onclick="runNow()">立即运行扫描</button>
+        <p id="nextRun" class="page-subtitle"></p>
+      </div>
+      <div class="panel">
+        <div class="toolbar"><strong>近期执行记录</strong></div>
+        <table><thead><tr><th>状态</th><th>触发方式</th><th>开始时间</th><th>结束时间</th><th>扫描图数</th><th>问题数</th><th>报告</th></tr></thead><tbody id="runs"></tbody></table>
+      </div>
+    </section>
+    <section id="view-history" class="view">
+      <div class="page-head"><div><h1 class="page-title">历史记录</h1><p class="page-subtitle">历史报告为只读，仅用于追溯查看。</p></div><span id="historySummary" class="status-pill">-</span></div>
+      <div class="panel"><table><thead><tr><th>状态</th><th>日期</th><th>时间</th><th>触发</th><th>扫描图数</th><th>问题</th><th>耗时</th><th>报告</th></tr></thead><tbody id="historyRows"></tbody></table></div>
+    </section>
+    <section id="view-settings" class="view">
+      <div class="page-head"><div><h1 class="page-title">定时设置</h1><p class="page-subtitle">配置自动扫描任务的执行计划。</p></div></div>
+      <div class="panel panel-pad">
+        <div class="settings-grid">
+          <label for="daily_run_time">每日执行时刻</label><input id="daily_run_time" name="daily_run_time" value="02:00">
+          <label for="history_success_limit">成功历史保留数量</label><input id="history_success_limit" name="history_success_limit" type="number" value="5">
+          <label for="history_failed_limit">失败历史保留数量</label><input id="history_failed_limit" name="history_failed_limit" type="number" value="5">
+          <label for="ocr_archive_retention_days">OCR 归档保留天数</label><input id="ocr_archive_retention_days" name="ocr_archive_retention_days" type="number" value="30">
+        </div>
+        <div id="cronPreview" class="cron">-</div>
+        <p><button class="button" onclick="saveConfig()">保存设置</button></p>
+      </div>
+    </section>
+  </main>
+</div>
 <script>
 async function fetchJson(url, options) {
   const response = await fetch(url, options);
@@ -96,36 +170,109 @@ function reportHref(run) {
   if (!run || !run.run_id) return '#';
   return `/reports/runs/${encodeURIComponent(run.run_id)}/ui_image_check_report.html`;
 }
+function showView(name) {
+  document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.id === `view-${name}`));
+  document.querySelectorAll('.nav button').forEach(button => button.classList.toggle('active', button.dataset.view === name));
+}
+function statusTag(run) {
+  const ok = run.status === 'success';
+  return `<span class="tag ${ok ? 'success' : 'failed'}">${ok ? '成功' : '失败'}</span>`;
+}
+function triggerTag(run) {
+  const manual = run.trigger === 'manual';
+  return `<span class="tag ${manual ? 'manual' : 'schedule'}">${manual ? '手动' : '定时'}</span>`;
+}
+function issueCount(run) {
+  const counts = run.counts || {};
+  return Number(counts.findings || counts.problem_count || counts.abnormal_count || 0);
+}
+function scanCount(run) {
+  const counts = run.counts || {};
+  return Number(counts.i18n_count || 0) + Number(counts.mainland_count || 0);
+}
+function formatDuration(run) {
+  const seconds = Number(run.duration_seconds || 0);
+  if (!seconds) return '-';
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return minutes ? `${minutes}m ${rest}s` : `${rest}s`;
+}
+function datePart(value) {
+  return String(value || '').slice(0, 10) || '-';
+}
+function timePart(value) {
+  return String(value || '').slice(11, 19) || '-';
+}
 function renderRuns(items) {
   document.getElementById('runs').innerHTML = items.map(run => `
     <tr>
-      <td>${run.run_id || ''}</td>
-      <td>${run.status || ''}</td>
-      <td>${run.trigger || ''}</td>
+      <td>${statusTag(run)}</td>
+      <td>${triggerTag(run)}</td>
       <td>${run.started_at || ''}</td>
-      <td>${run.status === 'success' ? `<a href="${reportHref(run)}">Open</a>` : ''}</td>
+      <td>${run.finished_at || ''}</td>
+      <td>${scanCount(run).toLocaleString()}</td>
+      <td class="issue">${issueCount(run) || '-'}</td>
+      <td>${run.status === 'success' ? `<a href="${reportHref(run)}" target="_blank">查看</a>` : (run.error_summary || '')}</td>
     </tr>
   `).join('');
 }
+function renderHistory(items) {
+  document.getElementById('historyRows').innerHTML = items.map(run => `
+    <tr>
+      <td>${statusTag(run)}</td>
+      <td>${datePart(run.started_at)}</td>
+      <td>${timePart(run.started_at)} → ${timePart(run.finished_at)}</td>
+      <td>${triggerTag(run)}</td>
+      <td>${scanCount(run).toLocaleString()}</td>
+      <td class="issue">${run.status === 'success' ? (issueCount(run) || '-') : '中断'}</td>
+      <td>${formatDuration(run)}</td>
+      <td>${run.status === 'success' ? `<a href="${reportHref(run)}" target="_blank">只读查看</a>` : ''}</td>
+    </tr>
+  `).join('');
+}
+function renderCronPreview(value) {
+  const parts = String(value || '02:00').split(':');
+  document.getElementById('cronPreview').textContent = `${parts[1] || '00'} ${parts[0] || '02'} * * *`;
+}
 async function refresh() {
   const data = await fetchJson('/api/status');
-  document.getElementById('statusText').textContent = `Status: ${data.status}`;
-  document.getElementById('nextRun').textContent = `Next scheduled run: ${data.next_scheduled_run || '-'}`;
+  const running = data.status === 'running';
+  document.getElementById('statusText').classList.toggle('status-running', running);
+  document.getElementById('statusText').innerHTML = `<span class="status-dot"></span>${running ? '运行中' : '待机'}`;
+  document.getElementById('serviceState').textContent = running ? '运行中' : '待机';
+  document.getElementById('nextRun').textContent = `下次定时执行：${data.next_scheduled_run || '-'}`;
   document.getElementById('runNow').disabled = data.status === 'running';
   document.getElementById('daily_run_time').value = data.config.daily_run_time;
   document.getElementById('history_success_limit').value = data.config.history_success_limit;
   document.getElementById('history_failed_limit').value = data.config.history_failed_limit;
   document.getElementById('ocr_archive_retention_days').value = data.config.ocr_archive_retention_days;
+  renderCronPreview(data.config.daily_run_time);
   const latest = (data.successful_runs || []).find(run => run.run_id === data.latest_success_run_id);
   const report = document.getElementById('currentReport');
+  const frame = document.getElementById('latestReportFrame');
+  const empty = document.getElementById('latestEmpty');
   if (latest) {
     report.href = reportHref(latest);
     report.style.display = '';
+    frame.src = reportHref(latest);
+    frame.style.display = '';
+    empty.style.display = 'none';
+    document.getElementById('latestIssueCount').innerHTML = `<span class="page-subtitle">本地待处理图数</span><br><strong>${issueCount(latest)}</strong>`;
+    document.getElementById('latestScanCount').textContent = scanCount(latest).toLocaleString();
+    document.getElementById('latestProblemCount').textContent = String(issueCount(latest));
   } else {
     report.style.display = 'none';
+    frame.style.display = 'none';
+    empty.style.display = '';
+    document.getElementById('latestIssueCount').textContent = '-';
+    document.getElementById('latestScanCount').textContent = '-';
+    document.getElementById('latestProblemCount').textContent = '-';
   }
-  renderRuns([...(data.successful_runs || []), ...(data.failed_runs || [])]);
-  document.getElementById('rawStatus').textContent = JSON.stringify(data, null, 2);
+  const allRuns = [...(data.successful_runs || []), ...(data.failed_runs || [])];
+  document.getElementById('runTotal').textContent = String(allRuns.length);
+  document.getElementById('historySummary').textContent = `共 ${allRuns.length} 次 · ${data.successful_runs.length} 成功 · ${data.failed_runs.length} 失败`;
+  renderRuns(allRuns.slice(0, 5));
+  renderHistory(allRuns);
 }
 async function runNow() {
   document.getElementById('runNow').disabled = true;
@@ -148,6 +295,7 @@ async function saveConfig() {
   });
   await refresh();
 }
+document.getElementById('daily_run_time').addEventListener('input', event => renderCronPreview(event.target.value));
 refresh();
 setInterval(refresh, 5000);
 </script>
