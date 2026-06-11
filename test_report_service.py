@@ -594,6 +594,9 @@ class ReportServiceWebTest(unittest.TestCase):
 
         self.assertIn("latest_report_url", html)
         self.assertIn("setLatestReportFrame", html)
+        self.assertNotIn("latestIssueCount", html)
+        self.assertNotIn("currentReport", html)
+        self.assertNotIn("toolbar-actions", html)
 
     def test_console_html_contains_required_controls(self):
         html = build_console_html()
@@ -615,7 +618,6 @@ class ReportServiceWebTest(unittest.TestCase):
         self.assertIn("schedule_weekdays", html)
         self.assertIn("runNow", html)
         self.assertIn("daily_run_time", html)
-        self.assertIn("打开最新报告", html)
         self.assertIn("/api/status", html)
         self.assertIn("/api/runs", html)
 

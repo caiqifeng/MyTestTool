@@ -102,8 +102,7 @@ body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Aria
 .button { border:0; border-radius:5px; background:var(--blue); color:#fff; padding:9px 14px; font-weight:700; cursor:pointer; }
 .button:disabled { opacity:.55; cursor:not-allowed; }
 .button.secondary { background:#eef4ff; color:#235bc4; }
-.latest-report-panel { height:calc(100vh - 112px); display:flex; flex-direction:column; }
-.latest-report-panel .toolbar { flex:0 0 auto; }
+.latest-report-panel { height:100vh; border:0; border-radius:0; margin:0; display:flex; flex-direction:column; }
 .latest-frame { flex:1 1 auto; width:100%; min-height:0; border:0; background:#fff; }
 .empty { padding:30px; text-align:center; color:var(--muted); }
 table { width:100%; border-collapse:collapse; }
@@ -134,7 +133,6 @@ input[type="checkbox"] { width:auto; height:auto; }
 .log-view { margin-top:14px; min-height:180px; max-height:360px; overflow:auto; background:#111827; color:#d1e7ff; border-radius:5px; padding:12px; font:12px/1.55 Consolas,monospace; white-space:pre-wrap; }
 .cron { margin-top:14px; background:#172134; color:#6dd3ff; border-radius:5px; padding:14px 16px; font-family:Consolas,monospace; }
 .toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
-.toolbar-actions { display:flex; gap:8px; align-items:center; }
 </style>
 </head>
 <body>
@@ -151,15 +149,7 @@ input[type="checkbox"] { width:auto; height:auto; }
   </aside>
   <main class="content">
     <section id="view-latest" class="view active">
-      <div class="page-head">
-        <div><h1 class="page-title">最新结果</h1><p class="page-subtitle">展示最近一次成功生成的检查报告。</p></div>
-        <div><span id="latestIssueCount" class="metric-count">-</span></div>
-      </div>
       <div class="panel latest-report-panel">
-        <div class="toolbar">
-          <strong>报告详情</strong>
-          <div class="toolbar-actions"><a id="currentReport" class="button secondary" href="#" target="_blank" style="display:none">打开最新报告</a></div>
-        </div>
         <div id="latestEmpty" class="empty">暂无成功报告</div>
         <iframe id="latestReportFrame" class="latest-frame" title="最新检查报告" style="display:none"></iframe>
       </div>
@@ -361,25 +351,19 @@ async function refresh() {
   renderCronPreview(data.config.daily_run_time);
   const latest = (data.successful_runs || []).find(run => run.run_id === data.latest_success_run_id);
   const latestReportUrl = data.latest_report_url || (latest ? reportHref(latest) : '');
-  const report = document.getElementById('currentReport');
   const frame = document.getElementById('latestReportFrame');
   const empty = document.getElementById('latestEmpty');
   if (latestReportUrl) {
-    report.href = latestReportUrl;
-    report.style.display = '';
     setLatestReportFrame(frame, latestReportUrl);
     frame.style.display = '';
     empty.style.display = 'none';
-    document.getElementById('latestIssueCount').innerHTML = `<span class="page-subtitle">本地待处理图数</span><br><strong>${issueCount(latest)}</strong>`;
     document.getElementById('latestScanCount').textContent = scanCount(latest).toLocaleString();
     document.getElementById('latestProblemCount').textContent = String(issueCount(latest));
   } else {
-    report.style.display = 'none';
     frame.style.display = 'none';
     frame.removeAttribute('src');
     delete frame.dataset.currentSrc;
     empty.style.display = '';
-    document.getElementById('latestIssueCount').textContent = '-';
     document.getElementById('latestScanCount').textContent = '-';
     document.getElementById('latestProblemCount').textContent = '-';
   }
