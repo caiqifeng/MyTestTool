@@ -593,6 +593,7 @@ class ReportServiceWebTest(unittest.TestCase):
         html = build_console_html()
 
         self.assertIn("latest_report_url", html)
+        self.assertIn("setLatestReportFrame", html)
 
     def test_console_html_contains_required_controls(self):
         html = build_console_html()
@@ -808,6 +809,36 @@ class ReportServiceWebTest(unittest.TestCase):
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
                     urllib.request.urlopen(f"{base_url}/reports/../secret.txt", timeout=5)
                 self.assertEqual(ctx.exception.code, 404)
+            finally:
+                server.shutdown()
+                server.server_close()
+                thread.join(timeout=5)
+
+    def test_http_local_report_serves_relative_assets(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.host = "127.0.0.1"
+            config.port = 0
+            config.reports_dir = str(root / "reports")
+            config_path = root / "service.json"
+            (root / "ui_image_check_report.html").write_text("<html>local</html>", encoding="utf-8")
+            assets = root / "ui_image_check_report_assets"
+            assets.mkdir()
+            (assets / "thumb.png").write_bytes(b"png")
+
+            runner = ReportRunner(config, check_callable=lambda output, log: {})
+            server = create_server(config, config_path, runner, lambda: None, static_root=root)
+            config.port = server.server_address[1]
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            base_url = f"http://127.0.0.1:{server.server_address[1]}"
+            try:
+                with urllib.request.urlopen(f"{base_url}/local/ui_image_check_report.html", timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                with urllib.request.urlopen(f"{base_url}/local/ui_image_check_report_assets/thumb.png", timeout=5) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertEqual(response.read(), b"png")
             finally:
                 server.shutdown()
                 server.server_close()

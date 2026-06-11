@@ -82,7 +82,7 @@ body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Aria
 .nav button { width:100%; height:36px; border:0; border-radius:4px; padding:0 12px; text-align:left; background:transparent; color:#c7d2df; font-weight:700; cursor:pointer; }
 .nav button.active { background:var(--brand); color:#081d19; }
 .side-foot { margin-top:auto; padding:14px 18px; border-top:1px solid #263241; color:#738196; font-size:11px; }
-.content { min-width:0; padding:26px 28px 40px; }
+.content { min-width:0; height:100vh; overflow:hidden; padding:26px 28px 40px; }
 .view { display:none; }
 .view.active { display:block; }
 .page-head { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; margin-bottom:18px; }
@@ -102,7 +102,9 @@ body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Aria
 .button { border:0; border-radius:5px; background:var(--blue); color:#fff; padding:9px 14px; font-weight:700; cursor:pointer; }
 .button:disabled { opacity:.55; cursor:not-allowed; }
 .button.secondary { background:#eef4ff; color:#235bc4; }
-.latest-frame { width:100%; height:calc(100vh - 198px); min-height:560px; border:0; background:#fff; }
+.latest-report-panel { height:calc(100vh - 112px); display:flex; flex-direction:column; }
+.latest-report-panel .toolbar { flex:0 0 auto; }
+.latest-frame { flex:1 1 auto; width:100%; min-height:0; border:0; background:#fff; }
 .empty { padding:30px; text-align:center; color:var(--muted); }
 table { width:100%; border-collapse:collapse; }
 th,td { border-bottom:1px solid #e9eef5; padding:11px 14px; text-align:left; font-size:13px; }
@@ -153,7 +155,7 @@ input[type="checkbox"] { width:auto; height:auto; }
         <div><h1 class="page-title">最新结果</h1><p class="page-subtitle">展示最近一次成功生成的检查报告。</p></div>
         <div><span id="latestIssueCount" class="metric-count">-</span></div>
       </div>
-      <div class="panel">
+      <div class="panel latest-report-panel">
         <div class="toolbar">
           <strong>报告详情</strong>
           <div class="toolbar-actions"><a id="currentReport" class="button secondary" href="#" target="_blank" style="display:none">打开最新报告</a></div>
@@ -227,6 +229,12 @@ function reportHref(run) {
   if (!run || !run.run_id) return '#';
   if (run.report_url) return run.report_url;
   return `/reports/runs/${encodeURIComponent(run.run_id)}/ui_image_check_report.html`;
+}
+function setLatestReportFrame(frame, url) {
+  if (frame.dataset.currentSrc !== url) {
+    frame.src = url;
+    frame.dataset.currentSrc = url;
+  }
 }
 function showView(name) {
   document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.id === `view-${name}`));
@@ -359,7 +367,7 @@ async function refresh() {
   if (latestReportUrl) {
     report.href = latestReportUrl;
     report.style.display = '';
-    frame.src = latestReportUrl;
+    setLatestReportFrame(frame, latestReportUrl);
     frame.style.display = '';
     empty.style.display = 'none';
     document.getElementById('latestIssueCount').innerHTML = `<span class="page-subtitle">本地待处理图数</span><br><strong>${issueCount(latest)}</strong>`;
@@ -368,6 +376,8 @@ async function refresh() {
   } else {
     report.style.display = 'none';
     frame.style.display = 'none';
+    frame.removeAttribute('src');
+    delete frame.dataset.currentSrc;
     empty.style.display = '';
     document.getElementById('latestIssueCount').textContent = '-';
     document.getElementById('latestScanCount').textContent = '-';
@@ -425,6 +435,7 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
     config_path: Path
     runner: ReportRunner
     get_next_run_text: Callable[[], str | None]
+    static_root: Path
 
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
@@ -440,8 +451,8 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
                 local_report_path=Path("ui_image_check_report.html"),
             ))
             return
-        if parsed.path == "/local/ui_image_check_report.html":
-            self._serve_local_report()
+        if parsed.path.startswith("/local/"):
+            self._serve_local_file(parsed.path)
             return
         if parsed.path.startswith("/reports/runs/") and parsed.path.endswith("/api/log"):
             self._serve_run_log(parsed.path)
@@ -540,12 +551,17 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
         content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         self._send_bytes(target.read_bytes(), content_type)
 
-    def _serve_local_report(self) -> None:
-        target = Path("ui_image_check_report.html").resolve()
-        if not target.is_file():
+    def _serve_local_file(self, request_path: str) -> None:
+        relative = urllib.parse.unquote(request_path.removeprefix("/local/")).replace("\\", "/")
+        static_root = self.static_root.resolve()
+        target = (static_root / relative).resolve()
+        if target == static_root or static_root not in target.parents or not target.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        self._send_bytes(target.read_bytes(), "text/html; charset=utf-8")
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        if target.suffix.lower() in {".html", ".htm"}:
+            content_type = "text/html; charset=utf-8"
+        self._send_bytes(target.read_bytes(), content_type)
 
     def _serve_run_log(self, request_path: str) -> None:
         parts = urllib.parse.unquote(request_path).strip("/").split("/")
@@ -593,6 +609,7 @@ def create_server(
     config_path: Path,
     runner: ReportRunner,
     get_next_run_text: Callable[[], str | None],
+    static_root: Path | None = None,
 ) -> ThreadingHTTPServer:
     class BoundHandler(ReportServiceHandler):
         pass
@@ -601,4 +618,5 @@ def create_server(
     BoundHandler.config_path = config_path
     BoundHandler.runner = runner
     BoundHandler.get_next_run_text = staticmethod(get_next_run_text)
+    BoundHandler.static_root = (static_root or Path.cwd()).resolve()
     return ThreadingHTTPServer((config.host, config.port), BoundHandler)
