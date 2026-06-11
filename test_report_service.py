@@ -44,10 +44,14 @@ class ReportServiceConfigTest(unittest.TestCase):
 
             self.assertIsInstance(config, ServiceConfig)
             self.assertEqual(config.daily_run_time, "02:00")
+            self.assertTrue(config.schedule_enabled)
+            self.assertEqual(config.schedule_weekdays, [0, 1, 2, 3, 4])
             self.assertEqual(config.history_success_limit, 5)
             self.assertTrue(path.exists())
             raw = json.loads(path.read_text(encoding="utf-8"))
             self.assertEqual(raw["reports_dir"], "reports")
+            self.assertTrue(raw["schedule_enabled"])
+            self.assertEqual(raw["schedule_weekdays"], [0, 1, 2, 3, 4])
 
     def test_validate_config_rejects_bad_time_and_non_positive_retention(self):
         config = ServiceConfig(
@@ -55,6 +59,8 @@ class ReportServiceConfigTest(unittest.TestCase):
             port=9080,
             check_config="check_config.json",
             daily_run_time="25:99",
+            schedule_enabled=True,
+            schedule_weekdays=[],
             history_success_limit=0,
             history_failed_limit=-1,
             ocr_archive_retention_days=0,
@@ -67,6 +73,15 @@ class ReportServiceConfigTest(unittest.TestCase):
         self.assertIn("history_success_limit must be a positive integer", errors)
         self.assertIn("history_failed_limit must be a positive integer", errors)
         self.assertIn("ocr_archive_retention_days must be a positive integer", errors)
+        self.assertIn("schedule_weekdays must include at least one weekday", errors)
+
+    def test_validate_config_rejects_weekdays_outside_monday_to_sunday(self):
+        config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+        config.schedule_weekdays = [-1, 7]
+
+        errors = validate_config(config)
+
+        self.assertIn("schedule_weekdays values must be integers from 0 to 6", errors)
 
     def test_save_config_writes_json_atomically_readable(self):
         with tempfile.TemporaryDirectory() as td:
@@ -359,6 +374,20 @@ class ReportServiceSchedulerTest(unittest.TestCase):
 
         self.assertEqual(result, dt.datetime(2026, 6, 11, 2, 0))
 
+    def test_next_daily_run_returns_none_when_schedule_disabled(self):
+        now = dt.datetime(2026, 6, 10, 1, 30)
+
+        result = next_daily_run("02:00", now, enabled=False)
+
+        self.assertIsNone(result)
+
+    def test_next_daily_run_skips_to_next_allowed_weekday(self):
+        now = dt.datetime(2026, 6, 10, 1, 30)  # Wednesday
+
+        result = next_daily_run("02:00", now, weekdays=[4])
+
+        self.assertEqual(result, dt.datetime(2026, 6, 12, 2, 0))
+
     def test_scheduler_start_is_idempotent_and_stop_returns(self):
         scheduler = DailyScheduler(
             get_daily_run_time=lambda: "23:59",
@@ -472,6 +501,8 @@ class ReportServiceWebTest(unittest.TestCase):
             self.assertEqual(payload["next_scheduled_run"], "2026-06-11 02:00:00")
             self.assertEqual(payload["config_errors"], ["bad"])
             self.assertIn("latest_success_run_id", payload)
+            self.assertTrue(payload["config"]["schedule_enabled"])
+            self.assertEqual(payload["config"]["schedule_weekdays"], [0, 1, 2, 3, 4])
 
     def test_console_html_contains_required_controls(self):
         html = build_console_html()
@@ -483,6 +514,9 @@ class ReportServiceWebTest(unittest.TestCase):
         self.assertIn("定时设置", html)
         self.assertIn("latestReportFrame", html)
         self.assertIn("historyRows", html)
+        self.assertIn("historyTrend", html)
+        self.assertIn("schedule_enabled", html)
+        self.assertIn("schedule_weekdays", html)
         self.assertIn("runNow", html)
         self.assertIn("daily_run_time", html)
         self.assertIn("打开最新报告", html)
@@ -556,14 +590,24 @@ class ReportServiceWebTest(unittest.TestCase):
                 status, payload = self._request_json(
                     f"{base_url}/api/config",
                     method="POST",
-                    data={"daily_run_time": "03:30", "history_success_limit": 7},
+                    data={
+                        "daily_run_time": "03:30",
+                        "history_success_limit": 7,
+                        "schedule_enabled": False,
+                        "schedule_weekdays": [1, 3, 5],
+                    },
                 )
 
                 self.assertEqual(status, 200)
                 self.assertTrue(payload["ok"])
                 self.assertEqual(config.daily_run_time, "03:30")
                 self.assertEqual(config.history_success_limit, 7)
+                self.assertFalse(config.schedule_enabled)
+                self.assertEqual(config.schedule_weekdays, [1, 3, 5])
                 self.assertTrue(config_path.exists())
+                saved = json.loads(config_path.read_text(encoding="utf-8"))
+                self.assertFalse(saved["schedule_enabled"])
+                self.assertEqual(saved["schedule_weekdays"], [1, 3, 5])
             finally:
                 server.shutdown()
                 server.server_close()

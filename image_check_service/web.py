@@ -90,6 +90,15 @@ th { background:#f7f9fc; color:#6d7d93; font-weight:700; }
 .settings-grid { display:grid; grid-template-columns:260px 1fr; gap:14px; align-items:center; max-width:720px; }
 label { color:#526176; font-size:13px; font-weight:700; }
 input { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; padding:6px 9px; font:inherit; }
+input[type="checkbox"] { width:auto; height:auto; }
+.weekday-row { display:flex; gap:8px; flex-wrap:wrap; }
+.weekday-button { min-width:46px; height:30px; border:1px solid #cfd8e6; background:#f8fbff; color:#66758a; border-radius:5px; font-weight:700; cursor:pointer; }
+.weekday-button.active { border-color:var(--blue); background:var(--blue); color:#fff; }
+.trend { display:flex; gap:10px; align-items:end; height:118px; padding:18px; }
+.trend-item { flex:1; min-width:48px; display:grid; gap:6px; align-content:end; color:#8a98ac; font-size:11px; text-align:center; }
+.trend-bar { height:12px; border-radius:3px; background:var(--blue); }
+.trend-bar.warn { background:var(--orange); }
+.trend-bar.fail { background:var(--red); }
 .cron { margin-top:14px; background:#172134; color:#6dd3ff; border-radius:5px; padding:14px 16px; font-family:Consolas,monospace; }
 .toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
 .toolbar-actions { display:flex; gap:8px; align-items:center; }
@@ -142,13 +151,24 @@ input { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; pa
     </section>
     <section id="view-history" class="view">
       <div class="page-head"><div><h1 class="page-title">历史记录</h1><p class="page-subtitle">历史报告为只读，仅用于追溯查看。</p></div><span id="historySummary" class="status-pill">-</span></div>
+      <div class="panel"><div class="toolbar"><strong>问题数趋势（近7次）</strong></div><div id="historyTrend" class="trend"></div></div>
       <div class="panel"><table><thead><tr><th>状态</th><th>日期</th><th>时间</th><th>触发</th><th>扫描图数</th><th>问题</th><th>耗时</th><th>报告</th></tr></thead><tbody id="historyRows"></tbody></table></div>
     </section>
     <section id="view-settings" class="view">
       <div class="page-head"><div><h1 class="page-title">定时设置</h1><p class="page-subtitle">配置自动扫描任务的执行计划。</p></div></div>
       <div class="panel panel-pad">
         <div class="settings-grid">
+          <label for="schedule_enabled">启用定时任务</label><div><input id="schedule_enabled" name="schedule_enabled" type="checkbox"></div>
           <label for="daily_run_time">每日执行时刻</label><input id="daily_run_time" name="daily_run_time" value="02:00">
+          <label>执行日期</label><div class="weekday-row" id="schedule_weekdays">
+            <button class="weekday-button" type="button" data-weekday="0" onclick="toggleWeekday(0)">周一</button>
+            <button class="weekday-button" type="button" data-weekday="1" onclick="toggleWeekday(1)">周二</button>
+            <button class="weekday-button" type="button" data-weekday="2" onclick="toggleWeekday(2)">周三</button>
+            <button class="weekday-button" type="button" data-weekday="3" onclick="toggleWeekday(3)">周四</button>
+            <button class="weekday-button" type="button" data-weekday="4" onclick="toggleWeekday(4)">周五</button>
+            <button class="weekday-button" type="button" data-weekday="5" onclick="toggleWeekday(5)">周六</button>
+            <button class="weekday-button" type="button" data-weekday="6" onclick="toggleWeekday(6)">周日</button>
+          </div>
           <label for="history_success_limit">成功历史保留数量</label><input id="history_success_limit" name="history_success_limit" type="number" value="5">
           <label for="history_failed_limit">失败历史保留数量</label><input id="history_failed_limit" name="history_failed_limit" type="number" value="5">
           <label for="ocr_archive_retention_days">OCR 归档保留天数</label><input id="ocr_archive_retention_days" name="ocr_archive_retention_days" type="number" value="30">
@@ -230,9 +250,36 @@ function renderHistory(items) {
     </tr>
   `).join('');
 }
+function renderHistoryTrend(items) {
+  const recent = items.slice(0, 7).reverse();
+  const maxIssues = Math.max(1, ...recent.map(issueCount));
+  document.getElementById('historyTrend').innerHTML = recent.map(run => {
+    const issues = issueCount(run);
+    const height = Math.max(10, Math.round((issues / maxIssues) * 82));
+    const cls = run.status !== 'success' ? 'fail' : issues > 20 ? 'warn' : '';
+    return `<div class="trend-item"><div class="trend-bar ${cls}" style="height:${height}px"></div><span>${datePart(run.started_at).slice(5)}</span><strong>${run.status === 'success' ? issues : '失败'}</strong></div>`;
+  }).join('');
+}
+function selectedWeekdays() {
+  return Array.from(document.querySelectorAll('.weekday-button.active')).map(button => Number(button.dataset.weekday));
+}
+function setWeekdays(values) {
+  const selected = new Set((values || []).map(Number));
+  document.querySelectorAll('.weekday-button').forEach(button => {
+    button.classList.toggle('active', selected.has(Number(button.dataset.weekday)));
+  });
+}
+function toggleWeekday(day) {
+  const button = document.querySelector(`.weekday-button[data-weekday="${day}"]`);
+  if (button) button.classList.toggle('active');
+  renderCronPreview(document.getElementById('daily_run_time').value);
+}
 function renderCronPreview(value) {
   const parts = String(value || '02:00').split(':');
-  document.getElementById('cronPreview').textContent = `${parts[1] || '00'} ${parts[0] || '02'} * * *`;
+  const weekdays = selectedWeekdays();
+  document.getElementById('cronPreview').textContent = document.getElementById('schedule_enabled').checked
+    ? `${parts[1] || '00'} ${parts[0] || '02'} * * ${weekdays.length ? weekdays.join(',') : '-'}`
+    : '定时任务已停用';
 }
 async function refresh() {
   const data = await fetchJson('/api/status');
@@ -243,6 +290,8 @@ async function refresh() {
   document.getElementById('nextRun').textContent = `下次定时执行：${data.next_scheduled_run || '-'}`;
   document.getElementById('runNow').disabled = data.status === 'running';
   document.getElementById('daily_run_time').value = data.config.daily_run_time;
+  document.getElementById('schedule_enabled').checked = Boolean(data.config.schedule_enabled);
+  setWeekdays(data.config.schedule_weekdays || []);
   document.getElementById('history_success_limit').value = data.config.history_success_limit;
   document.getElementById('history_failed_limit').value = data.config.history_failed_limit;
   document.getElementById('ocr_archive_retention_days').value = data.config.ocr_archive_retention_days;
@@ -273,6 +322,7 @@ async function refresh() {
   document.getElementById('historySummary').textContent = `共 ${allRuns.length} 次 · ${data.successful_runs.length} 成功 · ${data.failed_runs.length} 失败`;
   renderRuns(allRuns.slice(0, 5));
   renderHistory(allRuns);
+  renderHistoryTrend(allRuns);
 }
 async function runNow() {
   document.getElementById('runNow').disabled = true;
@@ -288,6 +338,8 @@ async function saveConfig() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       daily_run_time: document.getElementById('daily_run_time').value,
+      schedule_enabled: document.getElementById('schedule_enabled').checked,
+      schedule_weekdays: selectedWeekdays(),
       history_success_limit: Number(document.getElementById('history_success_limit').value),
       history_failed_limit: Number(document.getElementById('history_failed_limit').value),
       ocr_archive_retention_days: Number(document.getElementById('ocr_archive_retention_days').value)
@@ -296,6 +348,7 @@ async function saveConfig() {
   await refresh();
 }
 document.getElementById('daily_run_time').addEventListener('input', event => renderCronPreview(event.target.value));
+document.getElementById('schedule_enabled').addEventListener('change', () => renderCronPreview(document.getElementById('daily_run_time').value));
 refresh();
 setInterval(refresh, 5000);
 </script>
@@ -355,6 +408,16 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
         candidate = ServiceConfig(**self.config.to_dict())
         if "daily_run_time" in data:
             candidate.daily_run_time = str(data["daily_run_time"])
+        if "schedule_enabled" in data:
+            candidate.schedule_enabled = bool(data["schedule_enabled"])
+        if "schedule_weekdays" in data:
+            raw_weekdays = data["schedule_weekdays"]
+            if not isinstance(raw_weekdays, list):
+                raise ValueError("schedule_weekdays must be a list")
+            try:
+                candidate.schedule_weekdays = [int(day) for day in raw_weekdays]
+            except (TypeError, ValueError) as exc:
+                raise ValueError("schedule_weekdays values must be integers") from exc
         for key in ("history_success_limit", "history_failed_limit", "ocr_archive_retention_days"):
             if key in data:
                 try:
@@ -367,6 +430,8 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
             self._send_json({"ok": False, "errors": errors}, status=HTTPStatus.BAD_REQUEST)
             return
         self.config.daily_run_time = candidate.daily_run_time
+        self.config.schedule_enabled = candidate.schedule_enabled
+        self.config.schedule_weekdays = candidate.schedule_weekdays
         self.config.history_success_limit = candidate.history_success_limit
         self.config.history_failed_limit = candidate.history_failed_limit
         self.config.ocr_archive_retention_days = candidate.ocr_archive_retention_days

@@ -10,6 +10,8 @@ class ServiceConfig:
     port: int
     check_config: str
     daily_run_time: str
+    schedule_enabled: bool
+    schedule_weekdays: list[int]
     history_success_limit: int
     history_failed_limit: int
     ocr_archive_retention_days: int

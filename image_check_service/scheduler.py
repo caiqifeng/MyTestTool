@@ -7,13 +7,24 @@ import traceback
 from typing import Callable
 
 
-def next_daily_run(daily_run_time: str, now: dt.datetime | None = None) -> dt.datetime:
+def next_daily_run(
+    daily_run_time: str,
+    now: dt.datetime | None = None,
+    enabled: bool = True,
+    weekdays: list[int] | None = None,
+) -> dt.datetime | None:
+    if not enabled:
+        return None
     current = now or dt.datetime.now()
     hour, minute = [int(part) for part in daily_run_time.split(":")]
-    candidate = current.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if candidate <= current:
-        candidate = candidate + dt.timedelta(days=1)
-    return candidate
+    allowed_weekdays = set(weekdays if weekdays is not None else range(7))
+    for day_offset in range(8):
+        day = current + dt.timedelta(days=day_offset)
+        candidate = day.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= current or candidate.weekday() not in allowed_weekdays:
+            continue
+        return candidate
+    return None
 
 
 class DailyScheduler:
@@ -24,12 +35,16 @@ class DailyScheduler:
         poll_seconds: float = 5.0,
         error_handler: Callable[[BaseException, str], None] | None = None,
         now_provider: Callable[[], dt.datetime] | None = None,
+        is_enabled: Callable[[], bool] | None = None,
+        get_weekdays: Callable[[], list[int]] | None = None,
     ):
         self.get_daily_run_time = get_daily_run_time
         self.run_scheduled = run_scheduled
         self.poll_seconds = poll_seconds
         self.error_handler = error_handler
         self.now_provider = now_provider or dt.datetime.now
+        self.is_enabled = is_enabled or (lambda: True)
+        self.get_weekdays = get_weekdays or (lambda: list(range(7)))
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._next_run: dt.datetime | None = None
@@ -52,7 +67,7 @@ class DailyScheduler:
         if self._thread is not None:
             self._thread.join(timeout=2)
 
-    def _set_next_run(self, value: dt.datetime) -> None:
+    def _set_next_run(self, value: dt.datetime | None) -> None:
         with self._lock:
             self._next_run = value
 
@@ -66,9 +81,19 @@ class DailyScheduler:
 
     def _loop(self) -> None:
         while not self._stop.is_set():
-            self._set_next_run(next_daily_run(self.get_daily_run_time(), self.now_provider()))
+            self._set_next_run(
+                next_daily_run(
+                    self.get_daily_run_time(),
+                    self.now_provider(),
+                    enabled=self.is_enabled(),
+                    weekdays=self.get_weekdays(),
+                )
+            )
             while not self._stop.is_set():
                 next_run = self.next_run
+                if next_run is None:
+                    self._stop.wait(self.poll_seconds)
+                    break
                 if next_run is not None and self.now_provider() >= next_run:
                     try:
                         self.run_scheduled()

@@ -27,6 +27,8 @@ def build_service_components(config_path: Path):
     scheduler = DailyScheduler(
         get_daily_run_time=lambda: config.daily_run_time,
         run_scheduled=lambda: runner.run_once("scheduled"),
+        is_enabled=lambda: config.schedule_enabled,
+        get_weekdays=lambda: config.schedule_weekdays,
     )
     server = create_server(
         config,

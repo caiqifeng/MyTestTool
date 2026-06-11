@@ -14,6 +14,8 @@ DEFAULT_SERVICE_CONFIG = {
     "port": 9080,
     "check_config": "check_config.json",
     "daily_run_time": "02:00",
+    "schedule_enabled": True,
+    "schedule_weekdays": [0, 1, 2, 3, 4],
     "history_success_limit": 5,
     "history_failed_limit": 5,
     "ocr_archive_retention_days": 30,
@@ -29,6 +31,8 @@ def _coerce_config(data: dict[str, object]) -> ServiceConfig:
         port=int(merged["port"]),
         check_config=str(merged["check_config"]),
         daily_run_time=str(merged["daily_run_time"]),
+        schedule_enabled=bool(merged["schedule_enabled"]),
+        schedule_weekdays=[int(value) for value in (merged["schedule_weekdays"] or [])],
         history_success_limit=int(merged["history_success_limit"]),
         history_failed_limit=int(merged["history_failed_limit"]),
         ocr_archive_retention_days=int(merged["ocr_archive_retention_days"]),
@@ -65,6 +69,10 @@ def validate_config(config: ServiceConfig) -> list[str]:
         errors.append("reports_dir must not be empty")
     if config.port < 0 or config.port > 65535:
         errors.append("port must be between 0 and 65535")
+    if not config.schedule_weekdays:
+        errors.append("schedule_weekdays must include at least one weekday")
+    elif any(day < 0 or day > 6 for day in config.schedule_weekdays):
+        errors.append("schedule_weekdays values must be integers from 0 to 6")
     return errors
 
 
