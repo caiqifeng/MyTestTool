@@ -273,6 +273,7 @@ select { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; p
   </main>
 </div>
 <script>
+const dirtyFields = new Set();
 async function fetchJson(url, options) {
   const response = await fetch(url, options);
   const data = await response.json();
@@ -403,12 +404,16 @@ function setScheduleEnabled(enabled) {
 function scheduleEnabled() {
   return document.getElementById('schedule_enabled').dataset.enabled === 'true';
 }
+function setInputValueUnlessDirty(input, value) {
+  if (dirtyFields.has(input.dataset.dirtyKey || input.id)) return;
+  input.value = value;
+}
 function setExecutionParams(config) {
   document.querySelectorAll('[data-config-field="check_config"]').forEach(input => {
-    input.value = config.check_config || 'check_config.json';
+    setInputValueUnlessDirty(input, config.check_config || 'check_config.json');
   });
   document.querySelectorAll('[data-config-field="ocr_workers"]').forEach(input => {
-    input.value = Number(config.ocr_workers || 1);
+    setInputValueUnlessDirty(input, Number(config.ocr_workers || 1));
   });
   setAdvancedArgs(config.advanced_args || {});
   updateAdvancedSummary();
@@ -426,9 +431,9 @@ function setAdvancedArgs(values) {
     const key = input.dataset.advancedField;
     const value = values[key];
     if (input.dataset.advancedType === 'bool') {
-      input.value = value === true ? 'true' : '';
+      setInputValueUnlessDirty(input, value === true ? 'true' : '');
     } else {
-      input.value = value === undefined || value === null ? '' : value;
+      setInputValueUnlessDirty(input, value === undefined || value === null ? '' : value);
     }
   });
 }
@@ -476,13 +481,13 @@ async function refresh() {
   document.getElementById('serviceState').textContent = running ? '运行中' : '待机';
   document.getElementById('nextRun').textContent = `下次定时执行：${data.next_scheduled_run || '-'}`;
   document.getElementById('runNow').disabled = data.status === 'running';
-  document.getElementById('daily_run_time').value = data.config.daily_run_time;
+  setInputValueUnlessDirty(document.getElementById('daily_run_time'), data.config.daily_run_time);
   setScheduleEnabled(Boolean(data.config.schedule_enabled));
   setExecutionParams(data.config);
   setWeekdays(data.config.schedule_weekdays || []);
-  document.getElementById('history_success_limit').value = data.config.history_success_limit;
-  document.getElementById('history_failed_limit').value = data.config.history_failed_limit;
-  document.getElementById('ocr_archive_retention_days').value = data.config.ocr_archive_retention_days;
+  setInputValueUnlessDirty(document.getElementById('history_success_limit'), data.config.history_success_limit);
+  setInputValueUnlessDirty(document.getElementById('history_failed_limit'), data.config.history_failed_limit);
+  setInputValueUnlessDirty(document.getElementById('ocr_archive_retention_days'), data.config.ocr_archive_retention_days);
   renderCronPreview(data.config.daily_run_time);
   const latest = (data.successful_runs || []).find(run => run.run_id === data.latest_success_run_id);
   const latestReportUrl = data.latest_report_url || (latest ? reportHref(latest) : '');
@@ -534,8 +539,14 @@ async function saveConfig() {
       ocr_archive_retention_days: Number(document.getElementById('ocr_archive_retention_days').value)
     })
   });
+  dirtyFields.clear();
   await refresh();
 }
+document.querySelectorAll('input, select').forEach(input => {
+  input.dataset.dirtyKey = input.dataset.configField || input.dataset.advancedField || input.id;
+  input.addEventListener('input', event => dirtyFields.add(event.target.dataset.dirtyKey || event.target.id));
+  input.addEventListener('change', event => dirtyFields.add(event.target.dataset.dirtyKey || event.target.id));
+});
 document.getElementById('daily_run_time').addEventListener('input', event => renderCronPreview(event.target.value));
 document.querySelectorAll('[data-config-field="check_config"]').forEach(input => {
   input.addEventListener('input', event => syncExecutionParam('check_config', event.target.value));

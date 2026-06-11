@@ -216,13 +216,17 @@ class ReportServiceRunnerTest(unittest.TestCase):
                 return {"i18n_count": 1, "mainland_count": 1}
 
             with mock.patch("image_check_service.runner.check_i18n_images.cleanup_ocr_cache_archive") as cleanup:
-                metadata = ReportRunner(config, check_callable=fake_check).run_once("manual")
+                with mock.patch("image_check_service.runner.Path.cwd", return_value=root):
+                    metadata = ReportRunner(config, check_callable=fake_check).run_once("manual")
 
             self.assertEqual(metadata.status, "success")
             self.assertEqual(metadata.counts["i18n_count"], 1)
             index = load_index(Path(config.reports_dir))
             self.assertEqual(index["latest_success_run_id"], metadata.run_id)
             self.assertTrue(Path(metadata.report_path).exists())
+            self.assertEqual(Path(metadata.report_path), root / "reports" / "runs" / metadata.run_id / "ui_image_check_report.html")
+            self.assertEqual((root / "ui_image_check_report.html").read_text(encoding="utf-8"), "<html>ok</html>")
+            self.assertEqual(Path(metadata.report_path).read_text(encoding="utf-8"), "<html>ok</html>")
             cleanup.assert_called_once()
             self.assertEqual(cleanup.call_args.args[1], config.ocr_archive_retention_days)
 
@@ -414,6 +418,7 @@ class ReportServiceRunnerTest(unittest.TestCase):
             self.assertEqual(captured_args[:2], ["--config", str(Path(td) / "custom_check.json")])
             self.assertIn("--ocr-workers", captured_args)
             self.assertEqual(captured_args[captured_args.index("--ocr-workers") + 1], "3")
+            self.assertIn("--no-serve-report", captured_args)
 
     def test_default_checker_passes_only_enabled_advanced_args(self):
         with tempfile.TemporaryDirectory() as td:
@@ -457,8 +462,8 @@ class ReportServiceRunnerTest(unittest.TestCase):
             self.assertIn("--max-image-px", captured_args)
             self.assertEqual(captured_args[captured_args.index("--max-image-px") + 1], "640")
             self.assertIn("--no-serve-report", captured_args)
-            self.assertIn("--serve-host", captured_args)
-            self.assertIn("--serve-port", captured_args)
+            self.assertNotIn("--serve-host", captured_args)
+            self.assertNotIn("--serve-port", captured_args)
             self.assertNotIn("--assume-new-has-text", captured_args)
             self.assertNotIn("--report-server-only", captured_args)
             self.assertNotIn("--serve-report", captured_args)
@@ -705,6 +710,9 @@ class ReportServiceWebTest(unittest.TestCase):
         self.assertIn("advanced-params", html)
         self.assertIn("高级运行参数：默认参数运行", html)
         self.assertIn("toggleAdvancedParams", html)
+        self.assertIn("dirtyFields", html)
+        self.assertIn("setInputValueUnlessDirty", html)
+        self.assertIn("dataset.dirtyKey", html)
         self.assertIn("check_config", html)
         self.assertIn("ocr_workers", html)
         self.assertIn("--config", html)

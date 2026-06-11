@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import shutil
 import threading
 import traceback
 from pathlib import Path
@@ -21,15 +22,10 @@ ADVANCED_VALUE_ARGS = {
     "since": "--since",
     "max_files": "--max-files",
     "max_image_px": "--max-image-px",
-    "serve_host": "--serve-host",
-    "serve_port": "--serve-port",
 }
 ADVANCED_FLAG_ARGS = {
     "no_ocr": "--no-ocr",
     "assume_new_has_text": "--assume-new-has-text",
-    "serve_report": "--serve-report",
-    "no_serve_report": "--no-serve-report",
-    "report_server_only": "--report-server-only",
 }
 
 
@@ -91,6 +87,7 @@ class ReportRunner:
     def _run_locked(self, run_id: str, trigger: str) -> RunMetadata:
         reports_dir = Path(self.config.reports_dir)
         run_dir = create_run_directory(reports_dir, run_id)
+        local_report_path = Path.cwd() / "ui_image_check_report.html"
         report_path = run_dir / "ui_image_check_report.html"
         log_path = run_dir / "run.log"
         started = dt.datetime.now()
@@ -107,7 +104,8 @@ class ReportRunner:
         write_metadata(run_dir, metadata)
 
         try:
-            counts = self.check_callable(report_path, log_path)
+            counts = self.check_callable(local_report_path, log_path)
+            self._copy_local_report_to_run(local_report_path, report_path)
             finished = dt.datetime.now()
             metadata.status = "success"
             metadata.finished_at = _now_text()
@@ -137,6 +135,18 @@ class ReportRunner:
             record_failed_run(reports_dir, metadata, self.config.history_failed_limit)
             return metadata
 
+    def _copy_local_report_to_run(self, local_report_path: Path, report_path: Path) -> None:
+        if not local_report_path.exists():
+            raise RuntimeError(f"local report was not generated: {local_report_path}")
+        report_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(local_report_path, report_path)
+        local_assets = local_report_path.parent / f"{local_report_path.stem}_assets"
+        target_assets = report_path.parent / f"{report_path.stem}_assets"
+        if target_assets.exists():
+            shutil.rmtree(target_assets)
+        if local_assets.exists():
+            shutil.copytree(local_assets, target_assets)
+
     def _run_existing_checker(self, output_path: Path, log_path: Path) -> dict[str, int]:
         args = [
             "--config",
@@ -145,6 +155,7 @@ class ReportRunner:
             str(self.config.ocr_workers),
             "--output",
             str(output_path),
+            "--no-serve-report",
         ]
         args.extend(self._advanced_cli_args())
         log_path.parent.mkdir(parents=True, exist_ok=True)
