@@ -569,6 +569,31 @@ class ReportServiceWebTest(unittest.TestCase):
             self.assertTrue(payload["config"]["schedule_enabled"])
             self.assertEqual(payload["config"]["schedule_weekdays"], [0, 1, 2, 3, 4])
 
+    def test_status_payload_uses_local_report_when_no_success_history_exists(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            config = ServiceConfig(**DEFAULT_SERVICE_CONFIG)
+            config.reports_dir = str(root / "reports")
+            local_report = root / "ui_image_check_report.html"
+            local_report.write_text("<html>local</html>", encoding="utf-8")
+
+            payload = status_payload(
+                config,
+                active_run_id=None,
+                next_run_text=None,
+                local_report_path=local_report,
+            )
+
+            self.assertEqual(payload["latest_report_url"], "/local/ui_image_check_report.html")
+            self.assertEqual(payload["latest_success_run_id"], "local")
+            self.assertEqual(payload["successful_runs"][0]["run_id"], "local")
+            self.assertEqual(payload["successful_runs"][0]["trigger"], "local")
+
+    def test_console_html_uses_latest_report_url_when_available(self):
+        html = build_console_html()
+
+        self.assertIn("latest_report_url", html)
+
     def test_console_html_contains_required_controls(self):
         html = build_console_html()
 

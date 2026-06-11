@@ -22,15 +22,39 @@ def status_payload(
     next_run_text: str | None,
     active_run: dict[str, object] | None = None,
     config_errors: list[str] | None = None,
+    local_report_path: Path | None = None,
 ) -> dict[str, object]:
     index = load_index(Path(config.reports_dir))
+    latest_report_url = None
+    latest_success_run_id = index.get("latest_success_run_id")
+    successful_runs = list(index.get("successful_runs", []))
+    if latest_success_run_id:
+        latest_report_url = f"/reports/runs/{urllib.parse.quote(str(latest_success_run_id))}/ui_image_check_report.html"
+    elif local_report_path is not None and local_report_path.is_file():
+        latest_report_url = "/local/ui_image_check_report.html"
+        latest_success_run_id = "local"
+        successful_runs = [
+            {
+                "run_id": "local",
+                "trigger": "local",
+                "status": "success",
+                "started_at": "",
+                "finished_at": "",
+                "duration_seconds": None,
+                "report_path": str(local_report_path),
+                "log_path": None,
+                "error_summary": None,
+                "counts": {},
+            }
+        ]
     return {
         "status": "running" if active_run_id else "idle",
         "active_run_id": active_run_id,
         "active_run": active_run,
         "next_scheduled_run": next_run_text,
-        "latest_success_run_id": index.get("latest_success_run_id"),
-        "successful_runs": index.get("successful_runs", []),
+        "latest_success_run_id": latest_success_run_id,
+        "latest_report_url": latest_report_url,
+        "successful_runs": successful_runs,
         "failed_runs": index.get("failed_runs", []),
         "config": config.to_dict(),
         "config_errors": config_errors or validate_config(config),
@@ -201,6 +225,7 @@ async function fetchJson(url, options) {
 }
 function reportHref(run) {
   if (!run || !run.run_id) return '#';
+  if (run.report_url) return run.report_url;
   return `/reports/runs/${encodeURIComponent(run.run_id)}/ui_image_check_report.html`;
 }
 function showView(name) {
@@ -327,13 +352,14 @@ async function refresh() {
   document.getElementById('ocr_archive_retention_days').value = data.config.ocr_archive_retention_days;
   renderCronPreview(data.config.daily_run_time);
   const latest = (data.successful_runs || []).find(run => run.run_id === data.latest_success_run_id);
+  const latestReportUrl = data.latest_report_url || (latest ? reportHref(latest) : '');
   const report = document.getElementById('currentReport');
   const frame = document.getElementById('latestReportFrame');
   const empty = document.getElementById('latestEmpty');
-  if (latest) {
-    report.href = reportHref(latest);
+  if (latestReportUrl) {
+    report.href = latestReportUrl;
     report.style.display = '';
-    frame.src = reportHref(latest);
+    frame.src = latestReportUrl;
     frame.style.display = '';
     empty.style.display = 'none';
     document.getElementById('latestIssueCount').innerHTML = `<span class="page-subtitle">本地待处理图数</span><br><strong>${issueCount(latest)}</strong>`;
@@ -411,7 +437,11 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
                 self.runner.active_run_id,
                 self.get_next_run_text(),
                 active_run=self.runner.active_run_snapshot(),
+                local_report_path=Path("ui_image_check_report.html"),
             ))
+            return
+        if parsed.path == "/local/ui_image_check_report.html":
+            self._serve_local_report()
             return
         if parsed.path.startswith("/reports/runs/") and parsed.path.endswith("/api/log"):
             self._serve_run_log(parsed.path)
@@ -509,6 +539,13 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
             return
         content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
         self._send_bytes(target.read_bytes(), content_type)
+
+    def _serve_local_report(self) -> None:
+        target = Path("ui_image_check_report.html").resolve()
+        if not target.is_file():
+            self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        self._send_bytes(target.read_bytes(), "text/html; charset=utf-8")
 
     def _serve_run_log(self, request_path: str) -> None:
         parts = urllib.parse.unquote(request_path).strip("/").split("/")
