@@ -1862,6 +1862,16 @@ function updateRowOperation(row, operation) {{
 
 def make_html_report_readonly(content: str) -> str:
     content = content.replace("const OCR_CACHE_OPERATION_API = '/api/ocr-cache/operation';\n", "")
+    content = re.sub(
+        r'<button class="export-button" type="button" onclick="exportFilteredRows\(\)">.*?</button>',
+        "",
+        content,
+        flags=re.DOTALL,
+    )
+    export_start = content.find("async function imageSrcToDataUri(src) {")
+    export_end = content.find("function openPreview(button) {", export_start)
+    if export_start != -1 and export_end != -1:
+        content = content[:export_start] + content[export_end:]
     rows_start_marker = "const allRows = "
     rows_end_marker = ";\nconst FILTER_COLUMNS"
     rows_start = content.find(rows_start_marker)
@@ -1890,6 +1900,11 @@ def make_html_report_readonly(content: str) -> str:
     if start != -1 and end != -1:
         content = content[:start] + _readonly_operation_script() + content[end:]
     return content
+
+
+def rewrite_history_asset_paths(content: str, report_path: Path) -> str:
+    asset_prefix = f"{report_path.stem}_assets/"
+    return content.replace(asset_prefix, f"../../../{asset_prefix}")
 
 
 def _write_history_index(history_root: Path) -> None:
@@ -1949,13 +1964,8 @@ def archive_existing_html_report(
     run_dir = history_root / current.strftime("%Y-%m-%d_%H%M%S")
     run_dir.mkdir(parents=True, exist_ok=True)
     archived_report = make_html_report_readonly(report_path.read_text(encoding="utf-8"))
+    archived_report = rewrite_history_asset_paths(archived_report, report_path)
     (run_dir / "ui_image_check_report.html").write_text(archived_report, encoding="utf-8")
-    assets_dir = report_path.parent / f"{report_path.stem}_assets"
-    if assets_dir.exists():
-        target_assets = run_dir / assets_dir.name
-        if target_assets.exists():
-            shutil.rmtree(target_assets)
-        shutil.copytree(assets_dir, target_assets)
     cleanup_report_history(history_root, retention_days=retention_days, now=current)
     _write_history_index(history_root)
     return run_dir

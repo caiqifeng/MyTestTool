@@ -1409,12 +1409,16 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertNotIn("readOcrCache", content)
             self.assertNotIn("writeOcrCache", content)
 
-    def test_archive_existing_html_report_copies_report_and_assets(self):
+    def test_archive_existing_html_report_archives_html_only_and_reuses_shared_assets(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             report = root / "ui_image_check_report.html"
             assets = root / "ui_image_check_report_assets"
-            report.write_text("old report", encoding="utf-8")
+            report.write_text(
+                '<img src="ui_image_check_report_assets/thumb.png">'
+                '<button data-preview-src="ui_image_check_report_assets/preview.png"></button>',
+                encoding="utf-8",
+            )
             assets.mkdir()
             (assets / "thumb.png").write_bytes(b"png")
             now = dt.datetime(2026, 6, 11, 9, 30, 12, tzinfo=BEIJING_TZ)
@@ -1422,8 +1426,11 @@ class CheckI18nImagesTest(unittest.TestCase):
             archived = check_i18n_images.archive_existing_html_report(report, now=now)
 
             self.assertEqual(archived, root / "reports" / "history" / "2026-06-11_093012")
-            self.assertEqual((archived / "ui_image_check_report.html").read_text(encoding="utf-8"), "old report")
-            self.assertEqual((archived / "ui_image_check_report_assets" / "thumb.png").read_bytes(), b"png")
+            archived_html = (archived / "ui_image_check_report.html").read_text(encoding="utf-8")
+            self.assertIn("../../../ui_image_check_report_assets/thumb.png", archived_html)
+            self.assertIn("../../../ui_image_check_report_assets/preview.png", archived_html)
+            self.assertFalse((archived / "ui_image_check_report_assets").exists())
+            self.assertEqual((assets / "thumb.png").read_bytes(), b"png")
 
     def test_archive_existing_html_report_makes_report_readonly(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1455,6 +1462,8 @@ class CheckI18nImagesTest(unittest.TestCase):
             content = (archived / "ui_image_check_report.html").read_text(encoding="utf-8")
             self.assertIn("已忽略", content)
             self.assertNotIn("toggleIgnoreFinding", content)
+            self.assertNotIn("updateOcrOperation", content)
+            self.assertNotIn("fetch(", content)
             self.assertNotIn("OCR_CACHE_OPERATION_API", content)
             self.assertNotIn("标记为已忽略", content)
             self.assertNotIn("取消忽略", content)
