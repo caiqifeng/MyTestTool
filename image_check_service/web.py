@@ -72,16 +72,23 @@ def build_console_html() -> str:
 :root { --bg:#f3f6fb; --nav:#131a22; --nav-2:#1b2430; --brand:#08caa6; --text:#182235; --muted:#7b8aa1; --line:#dfe6ef; --panel:#fff; --blue:#2d6cdf; --green:#16a36a; --red:#e5484d; --orange:#f27a3d; }
 * { box-sizing:border-box; }
 body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--text); }
-.app { display:grid; grid-template-columns:188px 1fr; min-height:100vh; }
+.app { display:grid; grid-template-columns:188px 1fr; min-height:100vh; transition:grid-template-columns .18s ease; }
+.app.sidebar-collapsed { grid-template-columns:64px 1fr; }
 .side { background:var(--nav); color:#d8e0ea; display:flex; flex-direction:column; border-right:1px solid #263241; }
 .brand { height:58px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid #263241; }
 .brand-mark { width:32px; height:32px; flex:0 0 32px; display:block; object-fit:contain; }
 .brand strong { display:block; color:var(--brand); font-size:13px; line-height:1.2; letter-spacing:0; white-space:nowrap; }
 .brand span { display:block; color:#8fa0b5; font-size:10px; line-height:1.25; margin-top:2px; white-space:nowrap; }
+.sidebar-toggle { width:32px; height:32px; flex:0 0 32px; border:1px solid #2d3a4c; border-radius:5px; background:#1b2430; color:#c7d2df; font-size:18px; line-height:1; cursor:pointer; }
 .nav { padding:14px 10px; display:grid; gap:6px; }
 .nav button { width:100%; height:36px; border:0; border-radius:4px; padding:0 12px; text-align:left; background:transparent; color:#c7d2df; font-weight:700; cursor:pointer; }
 .nav button.active { background:var(--brand); color:#081d19; }
 .side-foot { margin-top:auto; padding:14px 18px; border-top:1px solid #263241; color:#738196; font-size:11px; }
+.app.sidebar-collapsed .brand { justify-content:center; padding:0 10px; }
+.app.sidebar-collapsed .brand-mark,.app.sidebar-collapsed .brand div,.app.sidebar-collapsed .side-foot { display:none; }
+.app.sidebar-collapsed .nav button { padding:0; text-align:center; font-size:0; }
+.app.sidebar-collapsed .nav button::first-letter { font-size:14px; }
+.app.sidebar-collapsed .nav button::after { content:attr(data-short); font-size:14px; }
 .content { min-width:0; height:100vh; overflow:hidden; padding:26px 28px 40px; }
 .view { display:none; }
 .view.active { display:block; }
@@ -159,17 +166,27 @@ select { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; p
 .log-view { margin-top:14px; min-height:180px; max-height:360px; overflow:auto; background:#111827; color:#d1e7ff; border-radius:5px; padding:12px; font:12px/1.55 Consolas,monospace; white-space:pre-wrap; }
 .cron { margin-top:14px; background:#172134; color:#6dd3ff; border-radius:5px; padding:14px 16px; font-family:Consolas,monospace; }
 .toolbar { display:flex; justify-content:space-between; gap:12px; align-items:center; padding:14px 16px; border-bottom:1px solid var(--line); }
+@media (max-width: 640px) {
+  .app { grid-template-columns:64px 1fr; }
+  .app:not(.sidebar-expanded) { grid-template-columns:64px 1fr; }
+  .app:not(.sidebar-expanded) .brand { justify-content:center; padding:0 10px; }
+  .app:not(.sidebar-expanded) .brand-mark,.app:not(.sidebar-expanded) .brand div,.app:not(.sidebar-expanded) .side-foot { display:none; }
+  .app:not(.sidebar-expanded) .nav button { padding:0; text-align:center; font-size:0; }
+  .app:not(.sidebar-expanded) .nav button::after { content:attr(data-short); font-size:14px; }
+  .app.sidebar-expanded { grid-template-columns:188px 1fr; }
+  .content { padding:14px 12px 24px; }
+}
 </style>
 </head>
 <body>
-<div class="app">
+<div id="app" class="app">
   <aside class="side">
-    <div class="brand"><img class="brand-mark" src="/static/app-icon.png" alt=""><div><strong>《剑网3》重制版</strong><span>多语言翻译检查平台</span></div></div>
+    <div class="brand"><img class="brand-mark" src="/static/app-icon.png" alt=""><div><strong>《剑网3》重制版</strong><span>多语言翻译检查平台</span></div><button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="收起侧边栏" onclick="toggleSidebar()">‹</button></div>
     <nav class="nav">
-      <button class="active" data-view="latest" onclick="showView('latest')">最新结果</button>
-      <button data-view="tasks" onclick="showView('tasks')">任务管理</button>
-      <button data-view="history" onclick="showView('history')">历史记录</button>
-      <button data-view="settings" onclick="showView('settings')">定时设置</button>
+      <button class="active" data-view="latest" data-short="新" onclick="showView('latest')">最新结果</button>
+      <button data-view="tasks" data-short="任" onclick="showView('tasks')">任务管理</button>
+      <button data-view="history" data-short="历" onclick="showView('history')">历史记录</button>
+      <button data-view="settings" data-short="设" onclick="showView('settings')">定时设置</button>
     </nav>
     <div class="side-foot">v1.0.0 · 2026-06-11</div>
   </aside>
@@ -294,6 +311,7 @@ select { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; p
 </div>
 <script>
 const dirtyFields = new Set();
+const SIDEBAR_STORAGE_KEY = 'sidebarCollapsed';
 async function fetchJson(url, options) {
   const response = await fetch(url, options);
   const data = await response.json();
@@ -314,6 +332,23 @@ function setLatestReportFrame(frame, url) {
 function showView(name) {
   document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.id === `view-${name}`));
   document.querySelectorAll('.nav button').forEach(button => button.classList.toggle('active', button.dataset.view === name));
+}
+function setSidebarCollapsed(collapsed) {
+  const app = document.getElementById('app');
+  const toggle = document.getElementById('sidebarToggle');
+  app.classList.toggle('sidebar-collapsed', collapsed);
+  app.classList.toggle('sidebar-expanded', !collapsed);
+  toggle.textContent = collapsed ? '›' : '‹';
+  toggle.setAttribute('aria-label', collapsed ? '展开侧边栏' : '收起侧边栏');
+  localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? 'true' : 'false');
+}
+function toggleSidebar() {
+  setSidebarCollapsed(!document.getElementById('app').classList.contains('sidebar-collapsed'));
+}
+function initSidebar() {
+  const saved = localStorage.getItem(SIDEBAR_STORAGE_KEY);
+  const shouldCollapse = saved === null ? window.matchMedia('(max-width: 640px)').matches : saved === 'true';
+  setSidebarCollapsed(shouldCollapse);
 }
 function statusTag(run) {
   const ok = run.status === 'success';
@@ -603,6 +638,7 @@ async function refreshLoop() {
     setTimeout(refreshLoop, running ? 2000 : 5000);
   }
 }
+initSidebar();
 refreshLoop();
 </script>
 </body>

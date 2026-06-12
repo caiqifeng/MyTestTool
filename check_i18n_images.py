@@ -2360,12 +2360,14 @@ async function toggleIgnoreFinding(rowIndex) {{
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(report_title)}</title>
 <style>
 :root {{ --bg:#f4f6f8; --panel:#ffffff; --text:#1f2937; --muted:#64748b; --line:#d8dee8; --header:#102033; --danger:#b42318; --warning:#b76e00; --review:#475569; }}
 * {{ box-sizing:border-box; }}
 body {{ margin:0; font-family:"Microsoft YaHei", "Segoe UI", Arial, sans-serif; color:var(--text); background:var(--bg); }}
-main {{ max-width:1680px; margin:0 auto; padding:28px; }}
+main {{ padding:28px 0; }}
+.report-container {{ width:min(100% - 32px, 1440px); margin:0 auto; display:grid; gap:18px; }}
 .report-shell {{ display:grid; gap:18px; }}
 .hero-panel {{ display:flex; justify-content:space-between; gap:24px; align-items:stretch; background:linear-gradient(135deg,#102033,#243b55); color:white; border-radius:8px; padding:26px 30px; box-shadow:0 14px 30px rgba(15,23,42,.14); }}
 .report-header-band {{ min-height:112px; }}
@@ -2406,7 +2408,7 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .pagination button {{ border:1px solid #cbd5e1; background:white; color:#334155; border-radius:5px; padding:6px 10px; font-size:13px; cursor:pointer; }}
 .pagination button:disabled {{ opacity:.45; cursor:not-allowed; }}
 .pagination-status {{ color:var(--muted); font-size:13px; min-width:220px; text-align:center; }}
-.table-wrap {{ overflow:visible; }}
+.table-wrap {{ overflow-x:auto; overflow-y:visible; }}
 table {{ width:100%; min-width:1180px; border-collapse:separate; border-spacing:0; table-layout:fixed; }}
 th,td {{ border-bottom:1px solid #e7ebf1; padding:10px; vertical-align:top; font-size:13px; }}
 th {{ position:sticky; top:0; height:40px; background:#eef3f8; color:#334155; z-index:3; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }}
@@ -2433,10 +2435,20 @@ tr.mainland-new-with-text[title],tr.mainland-new-with-chars[title] {{ cursor:hel
 .preview img {{ max-width:92vw; max-height:82vh; object-fit:contain; display:block; }}
 .preview-title {{ margin:0 0 8px; font-size:14px; color:#334155; word-break:break-all; }}
 .no-results {{ text-align:center; padding:40px; color:#94a3b8; font-size:15px; }}
+@media (max-width: 640px) {{
+  main {{ padding:12px 0; }}
+  .report-container {{ width:min(100% - 24px, 1440px); gap:12px; }}
+  .hero-panel {{ flex-direction:column; padding:18px; }}
+  .hero-panel h1 {{ font-size:22px; }}
+  .report-kpi-strip {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
+  .detail-toolbar,.pagination {{ flex-wrap:wrap; justify-content:flex-start; }}
+  .pagination-status {{ min-width:0; width:100%; text-align:left; }}
+}}
 </style>
 </head>
 <body>
 <main>
+<div class="report-container">
 {summary_table}
 <section class="detail-panel">
   <div class="detail-toolbar"><div><h2>{TEXT_REPORT_DETAIL}</h2><p>详情仅展示需处理的异常图片；{TEXT_NEW_NO_TEXT_ISSUE}列表已写入本次日志。</p></div><button class="export-button" type="button" onclick="exportFilteredRows()">\u5bfc\u51fa\u7b5b\u9009\u7ed3\u679c</button></div>
@@ -2491,6 +2503,7 @@ tr.mainland-new-with-text[title],tr.mainland-new-with-chars[title] {{ cursor:hel
     <button type="button" onclick="gotoPage(totalPages)" id="lastPageBtn">\u672b\u9875</button>
   </div>
 </section>
+</div>
 </main>
 <div id="overlay" class="overlay" onclick="closePreview()"><div class="preview" onclick="event.stopPropagation()"><p id="previewTitle" class="preview-title"></p><img id="previewImage" alt=""></div></div>
 <script>
