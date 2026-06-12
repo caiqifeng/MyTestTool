@@ -2125,6 +2125,8 @@ class CheckI18nImagesTest(unittest.TestCase):
             self.assertIn(".report-container { width:100%; max-width:1440px; padding:0 16px;", content)
             self.assertIn("@media (max-width: 640px)", content)
             self.assertIn(".detail-panel { min-width:0;", content)
+            self.assertIn(".detail-panel > * { width:100%; max-width:100%; }", content)
+            self.assertIn(".detail-toolbar > div { min-width:0; }", content)
             self.assertIn(".table-wrap { width:100%; max-width:100%; overflow-x:auto;", content)
             self.assertIn("#detailTable { width:100%; min-width:1180px;", content)
             self.assertNotIn("table { width:100%; min-width:1180px;", content)

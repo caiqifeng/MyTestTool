@@ -653,7 +653,9 @@ REPORT_RESPONSIVE_FIX_CSS = """
 <style id="service-responsive-report-fix">
 .report-container,.report-shell,.report-kpi-strip,.issue-breakdown,.summary-section-grid,.summary-block,.detail-panel{min-width:0!important;max-width:100%!important;}
 .detail-panel{overflow:hidden!important;}
-.detail-toolbar{min-width:0!important;}
+.detail-panel>*{width:100%!important;max-width:100%!important;}
+.detail-toolbar{min-width:0!important;box-sizing:border-box!important;}
+.detail-toolbar>div{min-width:0!important;}
 .table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto!important;overflow-y:visible!important;}
 .summary-table{width:100%!important;min-width:0!important;}
 .summary-table th,.summary-table td{word-break:break-word;}

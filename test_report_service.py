@@ -981,6 +981,7 @@ class ReportServiceWebTest(unittest.TestCase):
                     self.assertIn("report", body)
                     self.assertIn("service-responsive-report-fix", body)
                     self.assertIn(".table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto", body)
+                    self.assertIn(".detail-panel>*{width:100%!important;max-width:100%!important", body)
 
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
                     urllib.request.urlopen(f"{base_url}/reports/../secret.txt", timeout=5)
@@ -1018,6 +1019,7 @@ class ReportServiceWebTest(unittest.TestCase):
                     body = response.read().decode("utf-8")
                     self.assertIn("service-responsive-report-fix", body)
                     self.assertIn(".detail-panel{overflow:hidden!important", body)
+                    self.assertIn(".detail-panel>*{width:100%!important;max-width:100%!important", body)
                 with urllib.request.urlopen(f"{base_url}/local/ui_image_check_report_assets/thumb.png", timeout=5) as response:
                     self.assertEqual(response.status, 200)
                     self.assertEqual(response.read(), b"png")

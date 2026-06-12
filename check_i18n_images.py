@@ -2396,7 +2396,9 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .summary-table th,.summary-table td {{ border-bottom:1px solid #e7ebf1; padding:10px 12px; text-align:left; font-size:13px; }}
 .summary-table th {{ background:#f0f4f8; color:#334155; font-weight:600; }}
 .detail-panel {{ min-width:0; overflow:hidden; }}
+.detail-panel > * {{ width:100%; max-width:100%; }}
 .detail-toolbar {{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line); }}
+.detail-toolbar > div {{ min-width:0; }}
 .detail-filterbar {{ background:#f8fafc; }}
 .detail-toolbar p {{ margin:0; color:var(--muted); font-size:13px; }}
 .export-button {{ flex:0 0 auto; border:1px solid #2563eb; background:#2563eb; color:white; border-radius:5px; padding:8px 14px; font-size:13px; cursor:pointer; }}
@@ -2442,6 +2444,7 @@ tr.mainland-new-with-text[title],tr.mainland-new-with-chars[title] {{ cursor:hel
   .hero-panel h1 {{ font-size:22px; }}
   .report-kpi-strip {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}
   .detail-toolbar,.pagination {{ flex-wrap:wrap; justify-content:flex-start; }}
+  .export-button {{ width:100%; }}
   .pagination-status {{ min-width:0; width:100%; text-align:left; }}
 }}
 </style>
