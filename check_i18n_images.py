@@ -2367,7 +2367,7 @@ async function toggleIgnoreFinding(rowIndex) {{
 * {{ box-sizing:border-box; }}
 body {{ margin:0; font-family:"Microsoft YaHei", "Segoe UI", Arial, sans-serif; color:var(--text); background:var(--bg); }}
 main {{ padding:28px 0; }}
-.report-container {{ width:min(100% - 32px, 1440px); margin:0 auto; display:grid; gap:18px; }}
+.report-container {{ width:100%; max-width:1440px; padding:0 16px; margin:0 auto; display:grid; gap:18px; }}
 .report-shell {{ min-width:0; display:grid; gap:18px; }}
 .hero-panel {{ display:flex; justify-content:space-between; gap:24px; align-items:stretch; background:linear-gradient(135deg,#102033,#243b55); color:white; border-radius:8px; padding:26px 30px; box-shadow:0 14px 30px rgba(15,23,42,.14); }}
 .report-header-band {{ min-height:112px; }}
@@ -2409,7 +2409,7 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .pagination button:disabled {{ opacity:.45; cursor:not-allowed; }}
 .pagination-status {{ color:var(--muted); font-size:13px; min-width:220px; text-align:center; }}
 .table-wrap {{ width:100%; max-width:100%; overflow-x:auto; overflow-y:visible; }}
-table {{ width:100%; min-width:1180px; border-collapse:separate; border-spacing:0; table-layout:fixed; }}
+#detailTable {{ width:100%; min-width:1180px; border-collapse:separate; border-spacing:0; table-layout:fixed; }}
 th,td {{ border-bottom:1px solid #e7ebf1; padding:10px; vertical-align:top; font-size:13px; }}
 th {{ position:sticky; top:0; height:40px; background:#eef3f8; color:#334155; z-index:3; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }}
 .filter-row th {{ top:40px; background:#f8fafc; cursor:default; z-index:2; }}
@@ -2437,7 +2437,7 @@ tr.mainland-new-with-text[title],tr.mainland-new-with-chars[title] {{ cursor:hel
 .no-results {{ text-align:center; padding:40px; color:#94a3b8; font-size:15px; }}
 @media (max-width: 640px) {{
   main {{ padding:12px 0; }}
-  .report-container {{ width:min(100% - 24px, 1440px); gap:12px; }}
+  .report-container {{ padding:0 12px; gap:12px; }}
   .hero-panel {{ flex-direction:column; padding:18px; }}
   .hero-panel h1 {{ font-size:22px; }}
   .report-kpi-strip {{ grid-template-columns:repeat(2,minmax(0,1fr)); }}

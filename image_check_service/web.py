@@ -655,7 +655,9 @@ REPORT_RESPONSIVE_FIX_CSS = """
 .detail-panel{overflow:hidden!important;}
 .detail-toolbar{min-width:0!important;}
 .table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto!important;overflow-y:visible!important;}
-.table-wrap table{min-width:1180px;}
+.summary-table{width:100%!important;min-width:0!important;}
+.summary-table th,.summary-table td{word-break:break-word;}
+#detailTable{width:100%!important;min-width:1180px!important;}
 </style>
 """
 
