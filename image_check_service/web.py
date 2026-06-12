@@ -82,14 +82,16 @@ body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Aria
 .sidebar-toggle { position:absolute; top:22px; right:-10px; z-index:5; width:20px; height:20px; border:1px solid #2d3a4c; border-radius:999px; background:#1b2430; color:#8fa0b5; font-size:14px; line-height:18px; padding:0; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.22); }
 .sidebar-toggle:hover { border-color:var(--brand); background:var(--brand); color:#081d19; }
 .nav { padding:14px 10px; display:grid; gap:6px; }
-.nav button { width:100%; height:36px; border:0; border-radius:4px; padding:0 12px; text-align:left; background:transparent; color:#c7d2df; font-weight:700; cursor:pointer; }
+.nav button { width:100%; height:36px; border:0; border-radius:4px; padding:0 12px; text-align:left; background:transparent; color:#c7d2df; font-weight:700; cursor:pointer; display:flex; align-items:center; gap:10px; }
 .nav button.active { background:var(--brand); color:#081d19; }
+.nav-icon { width:18px; height:18px; flex:0 0 18px; display:none; object-fit:contain; }
+.nav-label { white-space:nowrap; }
 .side-foot { margin-top:auto; padding:14px 18px; border-top:1px solid #263241; color:#738196; font-size:11px; }
 .app.sidebar-collapsed .brand { justify-content:center; padding:0 10px; }
-.app.sidebar-collapsed .brand-mark,.app.sidebar-collapsed .brand div,.app.sidebar-collapsed .side-foot { display:none; }
-.app.sidebar-collapsed .nav button { padding:0; text-align:center; font-size:0; }
-.app.sidebar-collapsed .nav button::first-letter { font-size:14px; }
-.app.sidebar-collapsed .nav button::after { content:attr(data-short); font-size:14px; }
+.app.sidebar-collapsed .brand div,.app.sidebar-collapsed .side-foot { display:none; }
+.app.sidebar-collapsed .nav button { padding:0; justify-content:center; }
+.app.sidebar-collapsed .nav-icon { display:block; }
+.app.sidebar-collapsed .nav-label { display:none; }
 .content { min-width:0; height:100vh; overflow:hidden; padding:26px 28px 40px; }
 .view { display:none; }
 .view.active { display:block; }
@@ -171,9 +173,10 @@ select { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; p
   .app { grid-template-columns:64px 1fr; }
   .app:not(.sidebar-expanded) { grid-template-columns:64px 1fr; }
   .app:not(.sidebar-expanded) .brand { justify-content:center; padding:0 10px; }
-  .app:not(.sidebar-expanded) .brand-mark,.app:not(.sidebar-expanded) .brand div,.app:not(.sidebar-expanded) .side-foot { display:none; }
-  .app:not(.sidebar-expanded) .nav button { padding:0; text-align:center; font-size:0; }
-  .app:not(.sidebar-expanded) .nav button::after { content:attr(data-short); font-size:14px; }
+  .app:not(.sidebar-expanded) .brand div,.app:not(.sidebar-expanded) .side-foot { display:none; }
+  .app:not(.sidebar-expanded) .nav button { padding:0; justify-content:center; }
+  .app:not(.sidebar-expanded) .nav-icon { display:block; }
+  .app:not(.sidebar-expanded) .nav-label { display:none; }
   .app.sidebar-expanded { grid-template-columns:188px 1fr; }
   .content { padding:14px 12px 24px; }
 }
@@ -184,10 +187,10 @@ select { width:100%; height:34px; border:1px solid #cfd8e6; border-radius:5px; p
   <aside class="side">
     <div class="brand"><img class="brand-mark" src="/static/app-icon.png" alt=""><div><strong>《剑网3》重制版</strong><span>多语言翻译检查平台</span></div><button id="sidebarToggle" class="sidebar-toggle" type="button" aria-label="收起侧边栏" onclick="toggleSidebar()">‹</button></div>
     <nav class="nav">
-      <button class="active" data-view="latest" data-short="新" onclick="showView('latest')">最新结果</button>
-      <button data-view="tasks" data-short="任" onclick="showView('tasks')">任务管理</button>
-      <button data-view="history" data-short="历" onclick="showView('history')">历史记录</button>
-      <button data-view="settings" data-short="设" onclick="showView('settings')">定时设置</button>
+      <button class="active" data-view="latest" onclick="showView('latest')"><img class="nav-icon" src="/static/nav/lightning.png" alt=""><span class="nav-label">最新结果</span></button>
+      <button data-view="tasks" onclick="showView('tasks')"><img class="nav-icon" src="/static/nav/grid.png" alt=""><span class="nav-label">任务管理</span></button>
+      <button data-view="history" onclick="showView('history')"><img class="nav-icon" src="/static/nav/history.png" alt=""><span class="nav-label">历史记录</span></button>
+      <button data-view="settings" onclick="showView('settings')"><img class="nav-icon" src="/static/nav/clock.png" alt=""><span class="nav-label">定时设置</span></button>
     </nav>
     <div class="side-foot">v1.0.0 · 2026-06-11</div>
   </aside>
