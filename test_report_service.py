@@ -698,6 +698,8 @@ class ReportServiceWebTest(unittest.TestCase):
         self.assertIn("toggleSidebar", html)
         self.assertIn("sidebarCollapsed", html)
         self.assertIn("app.sidebar-collapsed", html)
+        self.assertIn("right:-10px", html)
+        self.assertIn(".sidebar-toggle:hover", html)
         self.assertIn('id="view-latest"', html)
         self.assertIn('id="view-history"', html)
         self.assertIn('id="view-settings"', html)

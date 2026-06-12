@@ -74,12 +74,13 @@ def build_console_html() -> str:
 body { margin:0; min-height:100vh; font-family:"Microsoft YaHei","Segoe UI",Arial,sans-serif; background:var(--bg); color:var(--text); }
 .app { display:grid; grid-template-columns:188px 1fr; min-height:100vh; transition:grid-template-columns .18s ease; }
 .app.sidebar-collapsed { grid-template-columns:64px 1fr; }
-.side { background:var(--nav); color:#d8e0ea; display:flex; flex-direction:column; border-right:1px solid #263241; }
+.side { position:relative; background:var(--nav); color:#d8e0ea; display:flex; flex-direction:column; border-right:1px solid #263241; }
 .brand { height:58px; display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid #263241; }
 .brand-mark { width:32px; height:32px; flex:0 0 32px; display:block; object-fit:contain; }
 .brand strong { display:block; color:var(--brand); font-size:13px; line-height:1.2; letter-spacing:0; white-space:nowrap; }
 .brand span { display:block; color:#8fa0b5; font-size:10px; line-height:1.25; margin-top:2px; white-space:nowrap; }
-.sidebar-toggle { width:32px; height:32px; flex:0 0 32px; border:1px solid #2d3a4c; border-radius:5px; background:#1b2430; color:#c7d2df; font-size:18px; line-height:1; cursor:pointer; }
+.sidebar-toggle { position:absolute; top:22px; right:-10px; z-index:5; width:20px; height:20px; border:1px solid #2d3a4c; border-radius:999px; background:#1b2430; color:#8fa0b5; font-size:14px; line-height:18px; padding:0; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,.22); }
+.sidebar-toggle:hover { border-color:var(--brand); background:var(--brand); color:#081d19; }
 .nav { padding:14px 10px; display:grid; gap:6px; }
 .nav button { width:100%; height:36px; border:0; border-radius:4px; padding:0 12px; text-align:left; background:transparent; color:#c7d2df; font-weight:700; cursor:pointer; }
 .nav button.active { background:var(--brand); color:#081d19; }
