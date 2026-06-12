@@ -2368,7 +2368,7 @@ async function toggleIgnoreFinding(rowIndex) {{
 body {{ margin:0; font-family:"Microsoft YaHei", "Segoe UI", Arial, sans-serif; color:var(--text); background:var(--bg); }}
 main {{ padding:28px 0; }}
 .report-container {{ width:min(100% - 32px, 1440px); margin:0 auto; display:grid; gap:18px; }}
-.report-shell {{ display:grid; gap:18px; }}
+.report-shell {{ min-width:0; display:grid; gap:18px; }}
 .hero-panel {{ display:flex; justify-content:space-between; gap:24px; align-items:stretch; background:linear-gradient(135deg,#102033,#243b55); color:white; border-radius:8px; padding:26px 30px; box-shadow:0 14px 30px rgba(15,23,42,.14); }}
 .report-header-band {{ min-height:112px; }}
 .hero-panel h1 {{ margin:4px 0 8px; font-size:30px; letter-spacing:0; }}
@@ -2384,9 +2384,9 @@ main {{ padding:28px 0; }}
 .metric-card small {{ display:block; margin-top:6px; color:var(--muted); line-height:1.4; }}
 .metric-card.danger strong {{ color:#d93025; }}
 .report-kpi-strip {{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }}
-.issue-breakdown {{ padding:16px 18px; }}
-.summary-section-grid {{ display:grid; gap:14px; }}
-.summary-block {{ border:1px solid #e8edf4; border-radius:6px; overflow:hidden; }}
+.issue-breakdown {{ min-width:0; padding:16px 18px; }}
+.summary-section-grid {{ min-width:0; display:grid; gap:14px; }}
+.summary-block {{ min-width:0; border:1px solid #e8edf4; border-radius:6px; overflow:hidden; }}
 .summary-block p {{ padding:12px 12px 0; }}
 .issue-breakdown p {{ margin:6px 0; font-size:15px; line-height:1.8; }}
 .summary-heading {{ margin-top:18px !important; }}

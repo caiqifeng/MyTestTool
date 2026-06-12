@@ -977,7 +977,10 @@ class ReportServiceWebTest(unittest.TestCase):
             try:
                 with urllib.request.urlopen(f"{base_url}/reports/runs/run1/ui_image_check_report.html", timeout=5) as response:
                     self.assertEqual(response.status, 200)
-                    self.assertIn("report", response.read().decode("utf-8"))
+                    body = response.read().decode("utf-8")
+                    self.assertIn("report", body)
+                    self.assertIn("service-responsive-report-fix", body)
+                    self.assertIn(".table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto", body)
 
                 with self.assertRaises(urllib.error.HTTPError) as ctx:
                     urllib.request.urlopen(f"{base_url}/reports/../secret.txt", timeout=5)
@@ -995,7 +998,10 @@ class ReportServiceWebTest(unittest.TestCase):
             config.port = 0
             config.reports_dir = str(root / "reports")
             config_path = root / "service.json"
-            (root / "ui_image_check_report.html").write_text("<html>local</html>", encoding="utf-8")
+            (root / "ui_image_check_report.html").write_text(
+                "<html><head><style>.table-wrap { overflow:visible; }</style></head><body>local</body></html>",
+                encoding="utf-8",
+            )
             assets = root / "ui_image_check_report_assets"
             assets.mkdir()
             (assets / "thumb.png").write_bytes(b"png")
@@ -1009,6 +1015,9 @@ class ReportServiceWebTest(unittest.TestCase):
             try:
                 with urllib.request.urlopen(f"{base_url}/local/ui_image_check_report.html", timeout=5) as response:
                     self.assertEqual(response.status, 200)
+                    body = response.read().decode("utf-8")
+                    self.assertIn("service-responsive-report-fix", body)
+                    self.assertIn(".detail-panel{overflow:hidden!important", body)
                 with urllib.request.urlopen(f"{base_url}/local/ui_image_check_report_assets/thumb.png", timeout=5) as response:
                     self.assertEqual(response.status, 200)
                     self.assertEqual(response.read(), b"png")

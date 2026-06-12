@@ -649,6 +649,26 @@ refreshLoop();
 </html>"""
 
 
+REPORT_RESPONSIVE_FIX_CSS = """
+<style id="service-responsive-report-fix">
+.report-container,.report-shell,.report-kpi-strip,.issue-breakdown,.summary-section-grid,.summary-block,.detail-panel{min-width:0!important;max-width:100%!important;}
+.detail-panel{overflow:hidden!important;}
+.detail-toolbar{min-width:0!important;}
+.table-wrap{width:100%!important;max-width:100%!important;overflow-x:auto!important;overflow-y:visible!important;}
+.table-wrap table{min-width:1180px;}
+</style>
+"""
+
+
+def inject_report_responsive_fix(html: str) -> str:
+    if "service-responsive-report-fix" in html:
+        return html
+    marker = "</head>"
+    if marker in html:
+        return html.replace(marker, f"{REPORT_RESPONSIVE_FIX_CSS}\n{marker}", 1)
+    return f"{REPORT_RESPONSIVE_FIX_CSS}\n{html}"
+
+
 class ReportServiceHandler(BaseHTTPRequestHandler):
     config: ServiceConfig
     config_path: Path
@@ -786,8 +806,7 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
         if target == reports_root or reports_root not in target.parents or not target.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
-        self._send_bytes(target.read_bytes(), content_type)
+        self._send_file(target)
 
     def _serve_local_file(self, request_path: str) -> None:
         relative = urllib.parse.unquote(request_path.removeprefix("/local/")).replace("\\", "/")
@@ -796,10 +815,7 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
         if target == static_root or static_root not in target.parents or not target.is_file():
             self.send_error(HTTPStatus.NOT_FOUND)
             return
-        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
-        if target.suffix.lower() in {".html", ".htm"}:
-            content_type = "text/html; charset=utf-8"
-        self._send_bytes(target.read_bytes(), content_type)
+        self._send_file(target)
 
     def _serve_app_static_file(self, request_path: str) -> None:
         relative = urllib.parse.unquote(request_path.removeprefix("/static/")).replace("\\", "/")
@@ -843,6 +859,15 @@ class ReportServiceHandler(BaseHTTPRequestHandler):
 
     def _send_text(self, text: str, content_type: str) -> None:
         self._send_bytes(text.encode("utf-8"), content_type)
+
+    def _send_file(self, target: Path) -> None:
+        content_type = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        if target.suffix.lower() in {".html", ".htm"}:
+            content_type = "text/html; charset=utf-8"
+            text = target.read_text(encoding="utf-8", errors="replace")
+            self._send_text(inject_report_responsive_fix(text), content_type)
+            return
+        self._send_bytes(target.read_bytes(), content_type)
 
     def _send_bytes(self, payload: bytes, content_type: str) -> None:
         self.send_response(HTTPStatus.OK)
