@@ -2395,7 +2395,7 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .summary-table {{ width:100%; border-collapse:collapse; }}
 .summary-table th,.summary-table td {{ border-bottom:1px solid #e7ebf1; padding:10px 12px; text-align:left; font-size:13px; }}
 .summary-table th {{ background:#f0f4f8; color:#334155; font-weight:600; }}
-.detail-panel {{ overflow:visible; }}
+.detail-panel {{ min-width:0; overflow:hidden; }}
 .detail-toolbar {{ display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:16px 18px; border-bottom:1px solid var(--line); }}
 .detail-filterbar {{ background:#f8fafc; }}
 .detail-toolbar p {{ margin:0; color:var(--muted); font-size:13px; }}
@@ -2408,7 +2408,7 @@ h2 {{ margin:0 0 12px; font-size:18px; }}
 .pagination button {{ border:1px solid #cbd5e1; background:white; color:#334155; border-radius:5px; padding:6px 10px; font-size:13px; cursor:pointer; }}
 .pagination button:disabled {{ opacity:.45; cursor:not-allowed; }}
 .pagination-status {{ color:var(--muted); font-size:13px; min-width:220px; text-align:center; }}
-.table-wrap {{ overflow-x:auto; overflow-y:visible; }}
+.table-wrap {{ width:100%; max-width:100%; overflow-x:auto; overflow-y:visible; }}
 table {{ width:100%; min-width:1180px; border-collapse:separate; border-spacing:0; table-layout:fixed; }}
 th,td {{ border-bottom:1px solid #e7ebf1; padding:10px; vertical-align:top; font-size:13px; }}
 th {{ position:sticky; top:0; height:40px; background:#eef3f8; color:#334155; z-index:3; text-align:left; cursor:pointer; user-select:none; white-space:nowrap; }}
